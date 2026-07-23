@@ -47,7 +47,7 @@ export const OfficeDashboard: React.FC = () => {
   const activeTab = officeSubTab;
   const setActiveTab = setOfficeSubTab;
 
-  const [viewType, setViewType] = useState<'kanban' | 'list'>('kanban');
+  const [viewType, setViewType] = useState<'kanban' | 'list'>('list');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Modals state
@@ -64,115 +64,213 @@ export const OfficeDashboard: React.FC = () => {
   );
 
   return (
-    <div id="office-dashboard" className="w-full px-4 sm:px-6 py-4 space-y-4">
+    <div id="office-dashboard" className="w-full px-4 sm:px-8 py-6 space-y-6 max-w-7xl mx-auto">
       
       {/* Streamlined Top Title Bar */}
-      <div className="bg-white border border-slate-200 rounded-xl p-3 sm:p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center space-x-3">
-          <div className="w-9 h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold shadow-2xs shrink-0">
-            <Building2 className="w-5 h-5" />
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center space-x-4">
+          <div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
+            <Building2 className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-sm sm:text-base font-bold text-slate-900 leading-tight">Módulo de Administración y Oficina</h2>
-            <p className="text-[11px] text-slate-500">Gestión global de órdenes de servicio, presupuestos, catálogos y métricas</p>
+            <h2 className="text-xl font-bold text-slate-900 leading-tight">Módulo de Administración y Oficina</h2>
+            <p className="text-sm text-slate-500 mt-0.5">Gestión global de órdenes de servicio, presupuestos, catálogos y métricas</p>
           </div>
         </div>
 
         <button
           onClick={() => setIsCreateOpen(true)}
-          className="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center justify-center space-x-1.5 shrink-0"
+          className="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-xs flex items-center justify-center space-x-2 shrink-0"
         >
-          <PlusCircle className="w-4 h-4" />
+          <PlusCircle className="w-5 h-5" />
           <span>+ Crear Reporte Mtto</span>
         </button>
       </div>
 
       {/* SUBMODULE 1: GESTIÓN DE ÓRDENES DE SERVICIO (OS) */}
       {activeTab === 'orders' && (
-        <div className="space-y-3">
+        <div className="space-y-4">
           
           {/* Action bar: Search, View switcher & New order button */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
             <div className="relative flex-1 w-full sm:max-w-md">
-              <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+              <Search className="w-5 h-5 absolute left-3.5 top-3 text-slate-400" />
               <input
                 type="text"
                 placeholder="Buscar por folio, cliente o ubicación..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 py-2.5 text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-medium"
               />
             </div>
 
-            <div className="flex items-center space-x-2 w-full sm:w-auto justify-between sm:justify-end">
-              <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-                <button
-                  onClick={() => setViewType('kanban')}
-                  className={`p-1.5 rounded-md text-xs font-medium flex items-center space-x-1 ${
-                    viewType === 'kanban' ? 'bg-white text-blue-600 shadow-2xs' : 'text-slate-500'
-                  }`}
-                  title="Vista Kanban"
-                >
-                  <LayoutGrid className="w-4 h-4" />
-                  <span className="text-[11px] font-semibold sm:hidden">Kanban</span>
-                </button>
+            <div className="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-end">
+              <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
                 <button
                   onClick={() => setViewType('list')}
-                  className={`p-1.5 rounded-md text-xs font-medium flex items-center space-x-1 ${
-                    viewType === 'list' ? 'bg-white text-blue-600 shadow-2xs' : 'text-slate-500'
+                  className={`px-3 py-2 rounded-lg text-xs sm:text-sm font-bold flex items-center space-x-1.5 transition-all ${
+                    viewType === 'list' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-600 hover:text-slate-900'
                   }`}
-                  title="Vista Lista"
+                  title="Vista Lista Horizontal"
                 >
                   <List className="w-4 h-4" />
-                  <span className="text-[11px] font-semibold sm:hidden">Lista</span>
+                  <span>Vista Lista Horizontal</span>
+                </button>
+                <button
+                  onClick={() => setViewType('kanban')}
+                  className={`px-3 py-2 rounded-lg text-xs sm:text-sm font-bold flex items-center space-x-1.5 transition-all ${
+                    viewType === 'kanban' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Vista Tablero"
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                  <span>Tablero Stage</span>
                 </button>
               </div>
 
               <button
                 onClick={() => setIsCreateOpen(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 shadow-2xs transition-all whitespace-nowrap"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center space-x-2 shadow-xs transition-all whitespace-nowrap"
               >
-                <PlusCircle className="w-3.5 h-3.5" />
+                <PlusCircle className="w-4 h-4" />
                 <span>Crear Reporte</span>
               </button>
             </div>
           </div>
 
-          {/* KANBAN BOARD VIEW (7 STAGES - HORIZONTAL SCROLLING WITHOUT EXCESS VERTICAL BLANK SPACES) */}
-          {viewType === 'kanban' ? (
-            <div className="flex overflow-x-auto gap-3 pb-3 pt-1 min-w-full items-start">
+          {/* LIST VIEW (HORIZONTALLY EXPANDED FULL-WIDTH WEBPAGE CARDS) */}
+          {viewType === 'list' ? (
+            <div className="space-y-3">
+              {filteredOrders.length === 0 ? (
+                <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center text-slate-500 font-medium text-base">
+                  No se encontraron órdenes de servicio con los criterios especificados.
+                </div>
+              ) : (
+                filteredOrders.map(ord => (
+                  <div
+                    key={ord.id}
+                    className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-5"
+                  >
+                    {/* Column 1: Folio & Badges */}
+                    <div className="flex items-start lg:items-center space-x-4 min-w-[200px]">
+                      <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-100 text-blue-600 flex items-center justify-center font-mono font-bold text-base shrink-0">
+                        {ord.folio.replace('OS-', '')}
+                      </div>
+                      <div>
+                        <div className="flex items-center space-x-2 mb-1">
+                          <span className="font-mono font-bold text-base text-blue-600">{ord.folio}</span>
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                              ord.priority === 'Alta'
+                                ? 'bg-rose-100 text-rose-800'
+                                : ord.priority === 'Media'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-emerald-100 text-emerald-800'
+                            }`}
+                          >
+                            {ord.priority}
+                          </span>
+                        </div>
+                        <span className="inline-block px-3 py-1 rounded-md text-xs font-bold bg-slate-100 text-slate-800 border border-slate-200">
+                          {ord.status}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Column 2: Client & Location */}
+                    <div className="flex-1 min-w-[240px]">
+                      <h3 className="font-bold text-slate-900 text-base sm:text-lg">{ord.clientName}</h3>
+                      <p className="text-sm font-semibold text-slate-500 mt-0.5">{ord.departmentName}</p>
+                      <p className="text-sm text-slate-700 mt-1.5 bg-slate-50 p-2.5 rounded-xl border border-slate-100 font-medium">
+                        {ord.description}
+                      </p>
+                    </div>
+
+                    {/* Column 3: Tech Assigned */}
+                    <div className="min-w-[220px] bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                      <span className="text-xs font-bold text-slate-500 block mb-1.5 uppercase tracking-wider">
+                        Técnico Asignado
+                      </span>
+                      {ord.technicianName ? (
+                        <div className="text-sm font-bold text-slate-900 flex items-center space-x-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                          <span>{ord.technicianName}</span>
+                        </div>
+                      ) : (
+                        <select
+                          value=""
+                          onChange={e => assignTechnician(ord.id, e.target.value)}
+                          className="w-full bg-amber-50 border border-amber-300 text-amber-900 text-xs font-bold rounded-lg p-2 focus:outline-hidden"
+                        >
+                          <option value="">+ Asignar Técnico de Campo...</option>
+                          {technicians.map(t => (
+                            <option key={t.id} value={t.id}>
+                              {t.name} ({t.specialty})
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+
+                    {/* Column 4: Actions */}
+                    <div className="flex items-center space-x-2 shrink-0 border-t lg:border-t-0 pt-3 lg:pt-0 border-slate-100 justify-end">
+                      {ord.status === 'Esperando Presupuesto' || ord.status === 'En Cotización' ? (
+                        <button
+                          onClick={() => setBudgetOrder(ord)}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold px-4 py-2.5 rounded-xl transition-colors flex items-center space-x-1.5 shadow-xs"
+                        >
+                          <FileSpreadsheet className="w-4 h-4" />
+                          <span>Generar Cotización</span>
+                        </button>
+                      ) : null}
+
+                      <button
+                        onClick={() => setDetailOrder(ord)}
+                        className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs sm:text-sm font-bold px-4 py-2.5 rounded-xl transition-colors flex items-center space-x-1"
+                      >
+                        <span>Ver Detalles</span>
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          ) : (
+            /* KANBAN BOARD VIEW */
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {STAGES.map(stage => {
                 const stageOrders = filteredOrders.filter(o => o.status === stage);
 
                 return (
                   <div
                     key={stage}
-                    className="bg-slate-100/90 border border-slate-200/90 rounded-xl p-2.5 flex flex-col w-72 shrink-0 max-h-[620px] shadow-2xs"
+                    className="bg-slate-100/90 border border-slate-200/90 rounded-2xl p-3 flex flex-col min-h-[300px] shadow-2xs"
                   >
                     <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-200">
-                      <span className="text-[11px] font-bold text-slate-700 uppercase tracking-tight truncate">
+                      <span className="text-xs font-bold text-slate-800 uppercase tracking-tight">
                         {stage}
                       </span>
-                      <span className="bg-slate-200 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                      <span className="bg-slate-200 text-slate-800 text-xs font-bold px-2.5 py-0.5 rounded-full">
                         {stageOrders.length}
                       </span>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto space-y-2 pr-0.5">
+                    <div className="space-y-2.5">
                       {stageOrders.length === 0 ? (
-                        <div className="text-center py-4 text-[11px] text-slate-400 font-medium bg-slate-50/50 rounded-lg border border-dashed border-slate-200">
+                        <div className="text-center py-6 text-xs text-slate-400 font-medium bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
                           Sin órdenes
                         </div>
                       ) : (
                         stageOrders.map(ord => (
                           <div
                             key={ord.id}
-                            className="bg-white border border-slate-200/90 rounded-xl p-3 shadow-2xs hover:shadow-md transition-all space-y-2"
+                            className="bg-white border border-slate-200/90 rounded-xl p-3.5 shadow-2xs hover:shadow-md transition-all space-y-2"
                           >
                             <div className="flex items-center justify-between">
-                              <span className="font-mono font-bold text-xs text-blue-600">{ord.folio}</span>
+                              <span className="font-mono font-bold text-sm text-blue-600">{ord.folio}</span>
                               <span
-                                className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                                className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                                   ord.priority === 'Alta'
                                     ? 'bg-rose-100 text-rose-800'
                                     : ord.priority === 'Media'
@@ -185,19 +283,18 @@ export const OfficeDashboard: React.FC = () => {
                             </div>
 
                             <div>
-                              <h4 className="font-bold text-slate-900 text-xs line-clamp-1">{ord.clientName}</h4>
-                              <p className="text-[11px] text-slate-500 line-clamp-1">{ord.departmentName}</p>
+                              <h4 className="font-bold text-slate-900 text-sm line-clamp-1">{ord.clientName}</h4>
+                              <p className="text-xs text-slate-500 line-clamp-1">{ord.departmentName}</p>
                             </div>
 
-                            <p className="text-[11px] text-slate-600 line-clamp-2 bg-slate-50 p-1.5 rounded-md border border-slate-100">
+                            <p className="text-xs text-slate-600 line-clamp-2 bg-slate-50 p-2 rounded-lg border border-slate-100">
                               {ord.description}
                             </p>
 
-                            {/* Tech assignment */}
-                            <div className="pt-1 flex items-center justify-between text-[11px]">
-                              <span className="text-slate-500 font-medium truncate">
+                            <div className="pt-1 flex items-center justify-between text-xs">
+                              <span className="text-slate-600 font-medium truncate">
                                 {ord.technicianName ? (
-                                  <span className="text-slate-700 font-semibold">👨‍🔧 {ord.technicianName}</span>
+                                  <span className="text-slate-800 font-semibold">👨‍🔧 {ord.technicianName}</span>
                                 ) : (
                                   <span className="text-amber-600 font-semibold">⚠️ Sin Técnico</span>
                                 )}
@@ -205,23 +302,12 @@ export const OfficeDashboard: React.FC = () => {
 
                               <button
                                 onClick={() => setDetailOrder(ord)}
-                                className="text-blue-600 hover:text-blue-800 font-semibold flex items-center space-x-0.5"
+                                className="text-blue-600 hover:text-blue-800 font-bold flex items-center space-x-0.5"
                               >
                                 <span>Ver</span>
                                 <ChevronRight className="w-3.5 h-3.5" />
                               </button>
                             </div>
-
-                            {/* Action shortcuts based on stage */}
-                            {ord.status === 'Esperando Presupuesto' || ord.status === 'En Cotización' ? (
-                              <button
-                                onClick={() => setBudgetOrder(ord)}
-                                className="w-full mt-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[10px] font-bold py-1 rounded-md transition-colors flex items-center justify-center space-x-1"
-                              >
-                                <FileSpreadsheet className="w-3 h-3" />
-                                <span>Generar Cotización</span>
-                              </button>
-                            ) : null}
                           </div>
                         ))
                       )}
@@ -229,75 +315,6 @@ export const OfficeDashboard: React.FC = () => {
                   </div>
                 );
               })}
-            </div>
-          ) : (
-            /* LIST VIEW */
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 uppercase font-bold">
-                  <tr>
-                    <th className="py-3 px-4">Folio</th>
-                    <th className="py-3 px-4">Cliente / Ubicación</th>
-                    <th className="py-3 px-4">Descripción</th>
-                    <th className="py-3 px-4">Prioridad</th>
-                    <th className="py-3 px-4">Técnico</th>
-                    <th className="py-3 px-4">Estatus</th>
-                    <th className="py-3 px-4 text-right">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredOrders.map(ord => (
-                    <tr key={ord.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-blue-600">{ord.folio}</td>
-                      <td className="py-3 px-4">
-                        <div className="font-bold text-slate-900">{ord.clientName}</div>
-                        <div className="text-[11px] text-slate-500">{ord.departmentName}</div>
-                      </td>
-                      <td className="py-3 px-4 text-slate-700 max-w-xs truncate">{ord.description}</td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            ord.priority === 'Alta'
-                              ? 'bg-rose-100 text-rose-800'
-                              : ord.priority === 'Media'
-                              ? 'bg-amber-100 text-amber-800'
-                              : 'bg-emerald-100 text-emerald-800'
-                          }`}
-                        >
-                          {ord.priority}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        {ord.technicianName ? (
-                          <span className="font-semibold text-slate-800">{ord.technicianName}</span>
-                        ) : (
-                          <select
-                            value=""
-                            onChange={e => assignTechnician(ord.id, e.target.value)}
-                            className="bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-semibold rounded-md p-1"
-                          >
-                            <option value="">Asignar técnico...</option>
-                            {technicians.map(t => (
-                              <option key={t.id} value={t.id}>
-                                {t.name}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 font-semibold text-slate-800">{ord.status}</td>
-                      <td className="py-3 px-4 text-right space-x-2">
-                        <button
-                          onClick={() => setDetailOrder(ord)}
-                          className="text-blue-600 hover:text-blue-800 font-bold"
-                        >
-                          Detalles
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
           )}
 

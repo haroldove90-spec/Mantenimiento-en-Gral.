@@ -71,13 +71,13 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
           
           {/* Section: INICIO */}
           <div>
-            <div className="px-2 mb-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            <div className="px-2 mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
               Navegación General
             </div>
             <button
               id="role-btn-home"
               onClick={() => setActiveRole('home')}
-              className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+              className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                 activeRole === 'home'
                   ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-bold'
                   : 'text-slate-300 hover:text-white hover:bg-slate-800'
@@ -90,9 +90,9 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
 
           {/* Section: OFICINA & SUB-MÓDULOS */}
           <div className="space-y-1">
-            <div className="px-2 mb-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+            <div className="px-2 mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
               <span>Módulos de Oficina</span>
-              <Building2 className="w-3.5 h-3.5 text-blue-400" />
+              <Building2 className="w-4 h-4 text-blue-400" />
             </div>
 
             <button
@@ -100,7 +100,7 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
                 setActiveRole('office');
                 setOfficeSubTab('orders');
               }}
-              className={`w-full flex items-center space-x-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+              className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                 activeRole === 'office' && officeSubTab === 'orders'
                   ? 'bg-blue-600 text-white shadow-md font-bold'
                   : 'text-slate-300 hover:text-white hover:bg-slate-800'
@@ -115,7 +115,7 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
                 setActiveRole('office');
                 setOfficeSubTab('budgets');
               }}
-              className={`w-full flex items-center space-x-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+              className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                 activeRole === 'office' && officeSubTab === 'budgets'
                   ? 'bg-blue-600 text-white shadow-md font-bold'
                   : 'text-slate-300 hover:text-white hover:bg-slate-800'
@@ -130,7 +130,7 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
                 setActiveRole('office');
                 setOfficeSubTab('catalogs');
               }}
-              className={`w-full flex items-center space-x-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+              className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                 activeRole === 'office' && officeSubTab === 'catalogs'
                   ? 'bg-blue-600 text-white shadow-md font-bold'
                   : 'text-slate-300 hover:text-white hover:bg-slate-800'
@@ -145,7 +145,7 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
                 setActiveRole('office');
                 setOfficeSubTab('reports');
               }}
-              className={`w-full flex items-center space-x-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+              className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                 activeRole === 'office' && officeSubTab === 'reports'
                   ? 'bg-blue-600 text-white shadow-md font-bold'
                   : 'text-slate-300 hover:text-white hover:bg-slate-800'
@@ -158,15 +158,15 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
 
           {/* Section: TÉCNICO DE CAMPO */}
           <div>
-            <div className="px-2 mb-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+            <div className="px-2 mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
               <span>Módulo Técnico</span>
-              <Wrench className="w-3.5 h-3.5 text-emerald-400" />
+              <Wrench className="w-4 h-4 text-emerald-400" />
             </div>
 
             <button
               id="role-btn-tech"
               onClick={() => setActiveRole('tech')}
-              className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+              className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                 activeRole === 'tech'
                   ? 'bg-emerald-600 text-white shadow-md font-bold'
                   : 'text-slate-300 hover:text-white hover:bg-slate-800'
@@ -179,15 +179,15 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
 
           {/* Section: PORTAL DEL CLIENTE */}
           <div>
-            <div className="px-2 mb-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+            <div className="px-2 mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
               <span>Portal de Cliente</span>
-              <UserCheck className="w-3.5 h-3.5 text-purple-400" />
+              <UserCheck className="w-4 h-4 text-purple-400" />
             </div>
 
             <button
               id="role-btn-client"
               onClick={() => setActiveRole('client')}
-              className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+              className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                 activeRole === 'client'
                   ? 'bg-purple-600 text-white shadow-md font-bold'
                   : 'text-slate-300 hover:text-white hover:bg-slate-800'
@@ -305,22 +305,24 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
         </div>
       </aside>
 
-      {/* ------------------- MOBILE & TABLET TOP HEADER BAR (lg:hidden) ------------------- */}
-      {/* Replaces bottom bar with a top bar containing Logout button to return to Home */}
-      {activeRole !== 'home' && (
-        <header
-          id="app-mobile-top-header"
-          className="lg:hidden bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-30 px-4 py-2.5 flex items-center justify-between shadow-md"
-        >
-          <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center font-bold text-white shadow-xs">
+      {/* ------------------- MOBILE & TABLET TOP NAVIGATION HEADER (lg:hidden) ------------------- */}
+      <header
+        id="app-mobile-top-header"
+        className="lg:hidden bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-30 shadow-md"
+      >
+        <div className="px-3.5 py-2.5 flex items-center justify-between">
+          <button
+            onClick={() => setActiveRole('home')}
+            className="flex items-center space-x-2.5 text-left focus:outline-hidden"
+          >
+            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center font-bold text-white shadow-xs shrink-0">
               <Wrench className="w-4 h-4" />
             </div>
             <div>
               <span className="font-bold text-sm text-white block leading-tight">Gestión OS</span>
               <span className="text-[10px] text-blue-400 font-semibold">{getRoleName()}</span>
             </div>
-          </div>
+          </button>
 
           <div className="flex items-center space-x-2">
             {/* Quick Create Button for Office */}
@@ -330,22 +332,80 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
                 className="bg-blue-600 hover:bg-blue-500 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1"
               >
                 <PlusCircle className="w-3.5 h-3.5" />
-                <span>+ Reporte</span>
+                <span className="hidden xs:inline">+ Reporte</span>
               </button>
             )}
 
             {/* Logout / Exit to Home Icon Button */}
+            {activeRole !== 'home' ? (
+              <button
+                onClick={() => setActiveRole('home')}
+                className="flex items-center space-x-1 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all"
+                title="Cerrar sesión e ir al Inicio"
+              >
+                <LogOut className="w-4 h-4 text-rose-400" />
+                <span className="text-[11px]">Cerrar Sesión</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowNotifMenu(!showNotifMenu)}
+                className="p-1.5 rounded-lg text-slate-300 hover:text-white relative bg-slate-800 border border-slate-700"
+              >
+                <Bell className="w-4 h-4 text-blue-400" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full" />
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Sub-module Navigation Pills for Office on Mobile/Tablet */}
+        {activeRole === 'office' && (
+          <div className="flex items-center space-x-1 px-3 pb-2 overflow-x-auto border-t border-slate-800/80 pt-1.5 text-xs no-scrollbar">
             <button
-              onClick={() => setActiveRole('home')}
-              className="flex items-center space-x-1 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 px-3 py-1.5 rounded-xl text-xs font-bold transition-all"
-              title="Cerrar sesión e ir al Inicio"
+              onClick={() => setOfficeSubTab('orders')}
+              className={`px-2.5 py-1 rounded-lg font-bold text-[11px] whitespace-nowrap transition-all ${
+                officeSubTab === 'orders'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-white bg-slate-800/50'
+              }`}
             >
-              <LogOut className="w-4 h-4 text-rose-400" />
-              <span>Cerrar Sesión</span>
+              Órdenes de Servicio
+            </button>
+            <button
+              onClick={() => setOfficeSubTab('budgets')}
+              className={`px-2.5 py-1 rounded-lg font-bold text-[11px] whitespace-nowrap transition-all ${
+                officeSubTab === 'budgets'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-white bg-slate-800/50'
+              }`}
+            >
+              Presupuestos
+            </button>
+            <button
+              onClick={() => setOfficeSubTab('catalogs')}
+              className={`px-2.5 py-1 rounded-lg font-bold text-[11px] whitespace-nowrap transition-all ${
+                officeSubTab === 'catalogs'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-white bg-slate-800/50'
+              }`}
+            >
+              Catálogos
+            </button>
+            <button
+              onClick={() => setOfficeSubTab('reports')}
+              className={`px-2.5 py-1 rounded-lg font-bold text-[11px] whitespace-nowrap transition-all ${
+                officeSubTab === 'reports'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-white bg-slate-800/50'
+              }`}
+            >
+              Reportes
             </button>
           </div>
-        </header>
-      )}
+        )}
+      </header>
     </>
   );
 };

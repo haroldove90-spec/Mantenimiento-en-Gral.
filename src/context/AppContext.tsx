@@ -21,6 +21,8 @@ import {
 interface AppContextType {
   activeRole: RoleType;
   setActiveRole: (role: RoleType) => void;
+  officeSubTab: 'orders' | 'budgets' | 'catalogs' | 'reports';
+  setOfficeSubTab: (tab: 'orders' | 'budgets' | 'catalogs' | 'reports') => void;
   orders: ServiceOrder[];
   clients: Client[];
   spareParts: SparePart[];
@@ -75,6 +77,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activeRole, setActiveRole] = useState<RoleType>('home');
+  const [officeSubTab, setOfficeSubTab] = useState<'orders' | 'budgets' | 'catalogs' | 'reports'>('orders');
   const [selectedClientOrderFolio, setSelectedClientOrderFolio] = useState<string | null>('OS-1004');
 
   // LocalStorage initialization with fallbacks
@@ -579,6 +582,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       value={{
         activeRole,
         setActiveRole,
+        officeSubTab,
+        setOfficeSubTab,
         orders,
         clients,
         spareParts,

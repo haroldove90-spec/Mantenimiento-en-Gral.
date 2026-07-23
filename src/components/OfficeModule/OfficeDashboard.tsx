@@ -35,9 +35,18 @@ const STAGES: OrderStatus[] = [
 ];
 
 export const OfficeDashboard: React.FC = () => {
-  const { orders, technicians, assignTechnician, updateOrderStatus } = useApp();
+  const {
+    orders,
+    technicians,
+    assignTechnician,
+    updateOrderStatus,
+    officeSubTab,
+    setOfficeSubTab
+  } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'orders' | 'budgets' | 'catalogs' | 'reports'>('orders');
+  const activeTab = officeSubTab;
+  const setActiveTab = setOfficeSubTab;
+
   const [viewType, setViewType] = useState<'kanban' | 'list'>('kanban');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -55,80 +64,35 @@ export const OfficeDashboard: React.FC = () => {
   );
 
   return (
-    <div id="office-dashboard" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    <div id="office-dashboard" className="w-full px-4 sm:px-6 py-4 space-y-4">
       
-      {/* Top Header & Submodule Tabs */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        
+      {/* Streamlined Top Title Bar */}
+      <div className="bg-white border border-slate-200 rounded-xl p-3 sm:p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold shadow-xs">
+          <div className="w-9 h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold shadow-2xs shrink-0">
             <Building2 className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-slate-900 leading-tight">Módulo de Administración y Oficina</h2>
-            <p className="text-xs text-slate-500">Gestión global de órdenes de servicio, presupuestos y catálogos</p>
+            <h2 className="text-sm sm:text-base font-bold text-slate-900 leading-tight">Módulo de Administración y Oficina</h2>
+            <p className="text-[11px] text-slate-500">Gestión global de órdenes de servicio, presupuestos, catálogos y métricas</p>
           </div>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex flex-wrap items-center bg-slate-100 p-1 rounded-xl gap-1">
-          <button
-            id="tab-orders"
-            onClick={() => setActiveTab('orders')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              activeTab === 'orders'
-                ? 'bg-white text-blue-600 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Órdenes de Servicio
-          </button>
-
-          <button
-            id="tab-budgets"
-            onClick={() => setActiveTab('budgets')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              activeTab === 'budgets'
-                ? 'bg-white text-blue-600 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Presupuestos y Cotizaciones
-          </button>
-
-          <button
-            id="tab-catalogs"
-            onClick={() => setActiveTab('catalogs')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              activeTab === 'catalogs'
-                ? 'bg-white text-blue-600 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Catálogos y Clientes
-          </button>
-
-          <button
-            id="tab-reports"
-            onClick={() => setActiveTab('reports')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              activeTab === 'reports'
-                ? 'bg-white text-blue-600 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Reportes y Métricas
-          </button>
-        </div>
-
+        <button
+          onClick={() => setIsCreateOpen(true)}
+          className="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center justify-center space-x-1.5 shrink-0"
+        >
+          <PlusCircle className="w-4 h-4" />
+          <span>+ Crear Reporte Mtto</span>
+        </button>
       </div>
 
       {/* SUBMODULE 1: GESTIÓN DE ÓRDENES DE SERVICIO (OS) */}
       {activeTab === 'orders' && (
-        <div className="space-y-4">
+        <div className="space-y-3">
           
           {/* Action bar: Search, View switcher & New order button */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
             <div className="relative flex-1 w-full sm:max-w-md">
               <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
               <input
@@ -140,48 +104,50 @@ export const OfficeDashboard: React.FC = () => {
               />
             </div>
 
-            <div className="flex items-center space-x-3 w-full sm:w-auto justify-end">
+            <div className="flex items-center space-x-2 w-full sm:w-auto justify-between sm:justify-end">
               <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
                 <button
                   onClick={() => setViewType('kanban')}
-                  className={`p-1.5 rounded-md text-xs font-medium ${
-                    viewType === 'kanban' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500'
+                  className={`p-1.5 rounded-md text-xs font-medium flex items-center space-x-1 ${
+                    viewType === 'kanban' ? 'bg-white text-blue-600 shadow-2xs' : 'text-slate-500'
                   }`}
                   title="Vista Kanban"
                 >
                   <LayoutGrid className="w-4 h-4" />
+                  <span className="text-[11px] font-semibold sm:hidden">Kanban</span>
                 </button>
                 <button
                   onClick={() => setViewType('list')}
-                  className={`p-1.5 rounded-md text-xs font-medium ${
-                    viewType === 'list' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500'
+                  className={`p-1.5 rounded-md text-xs font-medium flex items-center space-x-1 ${
+                    viewType === 'list' ? 'bg-white text-blue-600 shadow-2xs' : 'text-slate-500'
                   }`}
                   title="Vista Lista"
                 >
                   <List className="w-4 h-4" />
+                  <span className="text-[11px] font-semibold sm:hidden">Lista</span>
                 </button>
               </div>
 
               <button
                 onClick={() => setIsCreateOpen(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 shadow-xs transition-all whitespace-nowrap"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 shadow-2xs transition-all whitespace-nowrap"
               >
-                <PlusCircle className="w-4 h-4" />
-                <span>Crear Reporte Mtto</span>
+                <PlusCircle className="w-3.5 h-3.5" />
+                <span>Crear Reporte</span>
               </button>
             </div>
           </div>
 
-          {/* KANBAN BOARD VIEW (7 STAGES) */}
+          {/* KANBAN BOARD VIEW (7 STAGES - HORIZONTAL SCROLLING WITHOUT EXCESS VERTICAL BLANK SPACES) */}
           {viewType === 'kanban' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3 overflow-x-auto pb-4">
+            <div className="flex overflow-x-auto gap-3 pb-3 pt-1 min-w-full items-start">
               {STAGES.map(stage => {
                 const stageOrders = filteredOrders.filter(o => o.status === stage);
 
                 return (
                   <div
                     key={stage}
-                    className="bg-slate-100/80 border border-slate-200/80 rounded-2xl p-3 flex flex-col min-w-[240px] h-[580px]"
+                    className="bg-slate-100/90 border border-slate-200/90 rounded-xl p-2.5 flex flex-col w-72 shrink-0 max-h-[620px] shadow-2xs"
                   >
                     <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-200">
                       <span className="text-[11px] font-bold text-slate-700 uppercase tracking-tight truncate">
@@ -192,9 +158,9 @@ export const OfficeDashboard: React.FC = () => {
                       </span>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
+                    <div className="flex-1 overflow-y-auto space-y-2 pr-0.5">
                       {stageOrders.length === 0 ? (
-                        <div className="text-center py-8 text-[11px] text-slate-400 font-medium">
+                        <div className="text-center py-4 text-[11px] text-slate-400 font-medium bg-slate-50/50 rounded-lg border border-dashed border-slate-200">
                           Sin órdenes
                         </div>
                       ) : (

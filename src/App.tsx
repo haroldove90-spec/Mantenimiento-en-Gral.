@@ -13,9 +13,11 @@ function MainContent() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col selection:bg-blue-500 selection:text-white">
+      {/* Navigation (Left Sidebar on desktop, Top Header + Bottom Navbar on Mobile/Tablet) */}
       <Navbar onOpenCreateModal={() => setIsNavCreateOpen(true)} />
 
-      <main className="flex-1">
+      {/* Main Content Area (Offset for Desktop Sidebar) */}
+      <main className="flex-1 lg:pl-64">
         {activeRole === 'home' && <HomeDashboard />}
         {activeRole === 'office' && <OfficeDashboard />}
         {activeRole === 'tech' && <TechMobileView />}
@@ -29,7 +31,7 @@ function MainContent() {
       />
 
       {/* Clean Subtle Footer */}
-      <footer className="border-t border-slate-200 bg-white py-4 text-center text-xs text-slate-500 no-print">
+      <footer className="lg:pl-64 border-t border-slate-200 bg-white py-3 text-center text-xs text-slate-500 no-print">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>
             © {new Date().getFullYear()} Sistema de Mantenimiento & Servicios

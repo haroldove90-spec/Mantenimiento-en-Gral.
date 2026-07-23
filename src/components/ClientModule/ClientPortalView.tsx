@@ -64,7 +64,7 @@ export const ClientPortalView: React.FC = () => {
   const total = subtotal + taxAmount;
 
   return (
-    <div id="client-portal" className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+    <div id="client-portal" className="w-full max-w-5xl mx-auto px-4 sm:px-6 py-4 space-y-4">
       
       {/* Toast alert */}
       {toastMessage && (

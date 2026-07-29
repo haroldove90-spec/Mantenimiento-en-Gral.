@@ -146,49 +146,52 @@ export const ClientsAndCatalog: React.FC = () => {
         </div>
       </div>
 
-      {/* CLIENTS VIEW */}
+      {/* CLIENTS VIEW - HORIZONTAL LIST */}
       {activeTab === 'clients' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="space-y-4">
           {filteredClients.map(client => (
             <div
               key={client.id}
-              className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
+              className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all flex flex-col lg:flex-row lg:items-start justify-between gap-6"
             >
-              <div>
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-sm">
-                      <Building2 className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-slate-900 text-sm">{client.name}</h4>
-                      <span className="text-[11px] font-mono text-slate-500">RFC: {client.taxId}</span>
-                    </div>
+              {/* Client Info Block */}
+              <div className="space-y-3 lg:w-1/3 shrink-0">
+                <div className="flex items-center space-x-3">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-sm shrink-0">
+                    <Building2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-900 text-base">{client.name}</h4>
+                    <span className="text-xs font-mono font-semibold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-md border border-blue-200 inline-block mt-0.5">
+                      RFC: {client.taxId}
+                    </span>
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-1 text-xs text-slate-600 mb-4 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                  <Mail className="w-3.5 h-3.5 text-slate-400" />
-                  <span className="truncate">{client.email}</span>
+                <div className="flex items-center space-x-2 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                  <Mail className="w-4 h-4 text-slate-400 shrink-0" />
+                  <span className="truncate font-medium">{client.email}</span>
                 </div>
+              </div>
 
-                {/* 3 Departments */}
-                <div className="space-y-2">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
-                    Departamentos / Ubicaciones Registradas ({client.departments.length}):
-                  </span>
+              {/* Departments Block (Horizontal Row) */}
+              <div className="flex-1 space-y-2">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                  Departamentos / Ubicaciones Registradas ({client.departments.length}):
+                </span>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   {client.departments.map(dep => (
                     <div
                       key={dep.id}
-                      className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs space-y-0.5"
+                      className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1 hover:border-blue-300 transition-colors"
                     >
-                      <div className="font-semibold text-slate-800 flex items-center space-x-1">
+                      <div className="font-bold text-slate-800 flex items-center space-x-1">
                         <MapPin className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                        <span>{dep.name}</span>
+                        <span className="truncate">{dep.name}</span>
                       </div>
-                      <div className="text-slate-500 text-[11px] flex justify-between pl-4">
-                        <span>Contacto: {dep.contactName}</span>
-                        <span className="font-mono text-slate-700">{dep.phone}</span>
+                      <div className="text-slate-500 text-[11px] space-y-0.5 pt-0.5">
+                        <div className="truncate">Contacto: <span className="text-slate-700 font-medium">{dep.contactName}</span></div>
+                        <div className="font-mono text-slate-700">Tel: {dep.phone}</div>
                       </div>
                     </div>
                   ))}
@@ -201,8 +204,8 @@ export const ClientsAndCatalog: React.FC = () => {
 
       {/* SPARE PARTS CATALOG VIEW */}
       {activeTab === 'catalog' && (
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
-          <table className="w-full text-left text-xs">
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-x-auto">
+          <table className="w-full text-left text-xs min-w-[600px]">
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 uppercase font-bold">
               <tr>
                 <th className="py-3 px-4">Código</th>
@@ -245,83 +248,94 @@ export const ClientsAndCatalog: React.FC = () => {
 
       {/* NEW CLIENT MODAL */}
       {isClientModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
-            <h3 className="text-lg font-bold text-slate-900 mb-4">Agregar Nuevo Cliente</h3>
-            <form onSubmit={handleCreateClient} className="space-y-3 text-xs">
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">Nombre / Razon Social</label>
-                <input
-                  type="text"
-                  required
-                  value={newClientName}
-                  onChange={e => setNewClientName(e.target.value)}
-                  placeholder="Ej. Grupo Industrial Monterrey"
-                  className="w-full border border-slate-300 rounded-lg p-2.5"
-                />
-              </div>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[92vh] sm:max-h-[90vh] flex flex-col shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-4 sm:p-5 border-b border-slate-100 shrink-0 bg-white flex items-center justify-between">
+              <h3 className="text-base sm:text-lg font-bold text-slate-900">Agregar Nuevo Cliente</h3>
+              <button
+                onClick={() => setIsClientModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg bg-slate-50"
+              >
+                ✕
+              </button>
+            </div>
 
-              <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleCreateClient} className="flex flex-col flex-1 overflow-hidden">
+              <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4 text-xs">
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">RFC</label>
+                  <label className="font-semibold text-slate-700 block mb-1">Nombre / Razón Social</label>
                   <input
                     type="text"
-                    value={newClientTaxId}
-                    onChange={e => setNewClientTaxId(e.target.value)}
-                    placeholder="GIM990101XX1"
-                    className="w-full border border-slate-300 rounded-lg p-2.5"
+                    required
+                    value={newClientName}
+                    onChange={e => setNewClientName(e.target.value)}
+                    placeholder="Ej. Grupo Industrial Monterrey"
+                    className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white text-slate-800 text-sm font-medium"
                   />
                 </div>
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Email</label>
-                  <input
-                    type="email"
-                    value={newClientEmail}
-                    onChange={e => setNewClientEmail(e.target.value)}
-                    placeholder="compras@cliente.com"
-                    className="w-full border border-slate-300 rounded-lg p-2.5"
-                  />
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">RFC</label>
+                    <input
+                      type="text"
+                      value={newClientTaxId}
+                      onChange={e => setNewClientTaxId(e.target.value)}
+                      placeholder="GIM990101XX1"
+                      className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white text-slate-800 text-xs font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Email</label>
+                    <input
+                      type="email"
+                      value={newClientEmail}
+                      onChange={e => setNewClientEmail(e.target.value)}
+                      placeholder="compras@cliente.com"
+                      className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white text-slate-800 text-xs font-medium"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-slate-200">
+                  <span className="font-bold text-slate-800 block mb-2">Departamentos / Ubicaciones (3 por defecto):</span>
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Dep 1: Ej. Nave A - Producción"
+                      value={dep1Name}
+                      onChange={e => setDep1Name(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white text-slate-800 text-xs"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Dep 2: Ej. Edificio B - Laboratorio"
+                      value={dep2Name}
+                      onChange={e => setDep2Name(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white text-slate-800 text-xs"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Dep 3: Ej. Almacén Central"
+                      value={dep3Name}
+                      onChange={e => setDep3Name(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white text-slate-800 text-xs"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-slate-200">
-                <span className="font-bold text-slate-800 block mb-2">Departamentos / Ubicaciones (3):</span>
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    placeholder="Dep 1: Ej. Nave A - Producción"
-                    value={dep1Name}
-                    onChange={e => setDep1Name(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg p-2"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Dep 2: Ej. Edificio B - Laboratorio"
-                    value={dep2Name}
-                    onChange={e => setDep2Name(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg p-2"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Dep 3: Ej. Almacén Central"
-                    value={dep3Name}
-                    onChange={e => setDep3Name(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg p-2"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-2 pt-4">
+              <div className="p-4 border-t border-slate-100 bg-slate-50 shrink-0 flex items-center justify-end space-x-2">
                 <button
                   type="button"
                   onClick={() => setIsClientModalOpen(false)}
-                  className="px-4 py-2 border rounded-lg"
+                  className="px-4 py-2 border border-slate-300 bg-white rounded-lg text-xs font-semibold text-slate-700"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs shadow-md"
                 >
                   Guardar Cliente
                 </button>
@@ -333,77 +347,88 @@ export const ClientsAndCatalog: React.FC = () => {
 
       {/* NEW PART MODAL */}
       {isPartModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
-            <h3 className="text-lg font-bold text-slate-900 mb-4">Agregar Refacción al Catálogo</h3>
-            <form onSubmit={handleCreatePart} className="space-y-3 text-xs">
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">Nombre de Refacción</label>
-                <input
-                  type="text"
-                  required
-                  value={partName}
-                  onChange={e => setPartName(e.target.value)}
-                  placeholder="Ej. Batería de Gel 12V 100Ah"
-                  className="w-full border border-slate-300 rounded-lg p-2.5"
-                />
-              </div>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full max-h-[92vh] sm:max-h-[90vh] flex flex-col shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-4 sm:p-5 border-b border-slate-100 shrink-0 bg-white flex items-center justify-between">
+              <h3 className="text-base sm:text-lg font-bold text-slate-900">Agregar Refacción al Catálogo</h3>
+              <button
+                onClick={() => setIsPartModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg bg-slate-50"
+              >
+                ✕
+              </button>
+            </div>
 
-              <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleCreatePart} className="flex flex-col flex-1 overflow-hidden">
+              <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4 text-xs">
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Código</label>
+                  <label className="font-semibold text-slate-700 block mb-1">Nombre de Refacción</label>
                   <input
                     type="text"
-                    value={partCode}
-                    onChange={e => setPartCode(e.target.value)}
-                    placeholder="BAT-GEL-12V"
-                    className="w-full border border-slate-300 rounded-lg p-2.5"
+                    required
+                    value={partName}
+                    onChange={e => setPartName(e.target.value)}
+                    placeholder="Ej. Batería de Gel 12V 100Ah"
+                    className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white text-slate-800 text-sm font-medium"
                   />
                 </div>
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Categoría</label>
-                  <input
-                    type="text"
-                    value={partCategory}
-                    onChange={e => setPartCategory(e.target.value)}
-                    placeholder="Electrónica / HVAC"
-                    className="w-full border border-slate-300 rounded-lg p-2.5"
-                  />
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Código</label>
+                    <input
+                      type="text"
+                      value={partCode}
+                      onChange={e => setPartCode(e.target.value)}
+                      placeholder="BAT-GEL-12V"
+                      className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white text-slate-800 text-xs font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Categoría</label>
+                    <input
+                      type="text"
+                      value={partCategory}
+                      onChange={e => setPartCategory(e.target.value)}
+                      placeholder="Electrónica / HVAC"
+                      className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white text-slate-800 text-xs font-medium"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Precio Base (MXN)</label>
+                    <input
+                      type="number"
+                      value={partPrice}
+                      onChange={e => setPartPrice(Number(e.target.value))}
+                      className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white text-slate-800 text-xs font-semibold"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Stock Inicial</label>
+                    <input
+                      type="number"
+                      value={partStock}
+                      onChange={e => setPartStock(Number(e.target.value))}
+                      className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white text-slate-800 text-xs font-semibold"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Precio Base (MXN)</label>
-                  <input
-                    type="number"
-                    value={partPrice}
-                    onChange={e => setPartPrice(Number(e.target.value))}
-                    className="w-full border border-slate-300 rounded-lg p-2.5"
-                  />
-                </div>
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Stock Inicial</label>
-                  <input
-                    type="number"
-                    value={partStock}
-                    onChange={e => setPartStock(Number(e.target.value))}
-                    className="w-full border border-slate-300 rounded-lg p-2.5"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-2 pt-4">
+              <div className="p-4 border-t border-slate-100 bg-slate-50 shrink-0 flex items-center justify-end space-x-2">
                 <button
                   type="button"
                   onClick={() => setIsPartModalOpen(false)}
-                  className="px-4 py-2 border rounded-lg"
+                  className="px-4 py-2 border border-slate-300 bg-white rounded-lg text-xs font-semibold text-slate-700"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-bold"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs shadow-md"
                 >
                   Guardar Refacción
                 </button>

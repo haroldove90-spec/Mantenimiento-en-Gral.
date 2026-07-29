@@ -9,24 +9,30 @@ import {
   OrderStatus,
   PriorityType,
   RequestedPart,
-  Budget
+  Budget,
+  SystemUser,
+  OperatingExpense
 } from '../types';
 import {
   INITIAL_CLIENTS,
   INITIAL_ORDERS,
   INITIAL_SPARE_PARTS,
-  INITIAL_TECHNICIANS
+  INITIAL_TECHNICIANS,
+  INITIAL_USERS,
+  INITIAL_EXPENSES
 } from '../data/initialData';
 
 interface AppContextType {
   activeRole: RoleType;
   setActiveRole: (role: RoleType) => void;
-  officeSubTab: 'orders' | 'budgets' | 'catalogs' | 'reports';
-  setOfficeSubTab: (tab: 'orders' | 'budgets' | 'catalogs' | 'reports') => void;
+  officeSubTab: 'orders' | 'routes' | 'budgets' | 'catalogs' | 'reports';
+  setOfficeSubTab: (tab: 'orders' | 'routes' | 'budgets' | 'catalogs' | 'reports') => void;
   orders: ServiceOrder[];
   clients: Client[];
   spareParts: SparePart[];
   technicians: Technician[];
+  systemUsers: SystemUser[];
+  expenses: OperatingExpense[];
   notifications: Notification[];
   selectedClientOrderFolio: string | null;
   setSelectedClientOrderFolio: (folio: string | null) => void;
@@ -35,13 +41,17 @@ interface AppContextType {
   createOrder: (data: {
     clientId: string;
     departmentId: string;
+    equipmentType: string;
     description: string;
     priority: PriorityType;
     technicianId?: string;
+    scheduledDate?: string;
   }) => ServiceOrder;
 
   updateOrderStatus: (orderId: string, newStatus: OrderStatus, note?: string) => void;
-  assignTechnician: (orderId: string, technicianId: string) => void;
+  assignTechnician: (orderId: string, technicianId: string, routeOrder?: number, scheduledDate?: string) => void;
+  updateOrderRoute: (orderId: string, routeOrder: number, scheduledDate: string, notes?: string) => void;
+  reopenWarrantyOrder: (orderId: string, warrantyNotes: string) => void;
 
   // Tech actions
   startInspection: (orderId: string) => void;
@@ -56,6 +66,7 @@ interface AppContextType {
     orderId: string;
     solutionNotes: string;
     solutionPhotos: string[];
+    paymentMethod: 'Efectivo' | 'Tarjeta' | 'Transferencia' | 'Cheque';
     signature?: string;
   }) => void;
 
@@ -63,11 +74,18 @@ interface AppContextType {
   saveBudget: (orderId: string, budgetData: { laborCost: number; parts: RequestedPart[]; taxRate: number; notes?: string }) => void;
   sendBudgetToClient: (orderId: string) => void;
   addClient: (client: Omit<Client, 'id'>) => void;
+  updateClient: (id: string, clientData: Partial<Client>) => void;
   addSparePart: (part: Omit<SparePart, 'id'>) => void;
 
   // Client actions
   approveBudget: (orderId: string, clientComment?: string) => void;
   rejectBudget: (orderId: string, clientComment: string) => void;
+
+  // Owner / System Users & Expenses actions
+  addSystemUser: (user: Omit<SystemUser, 'id'>) => void;
+  updateSystemUser: (id: string, userData: Partial<SystemUser>) => void;
+  toggleUserStatus: (id: string) => void;
+  addExpense: (expense: Omit<OperatingExpense, 'id'>) => void;
 
   // Notifications
   markNotificationRead: (id: string) => void;
@@ -77,7 +95,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activeRole, setActiveRole] = useState<RoleType>('home');
-  const [officeSubTab, setOfficeSubTab] = useState<'orders' | 'budgets' | 'catalogs' | 'reports'>('orders');
+  const [officeSubTab, setOfficeSubTab] = useState<'orders' | 'routes' | 'budgets' | 'catalogs' | 'reports'>('orders');
   const [selectedClientOrderFolio, setSelectedClientOrderFolio] = useState<string | null>('OS-1004');
 
   // LocalStorage initialization with fallbacks
@@ -98,6 +116,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [technicians, setTechnicians] = useState<Technician[]>(INITIAL_TECHNICIANS);
 
+  const [systemUsers, setSystemUsers] = useState<SystemUser[]>(() => {
+    const saved = localStorage.getItem('app_system_users');
+    return saved ? JSON.parse(saved) : INITIAL_USERS;
+  });
+
+  const [expenses, setExpenses] = useState<OperatingExpense[]>(() => {
+    const saved = localStorage.getItem('app_operating_expenses');
+    return saved ? JSON.parse(saved) : INITIAL_EXPENSES;
+  });
+
   const [notifications, setNotifications] = useState<Notification[]>([
     {
       id: 'notif-1',
@@ -114,7 +142,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       targetRole: 'tech',
       orderFolio: 'OS-1005',
       title: 'Presupuesto Aprobado',
-      message: 'El cliente autorizó el presupuesto para OS-1005. ¡Puedes iniciar la reparación!',
+      message: 'El cliente autorizó el presupuesto para OS-1005. ¡Ruta programada para reparación!',
       read: false
     }
   ]);
@@ -132,6 +160,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('app_spare_parts', JSON.stringify(spareParts));
   }, [spareParts]);
 
+  useEffect(() => {
+    localStorage.setItem('app_system_users', JSON.stringify(systemUsers));
+  }, [systemUsers]);
+
+  useEffect(() => {
+    localStorage.setItem('app_operating_expenses', JSON.stringify(expenses));
+  }, [expenses]);
+
   const addNotification = (notif: Omit<Notification, 'id' | 'timestamp' | 'read'>) => {
     const newN: Notification = {
       ...notif,
@@ -145,15 +181,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const createOrder = ({
     clientId,
     departmentId,
+    equipmentType,
     description,
     priority,
-    technicianId
+    technicianId,
+    scheduledDate
   }: {
     clientId: string;
     departmentId: string;
+    equipmentType: string;
     description: string;
     priority: PriorityType;
     technicianId?: string;
+    scheduledDate?: string;
   }): ServiceOrder => {
     const client = clients.find(c => c.id === clientId);
     const department = client?.departments.find(d => d.id === departmentId);
@@ -170,12 +210,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       clientName: client?.name || 'Cliente Desconocido',
       departmentId,
       departmentName: department?.name || 'Departamento Principal',
+      equipmentType: equipmentType || 'Equipo General',
       description,
       priority,
-      status: 'Pendiente de Revisión',
+      status: 'Pendiente de Visita',
       technicianId: tech?.id,
       technicianName: tech?.name,
-      createdAt: nowStr,
+      scheduledDate: scheduledDate || new Date().toISOString().split('T')[0],
       diagnosticPhotos: [],
       requestedParts: [],
       solutionPhotos: [],
@@ -183,9 +224,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         {
           id: `tl-${Date.now()}`,
           timestamp: nowStr,
-          title: 'Orden Creada',
+          title: 'Orden de Servicio Creada',
           author: 'Oficina (Admin)',
-          note: `Folio generado: ${folio}`
+          note: `Folio: ${folio} | Equipo: ${equipmentType || 'General'}`
         }
       ]
     };
@@ -194,16 +235,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       newOrder.timeline.push({
         id: `tl-${Date.now() + 1}`,
         timestamp: nowStr,
-        title: 'Técnico Asignado',
+        title: 'Asignado a Técnico y Ruta',
         author: 'Oficina (Admin)',
-        note: `Asignado a ${tech.name}`
+        note: `Técnico: ${tech.name}`
       });
 
       addNotification({
         targetRole: 'tech',
         orderFolio: folio,
-        title: 'Nueva Orden Asignada',
-        message: `Se te ha asignado la orden ${folio} para ${newOrder.clientName}.`
+        title: 'Nueva Visita Programada',
+        message: `Asignado servicio OS ${folio} (${newOrder.clientName}) para ${newOrder.equipmentType}.`
       });
     }
 
@@ -213,7 +254,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       targetRole: 'office',
       orderFolio: folio,
       title: 'Nueva OS Registrada',
-      message: `Orden ${folio} registrada exitosamente.`
+      message: `Orden ${folio} creada para ${newOrder.clientName}.`
     });
 
     return newOrder;
@@ -242,7 +283,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
-  const assignTechnician = (orderId: string, technicianId: string) => {
+  const assignTechnician = (orderId: string, technicianId: string, routeOrder?: number, scheduledDate?: string) => {
     const tech = technicians.find(t => t.id === technicianId);
     if (!tech) return;
 
@@ -255,14 +296,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ...ord,
           technicianId: tech.id,
           technicianName: tech.name,
+          routeOrder: routeOrder || ord.routeOrder || 1,
+          scheduledDate: scheduledDate || ord.scheduledDate || new Date().toISOString().split('T')[0],
           timeline: [
             ...ord.timeline,
             {
               id: `tl-${Date.now()}`,
               timestamp: nowStr,
-              title: 'Técnico Asignado',
-              author: 'Oficina (Admin)',
-              note: `Asignado a ${tech.name}`
+              title: 'Ruta y Técnico Asignado',
+              author: 'Oficina (Logística)',
+              note: `Asignado a ${tech.name} en ruta`
             }
           ]
         };
@@ -274,8 +317,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addNotification({
         targetRole: 'tech',
         orderFolio: targetOrd.folio,
-        title: 'Asignación de Trabajo',
-        message: `Te han asignado la orden ${targetOrd.folio} (${targetOrd.clientName}).`
+        title: 'Asignación de Ruta',
+        message: `Te han programado el folio ${targetOrd.folio} (${targetOrd.clientName}) en tu ruta.`
+      });
+    }
+  };
+
+  const updateOrderRoute = (orderId: string, routeOrder: number, scheduledDate: string, notes?: string) => {
+    const nowStr = new Date().toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
+    setOrders(prev =>
+      prev.map(ord => {
+        if (ord.id !== orderId) return ord;
+        return {
+          ...ord,
+          routeOrder,
+          scheduledDate,
+          routeNotes: notes || ord.routeNotes,
+          timeline: [
+            ...ord.timeline,
+            {
+              id: `tl-${Date.now()}`,
+              timestamp: nowStr,
+              title: 'Ruta Reordenada / Reagendada',
+              author: 'Oficina (Logística)',
+              note: `Posición #${routeOrder} para el día ${scheduledDate}.`
+            }
+          ]
+        };
+      })
+    );
+  };
+
+  const reopenWarrantyOrder = (orderId: string, warrantyNotes: string) => {
+    const nowStr = new Date().toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
+    setOrders(prev =>
+      prev.map(ord => {
+        if (ord.id !== orderId) return ord;
+        return {
+          ...ord,
+          status: 'Garantía Reabierta',
+          isWarranty: true,
+          warrantyNotes,
+          timeline: [
+            ...ord.timeline,
+            {
+              id: `tl-${Date.now()}`,
+              timestamp: nowStr,
+              title: 'Folio Reabierto por Garantía',
+              author: 'Oficina (Garantías)',
+              note: `Motivo de garantía: ${warrantyNotes}`
+            }
+          ]
+        };
+      })
+    );
+
+    const ord = orders.find(o => o.id === orderId);
+    if (ord && ord.technicianId) {
+      addNotification({
+        targetRole: 'tech',
+        orderFolio: ord.folio,
+        title: 'Revisión por Garantía',
+        message: `El folio ${ord.folio} fue reabierto por garantía: "${warrantyNotes}". Requiere atención.`
       });
     }
   };
@@ -294,9 +397,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             {
               id: `tl-${Date.now()}`,
               timestamp: nowStr,
-              title: 'Revisión Técnica Iniciada',
+              title: 'Diagnóstico en Sitio Iniciado',
               author: ord.technicianName || 'Técnico',
-              note: 'El técnico ha iniciado la inspección en sitio.'
+              note: 'El técnico ha acudido al domicilio e inició revisión.'
             }
           ]
         };
@@ -316,8 +419,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     requestedParts: RequestedPart[];
   }) => {
     const nowStr = new Date().toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
-    const hasParts = requestedParts.length > 0;
-    const nextStatus: OrderStatus = hasParts ? 'Esperando Presupuesto' : 'En Cotización';
 
     setOrders(prev =>
       prev.map(ord => {
@@ -327,15 +428,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           diagnosticNotes: notes,
           diagnosticPhotos: [...ord.diagnosticPhotos, ...photos],
           requestedParts,
-          status: nextStatus,
+          status: 'Presupuesto Pendiente',
           timeline: [
             ...ord.timeline,
             {
               id: `tl-${Date.now()}`,
               timestamp: nowStr,
-              title: 'Diagnóstico Completado',
+              title: 'Diagnóstico y Lista de Refacciones Generada',
               author: ord.technicianName || 'Técnico',
-              note: `Refacciones solicitadas: ${requestedParts.length}`
+              note: `Refacciones solicitadas: ${requestedParts.length}. Evidencias enviadas a Oficina.`
             }
           ]
         };
@@ -347,8 +448,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addNotification({
         targetRole: 'office',
         orderFolio: ord.folio,
-        title: 'Diagnóstico Recibido',
-        message: `El téc. ${ord.technicianName || 'Técnico'} envió diagnóstico de ${ord.folio} con ${requestedParts.length} repuestos.`
+        title: 'Refacciones Recibidas de Campo',
+        message: `Téc. ${ord.technicianName || 'Técnico'} envió diagnóstico de ${ord.folio} con ${requestedParts.length} refacciones.`
       });
     }
   };
@@ -373,15 +474,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return {
           ...ord,
           budget: newBudget,
-          status: 'En Cotización',
+          status: 'Presupuesto Pendiente',
           timeline: [
             ...ord.timeline,
             {
               id: `tl-${Date.now()}`,
               timestamp: nowStr,
-              title: 'Presupuesto Creado/Actualizado',
+              title: 'Presupuesto Estructurado por Oficina',
               author: 'Oficina (Admin)',
-              note: 'Se estructuró la cotización de mano de obra y refacciones.'
+              note: 'Mano de obra y refacciones cotizadas.'
             }
           ]
         };
@@ -410,7 +511,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               timestamp: nowStr,
               title: 'Presupuesto Enviado al Cliente',
               author: 'Oficina (Admin)',
-              note: 'Link de autorización generado y notificado al cliente.'
+              note: 'Cotización enviada vía enlace y WhatsApp Business.'
             }
           ]
         };
@@ -422,8 +523,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addNotification({
         targetRole: 'client',
         orderFolio: ord.folio,
-        title: 'Presupuesto Disponible',
-        message: `Tu cotización para la orden ${ord.folio} está ready para autorización.`
+        title: 'Cotización Lista para Autorización',
+        message: `Tu presupuesto para ${ord.folio} está disponible para autorizar.`
       });
     }
   };
@@ -459,15 +560,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         targetRole: 'office',
         orderFolio: ord.folio,
         title: 'Presupuesto Autorizado',
-        message: `El cliente APROBÓ la cotización para ${ord.folio}. Se liberó para reparación.`
+        message: `El cliente APROBÓ el presupuesto de ${ord.folio}. Se liberó para reparación en ruta.`
       });
 
       if (ord.technicianId) {
         addNotification({
           targetRole: 'tech',
           orderFolio: ord.folio,
-          title: 'Presupuesto Aprobado',
-          message: `¡Luz verde! El cliente autorizó ${ord.folio}. Puedes proceder con los trabajos.`
+          title: 'Presupuesto Aprobado por Cliente',
+          message: `Luz verde para ${ord.folio}. Oficina ha asignado este servicio a tu ruta de reparación.`
         });
       }
     }
@@ -480,16 +581,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (ord.id !== orderId) return ord;
         return {
           ...ord,
-          status: 'En Cotización',
+          status: 'Presupuesto Pendiente',
           budget: ord.budget ? { ...ord.budget, status: 'Rechazado' } : undefined,
           timeline: [
             ...ord.timeline,
             {
               id: `tl-${Date.now()}`,
               timestamp: nowStr,
-              title: 'Presupuesto Rechazado / Ajuste Solicitado',
+              title: 'Presupuesto Rechazado por Cliente',
               author: 'Cliente',
-              note: `Comentario del cliente: ${clientComment}`
+              note: `Comentario: ${clientComment}`
             }
           ]
         };
@@ -502,7 +603,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         targetRole: 'office',
         orderFolio: ord.folio,
         title: 'Presupuesto Rechazado',
-        message: `El cliente solicitó ajustes en ${ord.folio}: "${clientComment}"`
+        message: `El cliente rechazó el presupuesto de ${ord.folio}: "${clientComment}"`
       });
     }
   };
@@ -511,11 +612,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     orderId,
     solutionNotes,
     solutionPhotos,
+    paymentMethod,
     signature
   }: {
     orderId: string;
     solutionNotes: string;
     solutionPhotos: string[];
+    paymentMethod: 'Efectivo' | 'Tarjeta' | 'Transferencia' | 'Cheque';
     signature?: string;
   }) => {
     const nowStr = new Date().toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
@@ -523,21 +626,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOrders(prev =>
       prev.map(ord => {
         if (ord.id !== orderId) return ord;
+
+        // Calculate exact total to collect from budget
+        let total = 0;
+        if (ord.budget) {
+          const partsSubtotal = ord.budget.parts.reduce((sum, p) => sum + p.quantity * p.estimatedUnitPrice, 0);
+          const subtotal = ord.budget.laborCost + partsSubtotal;
+          total = Math.round(subtotal * (1 + ord.budget.taxRate));
+        }
+
         return {
           ...ord,
-          status: 'Finalizada',
+          status: 'Cobrado/Cerrado',
           completedAt: nowStr,
           solutionNotes,
           solutionPhotos: [...ord.solutionPhotos, ...solutionPhotos],
           clientSignature: signature || ord.clientSignature,
+          paymentMethod,
+          collectedAmount: total,
           timeline: [
             ...ord.timeline,
             {
               id: `tl-${Date.now()}`,
               timestamp: nowStr,
-              title: 'Orden Resuelta y Finalizada',
+              title: 'Orden Cobrada y Cerrada',
               author: ord.technicianName || 'Técnico',
-              note: 'Trabajo completado y verificado en campo.'
+              note: `Cobro exacto de $${total.toLocaleString('es-MX')} MXN recibido vía ${paymentMethod}. Trabajo completado.`
             }
           ]
         };
@@ -549,8 +663,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addNotification({
         targetRole: 'office',
         orderFolio: ord.folio,
-        title: 'Orden Concluida',
-        message: `El téc. ${ord.technicianName || 'Técnico'} finalizó la orden ${ord.folio}.`
+        title: 'Orden Cobrada y Cerrada',
+        message: `El téc. ${ord.technicianName || 'Técnico'} cobró y cerró el folio ${ord.folio}. Pago recibido por ${paymentMethod}.`
+      });
+
+      addNotification({
+        targetRole: 'owner',
+        orderFolio: ord.folio,
+        title: 'Cobro Registrado',
+        message: `Se registró cobro de folio ${ord.folio} por el técnico ${ord.technicianName}.`
       });
     }
   };
@@ -563,12 +684,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setClients(prev => [...prev, newClient]);
   };
 
+  const updateClient = (id: string, clientData: Partial<Client>) => {
+    setClients(prev =>
+      prev.map(c => (c.id === id ? { ...c, ...clientData } : c))
+    );
+  };
+
   const addSparePart = (partData: Omit<SparePart, 'id'>) => {
     const newPart: SparePart = {
       ...partData,
       id: `sp-${Date.now()}`
     };
     setSpareParts(prev => [...prev, newPart]);
+  };
+
+  // Owner System Users & Expenses
+  const addSystemUser = (userData: Omit<SystemUser, 'id'>) => {
+    const newUser: SystemUser = {
+      ...userData,
+      id: `usr-${Date.now()}`,
+      lastLogin: 'Nunca'
+    };
+    setSystemUsers(prev => [...prev, newUser]);
+  };
+
+  const updateSystemUser = (id: string, userData: Partial<SystemUser>) => {
+    setSystemUsers(prev =>
+      prev.map(u => (u.id === id ? { ...u, ...userData } : u))
+    );
+  };
+
+  const toggleUserStatus = (id: string) => {
+    setSystemUsers(prev =>
+      prev.map(u =>
+        u.id === id ? { ...u, status: u.status === 'Activo' ? 'Inactivo' : 'Activo' } : u
+      )
+    );
+  };
+
+  const addExpense = (expenseData: Omit<OperatingExpense, 'id'>) => {
+    const newExp: OperatingExpense = {
+      ...expenseData,
+      id: `exp-${Date.now()}`
+    };
+    setExpenses(prev => [newExp, ...prev]);
   };
 
   const markNotificationRead = (id: string) => {
@@ -588,21 +747,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         clients,
         spareParts,
         technicians,
+        systemUsers,
+        expenses,
         notifications,
         selectedClientOrderFolio,
         setSelectedClientOrderFolio,
         createOrder,
         updateOrderStatus,
         assignTechnician,
+        updateOrderRoute,
+        reopenWarrantyOrder,
         startInspection,
         submitTechDiagnostic,
         submitTechResolution,
         saveBudget,
         sendBudgetToClient,
         addClient,
+        updateClient,
         addSparePart,
         approveBudget,
         rejectBudget,
+        addSystemUser,
+        updateSystemUser,
+        toggleUserStatus,
+        addExpense,
         markNotificationRead
       }}
     >

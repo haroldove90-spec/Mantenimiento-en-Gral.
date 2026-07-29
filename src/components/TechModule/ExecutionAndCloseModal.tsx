@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
-import { ServiceOrder } from '../../types';
-import { X, CheckCircle2, Camera, PenTool, Send, ShieldCheck, Plus, AlertCircle } from 'lucide-react';
+import { ServiceOrder, PaymentMethod } from '../../types';
+import { X, CheckCircle2, Camera, PenTool, Send, ShieldCheck, Plus, AlertCircle, DollarSign, CreditCard } from 'lucide-react';
 
 export const ExecutionAndCloseModal: React.FC<{
   order: ServiceOrder;
@@ -10,10 +10,13 @@ export const ExecutionAndCloseModal: React.FC<{
 }> = ({ order, isOpen, onClose }) => {
   const { submitTechResolution } = useApp();
 
+  const totalToCollect = order.budget?.grandTotal || 0;
+
   const [solutionNotes, setSolutionNotes] = useState(
     order.solutionNotes || 'Se efectuó la sustitución de piezas defectuosas, ajuste de torques y pruebas operativas a carga nominal durante 30 minutos sin anomalías.'
   );
   const [solutionPhotos, setSolutionPhotos] = useState<string[]>(order.solutionPhotos || []);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('Efectivo');
   const [signedName, setSignedName] = useState('');
   const [hasSignature, setHasSignature] = useState(false);
 
@@ -84,20 +87,22 @@ export const ExecutionAndCloseModal: React.FC<{
       orderId: order.id,
       solutionNotes,
       solutionPhotos,
-      signature: sigStr
+      signature: sigStr,
+      paymentMethod,
+      collectedAmount: totalToCollect
     });
 
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-3 z-50 overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-lg w-full p-5 shadow-2xl relative my-6 animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50">
+      <div className="bg-white rounded-2xl max-w-lg w-full max-h-[92vh] sm:max-h-[90vh] flex flex-col shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         
-        {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+        {/* Header - Fixed */}
+        <div className="flex items-center justify-between p-4 border-b border-slate-100 shrink-0 bg-white">
           <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold shrink-0">
               <CheckCircle2 className="w-5 h-5" />
             </div>
             <div>
@@ -105,23 +110,68 @@ export const ExecutionAndCloseModal: React.FC<{
               <p className="text-xs text-slate-500">{order.folio} - {order.clientName}</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600">
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg bg-slate-50 hover:bg-slate-100">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Budget Approval Banner */}
-        <div className="mb-4 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-900 flex items-center space-x-2">
-          <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
-          <div>
-            <span className="font-bold block">¡Presupuesto Aprobado por el Cliente!</span>
-            <p className="text-emerald-800 text-[11px]">
-              Mano de obra y refacciones fueron autorizadas. Registra la solución para con cluir.
-            </p>
-          </div>
-        </div>
+        {/* Scrollable Form Body */}
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+          <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4 text-xs">
 
-        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+            {/* Budget Approval Banner */}
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-900 flex items-center space-x-2">
+              <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+              <div>
+                <span className="font-bold block">¡Presupuesto Aprobado por el Cliente!</span>
+                <p className="text-emerald-800 text-[11px]">
+                  Mano de obra y refacciones fueron autorizadas. Registra la solución y el cobro para concluir.
+                </p>
+              </div>
+            </div>
+
+            {/* Read-Only Collection Block defined by Office */}
+            <div className="bg-slate-900 text-white rounded-xl p-3.5 space-y-2 border border-slate-800">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1">
+                  <DollarSign className="w-4 h-4 text-emerald-400" />
+                  <span>Cobro Total a Realizar (Definido por Administración)</span>
+                </span>
+                <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">
+                  Bloqueado para Edición
+                </span>
+              </div>
+
+              <div className="flex items-baseline justify-between bg-slate-800/80 p-2.5 rounded-lg border border-slate-700">
+                <span className="text-slate-300 text-xs font-semibold">Monto Autorizado en Cotización:</span>
+                <span className="text-2xl font-black font-mono text-emerald-400">
+                  ${totalToCollect.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
+                </span>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1 flex items-center space-x-1">
+                  <CreditCard className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Forma de Pago Recibida (Obligatorio)</span>
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                  {(['Efectivo', 'Transferencia', 'Tarjeta', 'Cheque'] as PaymentMethod[]).map(pm => (
+                    <button
+                      key={pm}
+                      type="button"
+                      onClick={() => setPaymentMethod(pm)}
+                      className={`py-2 px-2 text-xs font-bold rounded-lg border text-center transition-all ${
+                        paymentMethod === pm
+                          ? 'bg-emerald-600 border-emerald-500 text-white shadow-xs'
+                          : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      {pm}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           {/* Solution Notes */}
           <div>
             <label className="font-bold text-slate-700 block mb-1">Notas Técnicas de la Solución Aplicada</label>
@@ -204,19 +254,20 @@ export const ExecutionAndCloseModal: React.FC<{
             />
             <p className="text-[10px] text-slate-400 text-center">Firma táctil sobre el recuadro blanco</p>
           </div>
+          </div>
 
-          {/* Submit */}
-          <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+          {/* Submit Footer - Fixed */}
+          <div className="p-4 border-t border-slate-100 bg-slate-50 shrink-0 flex items-center justify-end space-x-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-slate-300 rounded-lg text-slate-700 font-semibold"
+              className="px-4 py-2 border border-slate-300 bg-white rounded-lg text-slate-700 font-semibold text-xs"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow-md flex items-center space-x-1.5"
+              className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow-md flex items-center space-x-1.5 text-xs"
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>Cerrar Orden y Enviar</span>

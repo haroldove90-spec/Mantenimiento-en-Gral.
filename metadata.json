@@ -1,5 +1,5 @@
 {
-  "name": "Gestión de Mantenimiento y Servicios",
+  "name": "Mantenimiento en General",
   "description": "Sistema de órdenes de servicio, presupuestos y soporte técnico por roles.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

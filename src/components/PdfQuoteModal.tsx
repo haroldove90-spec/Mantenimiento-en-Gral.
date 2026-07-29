@@ -23,14 +23,14 @@ export const PdfQuoteModal: React.FC<{
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-3xl w-full shadow-2xl relative my-6 overflow-hidden animate-in fade-in zoom-in-95 duration-150 border border-slate-200">
+    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50">
+      <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[92vh] sm:max-h-[90vh] flex flex-col shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-150 border border-slate-200">
         
-        {/* Top Control Bar */}
-        <div className="bg-slate-900 text-white p-4 flex items-center justify-between no-print">
+        {/* Top Control Bar - Fixed */}
+        <div className="bg-slate-900 text-white p-3.5 sm:p-4 flex items-center justify-between no-print shrink-0">
           <div className="flex items-center space-x-2">
-            <FileCheck className="w-5 h-5 text-blue-400" />
-            <span className="font-semibold text-sm">Vista Previa de Cotización (PDF/Documento)</span>
+            <FileCheck className="w-5 h-5 text-blue-400 shrink-0" />
+            <span className="font-semibold text-xs sm:text-sm">Vista Previa de Cotización (PDF/Documento)</span>
           </div>
           <div className="flex items-center space-x-2">
             <button
@@ -38,19 +38,19 @@ export const PdfQuoteModal: React.FC<{
               className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition-colors"
             >
               <Printer className="w-4 h-4" />
-              <span>Imprimir / Guardar PDF</span>
+              <span>Imprimir PDF</span>
             </button>
             <button
               onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-white rounded-lg transition-colors"
+              className="p-1.5 text-slate-400 hover:text-white rounded-lg transition-colors bg-slate-800"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* Printable Paper Area */}
-        <div className="p-8 sm:p-12 text-slate-800 space-y-8 bg-white print:p-0">
+        {/* Printable Paper Area - Scrollable */}
+        <div className="p-6 sm:p-10 text-slate-800 space-y-8 bg-white print:p-0 overflow-y-auto flex-1">
           
           {/* Document Header */}
           <div className="flex flex-col sm:flex-row justify-between items-start border-b border-slate-200 pb-6 gap-4">

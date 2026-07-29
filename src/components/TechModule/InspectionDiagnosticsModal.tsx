@@ -56,13 +56,13 @@ export const InspectionDiagnosticsModal: React.FC<{
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-3 z-50 overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-lg w-full p-5 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50">
+      <div className="bg-white rounded-2xl max-w-lg w-full max-h-[92vh] sm:max-h-[90vh] flex flex-col shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         
-        {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+        {/* Header - Fixed */}
+        <div className="flex items-center justify-between p-4 border-b border-slate-100 shrink-0 bg-white">
           <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shrink-0">
               <Wrench className="w-5 h-5" />
             </div>
             <div>
@@ -70,29 +70,32 @@ export const InspectionDiagnosticsModal: React.FC<{
               <p className="text-xs text-slate-500">{order.folio} - {order.clientName}</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600">
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg bg-slate-50 hover:bg-slate-100">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Start Inspection Button if status is Pendiente de Revisión */}
-        {order.status === 'Pendiente de Revisión' && (
-          <div className="mb-4 bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-900 flex items-center justify-between">
-            <div>
-              <span className="font-bold block">Iniciar Inspección en Sitio</span>
-              <p className="text-blue-700 text-[11px]">Presiona para marcar hora de inicio en el reporte.</p>
-            </div>
-            <button
-              onClick={handleStartInspectionClick}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 rounded-lg flex items-center space-x-1 shadow-xs"
-            >
-              <PlayCircle className="w-4 h-4" />
-              <span>Iniciar</span>
-            </button>
-          </div>
-        )}
+        {/* Scrollable Form Body */}
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+          <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4 text-xs">
 
-        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+            {/* Start Inspection Button if status is Pendiente de Revisión */}
+            {order.status === 'Pendiente de Revisión' && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-900 flex items-center justify-between">
+                <div>
+                  <span className="font-bold block">Iniciar Inspección en Sitio</span>
+                  <p className="text-blue-700 text-[11px]">Presiona para marcar hora de inicio en el reporte.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleStartInspectionClick}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 rounded-lg flex items-center space-x-1 shadow-xs"
+                >
+                  <PlayCircle className="w-4 h-4" />
+                  <span>Iniciar</span>
+                </button>
+              </div>
+            )}
           {/* Notes */}
           <div>
             <label className="font-bold text-slate-700 block mb-1">Notas del Diagnóstico Inicial</label>
@@ -195,19 +198,20 @@ export const InspectionDiagnosticsModal: React.FC<{
               ))}
             </div>
           </div>
+          </div>
 
-          {/* Submit */}
-          <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+          {/* Submit Footer - Fixed */}
+          <div className="p-4 border-t border-slate-100 bg-slate-50 shrink-0 flex items-center justify-end space-x-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-slate-300 rounded-lg text-slate-700 font-semibold"
+              className="px-4 py-2 border border-slate-300 bg-white rounded-lg text-slate-700 font-semibold text-xs"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow-md flex items-center space-x-1.5"
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow-md flex items-center space-x-1.5 text-xs"
             >
               <Send className="w-4 h-4" />
               <span>Enviar a Oficina</span>

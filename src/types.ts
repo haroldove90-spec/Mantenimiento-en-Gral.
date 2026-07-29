@@ -1,21 +1,22 @@
-export type RoleType = 'home' | 'office' | 'tech' | 'client';
+export type RoleType = 'home' | 'owner' | 'office' | 'tech' | 'client';
 
 export type PriorityType = 'Alta' | 'Media' | 'Baja';
 
 export type OrderStatus =
-  | 'Pendiente de Revisión'
+  | 'Pendiente de Visita'
   | 'En Diagnóstico'
-  | 'Esperando Presupuesto'
-  | 'En Cotización'
+  | 'Presupuesto Pendiente'
   | 'Esperando Aprobación'
   | 'En Reparación'
-  | 'Finalizada';
+  | 'Cobrado/Cerrado'
+  | 'Garantía Reabierta';
 
 export interface Department {
   id: string;
   name: string;
   contactName: string;
   phone: string;
+  address?: string;
 }
 
 export interface Client {
@@ -23,6 +24,12 @@ export interface Client {
   name: string;
   taxId: string;
   email: string;
+  phone?: string;
+  fiscalAddress?: string;
+  deliveryAddress?: string;
+  creditLimit?: number;
+  creditDays?: number;
+  category?: 'VIP' | 'Regular' | 'Corporativo' | 'Residencial';
   departments: Department[];
 }
 
@@ -71,6 +78,7 @@ export interface ServiceOrder {
   clientName: string;
   departmentId: string;
   departmentName: string;
+  equipmentType?: string; // e.g. "Climatización HVAC", "Compresor Industrial", "Tablero Eléctrico"
   description: string;
   priority: PriorityType;
   status: OrderStatus;
@@ -80,6 +88,11 @@ export interface ServiceOrder {
   startedAt?: string;
   completedAt?: string;
   
+  // Route & Agenda
+  routeOrder?: number; // e.g. 1, 2, 3 in daily route
+  scheduledDate?: string; // YYYY-MM-DD
+  routeNotes?: string;
+
   // Tech inspection data
   diagnosticPhotos: string[];
   diagnosticNotes?: string;
@@ -88,10 +101,16 @@ export interface ServiceOrder {
   // Budget data
   budget?: Budget;
 
-  // Tech execution data
+  // Tech execution & collection
   solutionNotes?: string;
   solutionPhotos: string[];
   clientSignature?: string; // base64 canvas image or signature mark
+  paymentMethod?: 'Efectivo' | 'Tarjeta' | 'Transferencia' | 'Cheque';
+  collectedAmount?: number; // exact amount collected by tech on site
+
+  // Warranty handling
+  isWarranty?: boolean;
+  warrantyNotes?: string;
 
   timeline: TimelineEvent[];
 }
@@ -105,12 +124,32 @@ export interface Technician {
   activeOrdersCount: number;
   avgResponseTimeHours: number;
   avatarUrl?: string;
+  status?: 'Activo' | 'Inactivo';
+}
+
+export interface SystemUser {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: 'owner' | 'office' | 'tech';
+  status: 'Activo' | 'Inactivo';
+  lastLogin?: string;
+}
+
+export interface OperatingExpense {
+  id: string;
+  category: 'Combustible' | 'Herramientas' | 'Viáticos' | 'Mantenimiento Vehículos' | 'Otros';
+  description: string;
+  amount: number;
+  date: string;
+  registeredBy: string;
 }
 
 export interface Notification {
   id: string;
   timestamp: string;
-  targetRole: 'office' | 'tech' | 'client';
+  targetRole: 'owner' | 'office' | 'tech' | 'client';
   orderFolio: string;
   title: string;
   message: string;

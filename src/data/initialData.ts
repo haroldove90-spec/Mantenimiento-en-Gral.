@@ -1,4 +1,4 @@
-import { Client, SparePart, Technician, ServiceOrder } from '../types';
+import { Client, SparePart, Technician, ServiceOrder, SystemUser, OperatingExpense } from '../types';
 
 export const INITIAL_CLIENTS: Client[] = [
   {
@@ -6,10 +6,16 @@ export const INITIAL_CLIENTS: Client[] = [
     name: 'Hospital Médica Sur',
     taxId: 'HMS9201018X4',
     email: 'mantenimiento@medicasur.com.mx',
+    phone: '555-0192',
+    fiscalAddress: 'Av. Puente de Piedra 150, Toriello Guerra, CDMX',
+    deliveryAddress: 'Puerta 3 - Recepción de Servicio Técnico',
+    creditLimit: 150000,
+    creditDays: 30,
+    category: 'Corporativo',
     departments: [
-      { id: 'dep-101', name: 'Quirófano Principal - Planta 2', contactName: 'Dr. Roberto Silva', phone: '555-0192' },
-      { id: 'dep-102', name: 'Laboratorio de Genética', contactName: 'Ing. Elena Rostrova', phone: '555-0193' },
-      { id: 'dep-103', name: 'Urgencias y Imagenología', contactName: 'Lic. Marco Polo', phone: '555-0194' }
+      { id: 'dep-101', name: 'Quirófano Principal - Planta 2', contactName: 'Dr. Roberto Silva', phone: '555-0192', address: 'Torre Médica A - Piso 2' },
+      { id: 'dep-102', name: 'Laboratorio de Genética', contactName: 'Ing. Elena Rostrova', phone: '555-0193', address: 'Torre de Investigación - Piso 1' },
+      { id: 'dep-103', name: 'Urgencias y Imagenología', contactName: 'Lic. Marco Polo', phone: '555-0194', address: 'Planta Baja - Urgencias' }
     ]
   },
   {
@@ -17,10 +23,16 @@ export const INITIAL_CLIENTS: Client[] = [
     name: 'Industrias Automotrices Norte',
     taxId: 'IAN851020LL3',
     email: 'compras@ianorte.com',
+    phone: '555-0311',
+    fiscalAddress: 'Parque Industrial Milimex, Av. Italia 400, Apodaca, NL',
+    deliveryAddress: 'Nave B - Portón 4 de Ensamble',
+    creditLimit: 300000,
+    creditDays: 45,
+    category: 'VIP',
     departments: [
-      { id: 'dep-201', name: 'Línea de Ensamble A', contactName: 'Ing. Javier Méndez', phone: '555-0311' },
-      { id: 'dep-202', name: 'Nave de Pintura Robótica', contactName: 'Téc. Sofía Vargas', phone: '555-0312' },
-      { id: 'dep-203', name: 'Almacén Central de Refacciones', contactName: 'Carlos Benítez', phone: '555-0313' }
+      { id: 'dep-201', name: 'Línea de Ensamble A', contactName: 'Ing. Javier Méndez', phone: '555-0311', address: 'Nave 1 - Pasillo 3' },
+      { id: 'dep-202', name: 'Nave de Pintura Robótica', contactName: 'Téc. Sofía Vargas', phone: '555-0312', address: 'Nave 2 - Área Limpia' },
+      { id: 'dep-203', name: 'Almacén Central de Refacciones', contactName: 'Carlos Benítez', phone: '555-0313', address: 'Edificio de Almacenes' }
     ]
   },
   {
@@ -28,10 +40,16 @@ export const INITIAL_CLIENTS: Client[] = [
     name: 'Corporativo San José',
     taxId: 'CSJ0103158A1',
     email: 'administracion@corporativosanjose.com',
+    phone: '555-0720',
+    fiscalAddress: 'Av. Insurgentes Sur 1602, Crédito Constructor, CDMX',
+    deliveryAddress: 'Cuarto de Máquinas Sótano 2',
+    creditLimit: 80000,
+    creditDays: 15,
+    category: 'Regular',
     departments: [
-      { id: 'dep-301', name: 'Torre A - Cuarto de Servidores', contactName: 'Sistemas IT - Andrés', phone: '555-0720' },
-      { id: 'dep-302', name: 'Piso 5 - Climatización HVAC', contactName: 'Arq. Mónica Luján', phone: '555-0721' },
-      { id: 'dep-303', name: 'Planta Baja - Grupo Electrógeno', contactName: 'Felipe Hinojosa', phone: '555-0722' }
+      { id: 'dep-301', name: 'Torre A - Cuarto de Servidores', contactName: 'Sistemas IT - Andrés', phone: '555-0720', address: 'Torre A - Piso 4' },
+      { id: 'dep-302', name: 'Piso 5 - Climatización HVAC', contactName: 'Arq. Mónica Luján', phone: '555-0721', address: 'Torre B - Azotea HVAC' },
+      { id: 'dep-303', name: 'Planta Baja - Grupo Electrógeno', contactName: 'Felipe Hinojosa', phone: '555-0722', address: 'Sótano 1 - Subestación' }
     ]
   }
 ];
@@ -46,9 +64,22 @@ export const INITIAL_SPARE_PARTS: SparePart[] = [
 ];
 
 export const INITIAL_TECHNICIANS: Technician[] = [
-  { id: 'tech-1', name: 'Carlos Ruiz', phone: '555-8811', email: 'carlos.tech@mantenimiento.com', specialty: 'Refrigeración & HVAC', activeOrdersCount: 2, avgResponseTimeHours: 2.5 },
-  { id: 'tech-2', name: 'Ana Mendoza', phone: '555-8822', email: 'ana.tech@mantenimiento.com', specialty: 'Electricidad & Control PLC', activeOrdersCount: 3, avgResponseTimeHours: 1.8 },
-  { id: 'tech-3', name: 'Roberto Gómez', phone: '555-8833', email: 'roberto.tech@mantenimiento.com', specialty: 'Mecánica & Hidráulica', activeOrdersCount: 1, avgResponseTimeHours: 3.1 }
+  { id: 'tech-1', name: 'Carlos Ruiz', phone: '555-8811', email: 'carlos.tech@mantenimiento.com', specialty: 'Refrigeración & HVAC', activeOrdersCount: 2, avgResponseTimeHours: 2.5, status: 'Activo' },
+  { id: 'tech-2', name: 'Ana Mendoza', phone: '555-8822', email: 'ana.tech@mantenimiento.com', specialty: 'Electricidad & Control PLC', activeOrdersCount: 3, avgResponseTimeHours: 1.8, status: 'Activo' },
+  { id: 'tech-3', name: 'Roberto Gómez', phone: '555-8833', email: 'roberto.tech@mantenimiento.com', specialty: 'Mecánica & Hidráulica', activeOrdersCount: 1, avgResponseTimeHours: 3.1, status: 'Activo' }
+];
+
+export const INITIAL_USERS: SystemUser[] = [
+  { id: 'usr-1', name: 'Ing. Fernando Valdés', email: 'director@empresa.com', phone: '555-0001', role: 'owner', status: 'Activo', lastLogin: 'Hoy 09:12' },
+  { id: 'usr-2', name: 'Mariana Ríos (Oficina)', email: 'oficina@empresa.com', phone: '555-0002', role: 'office', status: 'Activo', lastLogin: 'Hoy 08:30' },
+  { id: 'usr-3', name: 'Carlos Ruiz (Técnico)', email: 'carlos.tech@mantenimiento.com', phone: '555-8811', role: 'tech', status: 'Activo', lastLogin: 'Hoy 10:15' },
+  { id: 'usr-4', name: 'Ana Mendoza (Técnico)', email: 'ana.tech@mantenimiento.com', phone: '555-8822', role: 'tech', status: 'Activo', lastLogin: 'Ayer 18:40' }
+];
+
+export const INITIAL_EXPENSES: OperatingExpense[] = [
+  { id: 'exp-1', category: 'Combustible', description: 'Recarga gasolina Camioneta Técnico Carlos', amount: 1250, date: '2026-07-26', registeredBy: 'Oficina' },
+  { id: 'exp-2', category: 'Herramientas', description: 'Pinza amperimétrica Fluke para laboratorio', amount: 3400, date: '2026-07-25', registeredBy: 'Dueño' },
+  { id: 'exp-3', category: 'Viáticos', description: 'Comida y peajes ruta Apodaca Téc. Ana', amount: 480, date: '2026-07-24', registeredBy: 'Oficina' }
 ];
 
 export const INITIAL_ORDERS: ServiceOrder[] = [
@@ -59,18 +90,21 @@ export const INITIAL_ORDERS: ServiceOrder[] = [
     clientName: 'Hospital Médica Sur',
     departmentId: 'dep-101',
     departmentName: 'Quirófano Principal - Planta 2',
+    equipmentType: 'Flujo Laminar de Precisión',
     description: 'Falla en sistema de flujo laminar. Ruido anormal y baja presión de aire.',
     priority: 'Alta',
-    status: 'Pendiente de Revisión',
+    status: 'Pendiente de Visita',
     technicianId: 'tech-1',
     technicianName: 'Carlos Ruiz',
+    scheduledDate: '2026-07-28',
+    routeOrder: 1,
     createdAt: '2026-07-23 07:15',
     diagnosticPhotos: [],
     requestedParts: [],
     solutionPhotos: [],
     timeline: [
       { id: 'tl-1', timestamp: '2026-07-23 07:15', title: 'Orden Creada', author: 'Oficina (Admin)', note: 'Reporte ingresado por llamada de urgencia.' },
-      { id: 'tl-2', timestamp: '2026-07-23 07:20', title: 'Técnico Asignado', author: 'Oficina (Admin)', note: 'Asignado a Carlos Ruiz' }
+      { id: 'tl-2', timestamp: '2026-07-23 07:20', title: 'Técnico Asignado a Ruta #1', author: 'Oficina (Admin)', note: 'Asignado a Carlos Ruiz' }
     ]
   },
   {
@@ -80,11 +114,14 @@ export const INITIAL_ORDERS: ServiceOrder[] = [
     clientName: 'Industrias Automotrices Norte',
     departmentId: 'dep-201',
     departmentName: 'Línea de Ensamble A',
+    equipmentType: 'Banda Transportadora con Motor Trifásico',
     description: 'Sobrecalentamiento en motor impulsor de la banda transportadora #3.',
     priority: 'Alta',
     status: 'En Diagnóstico',
     technicianId: 'tech-2',
     technicianName: 'Ana Mendoza',
+    scheduledDate: '2026-07-28',
+    routeOrder: 2,
     createdAt: '2026-07-22 16:30',
     startedAt: '2026-07-23 08:00',
     diagnosticPhotos: [
@@ -109,11 +146,14 @@ export const INITIAL_ORDERS: ServiceOrder[] = [
     clientName: 'Corporativo San José',
     departmentId: 'dep-302',
     departmentName: 'Piso 5 - Climatización HVAC',
+    equipmentType: 'Aire Acondicionado Chillers HVAC',
     description: 'Mantenimiento preventivo semestral y cambio de filtros de aire acondicionado central.',
     priority: 'Media',
-    status: 'Esperando Presupuesto',
+    status: 'Presupuesto Pendiente',
     technicianId: 'tech-1',
     technicianName: 'Carlos Ruiz',
+    scheduledDate: '2026-07-28',
+    routeOrder: 3,
     createdAt: '2026-07-21 10:00',
     startedAt: '2026-07-22 09:00',
     diagnosticPhotos: [
@@ -136,6 +176,7 @@ export const INITIAL_ORDERS: ServiceOrder[] = [
     clientName: 'Hospital Médica Sur',
     departmentId: 'dep-102',
     departmentName: 'Laboratorio de Genética',
+    equipmentType: 'Centrífuga de Alta Velocidad',
     description: 'Calibración de centrifugas de alta precisión y reemplazo de empaques.',
     priority: 'Baja',
     status: 'Esperando Aprobación',
@@ -164,7 +205,7 @@ export const INITIAL_ORDERS: ServiceOrder[] = [
     solutionPhotos: [],
     timeline: [
       { id: 'tl-30', timestamp: '2026-07-20 11:15', title: 'Orden Creada', author: 'Oficina' },
-      { id: 'tl-31', timestamp: '2026-07-21 15:00', title: 'Presupuesto Enviado al Cliente', author: 'Oficina', note: 'Enviado por link y email.' }
+      { id: 'tl-31', timestamp: '2026-07-21 15:00', title: 'Presupuesto Enviado al Cliente', author: 'Oficina', note: 'Enviado por link y WhatsApp.' }
     ]
   },
   {
@@ -174,6 +215,7 @@ export const INITIAL_ORDERS: ServiceOrder[] = [
     clientName: 'Industrias Automotrices Norte',
     departmentId: 'dep-202',
     departmentName: 'Nave de Pintura Robótica',
+    equipmentType: 'Brazo Robótico Hidráulico',
     description: 'Fuga en electroválvula de control hidráulico en el brazo articulado #2.',
     priority: 'Alta',
     status: 'En Reparación',
@@ -213,11 +255,14 @@ export const INITIAL_ORDERS: ServiceOrder[] = [
     clientName: 'Corporativo San José',
     departmentId: 'dep-301',
     departmentName: 'Torre A - Cuarto de Servidores',
+    equipmentType: 'Respaldo de Energía UPS 10KVA',
     description: 'Reemplazo de baterías de respaldo UPS de 10 KVA.',
     priority: 'Alta',
-    status: 'Finalizada',
+    status: 'Cobrado/Cerrado',
     technicianId: 'tech-2',
     technicianName: 'Ana Mendoza',
+    paymentMethod: 'Transferencia',
+    collectedAmount: 2088,
     createdAt: '2026-07-18 08:00',
     startedAt: '2026-07-18 09:30',
     completedAt: '2026-07-18 17:00',
@@ -240,7 +285,8 @@ export const INITIAL_ORDERS: ServiceOrder[] = [
     clientSignature: 'Firma Digital Registrada - Lic. Andrés IT',
     timeline: [
       { id: 'tl-50', timestamp: '2026-07-18 08:00', title: 'Orden Creada', author: 'Oficina' },
-      { id: 'tl-51', timestamp: '2026-07-18 17:00', title: 'Orden Finalizada', author: 'Téc. Ana Mendoza', note: 'Cierre con conformidad del cliente.' }
+      { id: 'tl-51', timestamp: '2026-07-18 17:00', title: 'Orden Cobrada y Finalizada', author: 'Téc. Ana Mendoza', note: 'Cobro de $2,088 MXN recibido por Transferencia.' }
     ]
   }
 ];
+

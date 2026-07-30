@@ -13,7 +13,7 @@ function MainContent() {
   const [isNavCreateOpen, setIsNavCreateOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col selection:bg-blue-500 selection:text-white">
+    <div className="min-h-screen bg-white text-sij-dark font-sans flex flex-col selection:bg-sij-cyan selection:text-white">
       {/* Navigation (Left Sidebar on desktop, Top Header + Bottom Navbar on Mobile/Tablet) */}
       <Navbar onOpenCreateModal={() => setIsNavCreateOpen(true)} />
 

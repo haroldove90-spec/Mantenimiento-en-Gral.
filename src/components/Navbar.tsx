@@ -50,24 +50,22 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
       {activeRole !== 'home' && (
         <aside
           id="app-sidebar-desktop"
-          className="hidden lg:flex flex-col w-64 bg-slate-900 border-r border-slate-800 text-white h-screen fixed top-0 left-0 z-40 p-4 shadow-xl overflow-y-auto"
+          className="hidden lg:flex flex-col w-64 bg-sij-navy border-r border-sij-navy text-white h-screen fixed top-0 left-0 z-40 p-4 shadow-xl overflow-y-auto"
         >
           {/* Brand Header */}
-          <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+          <div className="flex items-center justify-between pb-4 border-b border-white/10">
             <button
               onClick={() => setActiveRole('home')}
               className="flex items-center space-x-3 text-left group focus:outline-hidden"
             >
-              <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-700/80 p-1 flex items-center justify-center shrink-0 shadow-md">
-                <img
-                  src="https://battwitnhrezwotkcvbc.supabase.co/storage/v1/object/public/logo/sijicono.png"
-                  alt="SIJ Logo"
-                  className="w-full h-full object-contain rounded-lg"
-                />
-              </div>
+              <img
+                src="https://battwitnhrezwotkcvbc.supabase.co/storage/v1/object/public/logo/sijicono.png"
+                alt="SIJ Logo"
+                className="h-10 w-auto object-contain shrink-0 drop-shadow-sm"
+              />
               <div>
                 <span className="font-extrabold text-lg text-white block leading-tight tracking-wider">SIJ</span>
-                <span className="text-[10px] text-slate-400 font-medium">Mantenimiento y Servicios</span>
+                <span className="text-[10px] text-sij-cyan font-semibold">Mantenimiento y Servicios</span>
               </div>
             </button>
           </div>
@@ -77,7 +75,7 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
             
             {/* Section: INICIO */}
             <div>
-              <div className="px-2 mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
+              <div className="px-2 mb-2 text-xs font-bold text-white/50 uppercase tracking-wider">
                 Navegación General
               </div>
               <button
@@ -85,8 +83,8 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
                 onClick={() => setActiveRole('home')}
                 className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                   activeRole === 'home'
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-bold'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                    ? 'bg-sij-cyan text-white shadow-md font-bold'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
                 }`}
               >
                 <Home className="w-4 h-4 shrink-0" />
@@ -96,9 +94,9 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
 
             {/* Section: DUEÑO */}
             <div>
-              <div className="px-2 mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+              <div className="px-2 mb-2 text-xs font-bold text-white/50 uppercase tracking-wider flex items-center justify-between">
                 <span>Administración</span>
-                <Crown className="w-4 h-4 text-amber-400" />
+                <Crown className="w-4 h-4 text-sij-orange" />
               </div>
 
               <button
@@ -106,20 +104,20 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
                 onClick={() => setActiveRole('owner')}
                 className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                   activeRole === 'owner'
-                    ? 'bg-amber-600 text-slate-950 shadow-md font-bold'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                    ? 'bg-sij-orange text-white shadow-md font-bold'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
                 }`}
               >
-                <Crown className="w-4 h-4 shrink-0 text-amber-400" />
+                <Crown className="w-4 h-4 shrink-0 text-sij-orange" />
                 <span>Panel del Dueño</span>
               </button>
             </div>
 
             {/* Section: OFICINA & SUB-MÓDULOS */}
             <div className="space-y-1">
-              <div className="px-2 mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+              <div className="px-2 mb-2 text-xs font-bold text-white/50 uppercase tracking-wider flex items-center justify-between">
                 <span>Módulos de Oficina</span>
-                <Building2 className="w-4 h-4 text-blue-400" />
+                <Building2 className="w-4 h-4 text-sij-cyan" />
               </div>
 
               <button
@@ -129,11 +127,11 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
                 }}
                 className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                   activeRole === 'office' && officeSubTab === 'orders'
-                    ? 'bg-blue-600 text-white shadow-md font-bold'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                    ? 'bg-sij-blue text-white shadow-md font-bold'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
                 }`}
               >
-                <FileText className="w-4 h-4 shrink-0 text-blue-400" />
+                <FileText className="w-4 h-4 shrink-0 text-sij-cyan" />
                 <span>Órdenes de Servicio</span>
               </button>
 
@@ -144,8 +142,8 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
                 }}
                 className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                   activeRole === 'office' && officeSubTab === 'budgets'
-                    ? 'bg-blue-600 text-white shadow-md font-bold'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                    ? 'bg-sij-blue text-white shadow-md font-bold'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
                 }`}
               >
                 <FileSpreadsheet className="w-4 h-4 shrink-0 text-emerald-400" />
@@ -159,11 +157,11 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
                 }}
                 className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                   activeRole === 'office' && officeSubTab === 'catalogs'
-                    ? 'bg-blue-600 text-white shadow-md font-bold'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                    ? 'bg-sij-blue text-white shadow-md font-bold'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
                 }`}
               >
-                <Users className="w-4 h-4 shrink-0 text-indigo-400" />
+                <Users className="w-4 h-4 shrink-0 text-amber-400" />
                 <span>Catálogos, Clientes e Historial</span>
               </button>
 
@@ -174,11 +172,11 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
                 }}
                 className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                   activeRole === 'office' && officeSubTab === 'reports'
-                    ? 'bg-blue-600 text-white shadow-md font-bold'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                    ? 'bg-sij-blue text-white shadow-md font-bold'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
                 }`}
               >
-                <BarChart3 className="w-4 h-4 shrink-0 text-purple-400" />
+                <BarChart3 className="w-4 h-4 shrink-0 text-sij-cyan" />
                 <span>Reportes y Métricas</span>
               </button>
             </div>
@@ -335,20 +333,18 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
       {activeRole !== 'home' && (
         <header
           id="app-mobile-top-header"
-          className="lg:hidden bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-30 shadow-md"
+          className="lg:hidden bg-sij-navy text-white border-b border-sij-navy sticky top-0 z-30 shadow-md"
         >
           <div className="px-3.5 py-2.5 flex items-center justify-between">
             <div className="flex items-center space-x-2.5 text-left">
-              <div className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-700/80 p-0.5 flex items-center justify-center shrink-0 shadow-xs">
-                <img
-                  src="https://battwitnhrezwotkcvbc.supabase.co/storage/v1/object/public/logo/sijicono.png"
-                  alt="SIJ Logo"
-                  className="w-full h-full object-contain rounded-lg"
-                />
-              </div>
+              <img
+                src="https://battwitnhrezwotkcvbc.supabase.co/storage/v1/object/public/logo/sijicono.png"
+                alt="SIJ Logo"
+                className="h-9 w-auto object-contain shrink-0 drop-shadow-sm"
+              />
               <div>
                 <span className="font-extrabold text-base text-white block leading-tight tracking-wider">SIJ</span>
-                <span className="text-[11px] text-blue-400 font-bold">{getRoleName()}</span>
+                <span className="text-[11px] text-sij-cyan font-bold">{getRoleName()}</span>
               </div>
             </div>
 

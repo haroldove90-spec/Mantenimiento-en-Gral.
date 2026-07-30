@@ -50,21 +50,19 @@ export const HomeDashboard: React.FC = () => {
       
       {/* Brand Logo & Header above role accesses */}
       <div className="text-center space-y-3 max-w-lg mx-auto">
-        <div className="w-24 h-24 sm:w-32 sm:h-32 mx-auto rounded-3xl bg-slate-900 border-2 border-slate-700/60 p-2 flex items-center justify-center shadow-2xl shadow-blue-900/20 ring-8 ring-blue-50/50">
-          <img
-            src="https://battwitnhrezwotkcvbc.supabase.co/storage/v1/object/public/logo/sijicono.png"
-            alt="SIJ Logo"
-            className="w-full h-full object-contain rounded-2xl"
-          />
-        </div>
+        <img
+          src="https://battwitnhrezwotkcvbc.supabase.co/storage/v1/object/public/logo/sijicono.png"
+          alt="SIJ Logo"
+          className="w-32 h-32 sm:w-40 sm:h-40 mx-auto object-contain drop-shadow-sm"
+        />
         <div>
-          <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight uppercase">
+          <h1 className="text-3xl sm:text-4xl font-black text-sij-navy tracking-tight uppercase">
             SIJ
           </h1>
-          <p className="text-sm sm:text-base font-bold text-blue-600 mt-1">
+          <p className="text-sm sm:text-base font-bold text-sij-blue mt-0.5">
             Sistema de Mantenimiento y Servicios
           </p>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-sij-dark/70 font-medium mt-1">
             Selecciona tu perfil de usuario para ingresar al sistema
           </p>
         </div>
@@ -80,9 +78,9 @@ export const HomeDashboard: React.FC = () => {
             <button
               id="install-pwa-btn"
               onClick={handleInstallClick}
-              className="group cursor-pointer inline-flex items-center space-x-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs sm:text-sm px-5 py-3 rounded-2xl shadow-lg shadow-blue-500/25 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
+              className="group cursor-pointer inline-flex items-center space-x-2.5 bg-sij-blue hover:bg-sij-navy text-white font-extrabold text-xs sm:text-sm px-6 py-3.5 rounded-2xl shadow-lg shadow-sij-blue/20 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
             >
-              <Smartphone className="w-5 h-5 text-blue-200 group-hover:animate-bounce" />
+              <Smartphone className="w-5 h-5 text-sij-cyan group-hover:animate-bounce" />
               <span>📲 Instalar Aplicación SIJ en tu Celular/Dispositivo</span>
               <Download className="w-4 h-4 text-white/80" />
             </button>
@@ -128,20 +126,20 @@ export const HomeDashboard: React.FC = () => {
         <button
           id="home-role-owner"
           onClick={() => setActiveRole('owner')}
-          className="group cursor-pointer bg-white border border-amber-200 rounded-2xl sm:rounded-3xl p-4 sm:p-6 flex flex-col items-center justify-center text-center gap-3 shadow-xs hover:shadow-xl hover:border-amber-500/50 transition-all duration-300"
+          className="group cursor-pointer bg-white border border-sij-orange/20 rounded-2xl sm:rounded-3xl p-4 sm:p-6 flex flex-col items-center justify-center text-center gap-3 shadow-xs hover:shadow-xl hover:border-sij-orange/60 transition-all duration-300"
         >
-          <div className="w-14 h-14 sm:w-16 sm:h-16 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-center group-hover:bg-amber-500 transition-colors duration-300 shrink-0">
-            <Crown className="w-7 h-7 sm:w-9 sm:h-9 text-amber-600 group-hover:text-slate-950 transition-colors duration-300" />
+          <div className="w-14 h-14 sm:w-16 sm:h-16 bg-sij-orange/10 border border-sij-orange/20 rounded-2xl flex items-center justify-center group-hover:bg-sij-orange transition-colors duration-300 shrink-0">
+            <Crown className="w-7 h-7 sm:w-9 sm:h-9 text-sij-orange group-hover:text-white transition-colors duration-300" />
           </div>
           <div>
-            <span className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-amber-700 transition-colors block">
+            <span className="text-sm sm:text-base font-bold text-sij-dark group-hover:text-sij-orange transition-colors block">
               Dueño / Admin
             </span>
-            <span className="text-[11px] text-slate-500 hidden sm:block mt-0.5">
-              Finanzas, gastos, ventas y gestión de personal
+            <span className="text-[11px] text-sij-dark/60 hidden sm:block mt-0.5">
+              Finanzas, gastos, ventas y personal
             </span>
           </div>
-          <div className="inline-flex items-center space-x-1 text-xs font-bold text-amber-700 group-hover:translate-x-1 transition-transform">
+          <div className="inline-flex items-center space-x-1 text-xs font-bold text-sij-orange group-hover:translate-x-1 transition-transform">
             <span>Ingresar</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </div>
@@ -151,20 +149,20 @@ export const HomeDashboard: React.FC = () => {
         <button
           id="home-role-office"
           onClick={() => setActiveRole('office')}
-          className="group cursor-pointer bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-7 flex flex-col items-center justify-center text-center gap-3 sm:gap-4 shadow-xs hover:shadow-xl hover:border-blue-500/40 transition-all duration-300"
+          className="group cursor-pointer bg-white border border-sij-blue/20 rounded-2xl sm:rounded-3xl p-4 sm:p-7 flex flex-col items-center justify-center text-center gap-3 sm:gap-4 shadow-xs hover:shadow-xl hover:border-sij-blue transition-all duration-300"
         >
-          <div className="w-14 h-14 sm:w-20 sm:h-20 bg-blue-50 border border-blue-100 rounded-2xl flex items-center justify-center group-hover:bg-blue-600 transition-colors duration-300 shrink-0">
-            <Building2 className="w-7 h-7 sm:w-10 sm:h-10 text-blue-600 group-hover:text-white transition-colors duration-300" />
+          <div className="w-14 h-14 sm:w-20 sm:h-20 bg-sij-blue/10 border border-sij-blue/20 rounded-2xl flex items-center justify-center group-hover:bg-sij-blue transition-colors duration-300 shrink-0">
+            <Building2 className="w-7 h-7 sm:w-10 sm:h-10 text-sij-blue group-hover:text-white transition-colors duration-300" />
           </div>
           <div>
-            <span className="text-sm sm:text-lg font-bold text-slate-900 group-hover:text-blue-600 transition-colors block">
+            <span className="text-sm sm:text-lg font-bold text-sij-dark group-hover:text-sij-blue transition-colors block">
               Oficina / Admin
             </span>
-            <span className="text-[11px] text-slate-500 hidden sm:block mt-0.5">
+            <span className="text-[11px] text-sij-dark/60 hidden sm:block mt-0.5">
               Gestión global, cotizaciones y reportes
             </span>
           </div>
-          <div className="inline-flex items-center space-x-1 text-xs font-bold text-blue-600 group-hover:translate-x-1 transition-transform">
+          <div className="inline-flex items-center space-x-1 text-xs font-bold text-sij-blue group-hover:translate-x-1 transition-transform">
             <span>Ingresar</span>
             <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </div>
@@ -174,20 +172,20 @@ export const HomeDashboard: React.FC = () => {
         <button
           id="home-role-tech"
           onClick={() => setActiveRole('tech')}
-          className="group cursor-pointer bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-7 flex flex-col items-center justify-center text-center gap-3 sm:gap-4 shadow-xs hover:shadow-xl hover:border-emerald-500/40 transition-all duration-300"
+          className="group cursor-pointer bg-white border border-sij-cyan/20 rounded-2xl sm:rounded-3xl p-4 sm:p-7 flex flex-col items-center justify-center text-center gap-3 sm:gap-4 shadow-xs hover:shadow-xl hover:border-sij-cyan transition-all duration-300"
         >
-          <div className="w-14 h-14 sm:w-20 sm:h-20 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center justify-center group-hover:bg-emerald-600 transition-colors duration-300 shrink-0">
-            <Wrench className="w-7 h-7 sm:w-10 sm:h-10 text-emerald-600 group-hover:text-white transition-colors duration-300" />
+          <div className="w-14 h-14 sm:w-20 sm:h-20 bg-sij-cyan/10 border border-sij-cyan/20 rounded-2xl flex items-center justify-center group-hover:bg-sij-cyan transition-colors duration-300 shrink-0">
+            <Wrench className="w-7 h-7 sm:w-10 sm:h-10 text-sij-cyan group-hover:text-white transition-colors duration-300" />
           </div>
           <div>
-            <span className="text-sm sm:text-lg font-bold text-slate-900 group-hover:text-emerald-600 transition-colors block">
+            <span className="text-sm sm:text-lg font-bold text-sij-dark group-hover:text-sij-cyan transition-colors block">
               Módulo Técnico
             </span>
-            <span className="text-[11px] text-slate-500 hidden sm:block mt-0.5">
+            <span className="text-[11px] text-sij-dark/60 hidden sm:block mt-0.5">
               Trabajos asignados y diagnóstico en campo
             </span>
           </div>
-          <div className="inline-flex items-center space-x-1 text-xs font-bold text-emerald-600 group-hover:translate-x-1 transition-transform">
+          <div className="inline-flex items-center space-x-1 text-xs font-bold text-sij-cyan group-hover:translate-x-1 transition-transform">
             <span>Ingresar</span>
             <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </div>
@@ -197,20 +195,20 @@ export const HomeDashboard: React.FC = () => {
         <button
           id="home-role-client"
           onClick={() => setActiveRole('client')}
-          className="group cursor-pointer bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-7 flex flex-col items-center justify-center text-center gap-3 sm:gap-4 shadow-xs hover:shadow-xl hover:border-purple-500/40 transition-all duration-300 col-span-2 md:col-span-1"
+          className="group cursor-pointer bg-white border border-sij-navy/20 rounded-2xl sm:rounded-3xl p-4 sm:p-7 flex flex-col items-center justify-center text-center gap-3 sm:gap-4 shadow-xs hover:shadow-xl hover:border-sij-navy transition-all duration-300 col-span-2 md:col-span-1"
         >
-          <div className="w-14 h-14 sm:w-20 sm:h-20 bg-purple-50 border border-purple-100 rounded-2xl flex items-center justify-center group-hover:bg-purple-600 transition-colors duration-300 shrink-0">
-            <UserCheck className="w-7 h-7 sm:w-10 sm:h-10 text-purple-600 group-hover:text-white transition-colors duration-300" />
+          <div className="w-14 h-14 sm:w-20 sm:h-20 bg-sij-navy/10 border border-sij-navy/20 rounded-2xl flex items-center justify-center group-hover:bg-sij-navy transition-colors duration-300 shrink-0">
+            <UserCheck className="w-7 h-7 sm:w-10 sm:h-10 text-sij-navy group-hover:text-white transition-colors duration-300" />
           </div>
           <div>
-            <span className="text-sm sm:text-lg font-bold text-slate-900 group-hover:text-purple-600 transition-colors block">
+            <span className="text-sm sm:text-lg font-bold text-sij-dark group-hover:text-sij-navy transition-colors block">
               Portal Cliente
             </span>
-            <span className="text-[11px] text-slate-500 hidden sm:block mt-0.5">
+            <span className="text-[11px] text-sij-dark/60 hidden sm:block mt-0.5">
               Autorización y firma de cotizaciones
             </span>
           </div>
-          <div className="inline-flex items-center space-x-1 text-xs font-bold text-purple-600 group-hover:translate-x-1 transition-transform">
+          <div className="inline-flex items-center space-x-1 text-xs font-bold text-sij-navy group-hover:translate-x-1 transition-transform">
             <span>Ingresar</span>
             <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </div>

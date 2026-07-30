@@ -65,21 +65,21 @@ export const HomeDashboard: React.FC = () => {
         </div>
 
         {/* PWA INSTALL BUTTON */}
-        <div className="pt-2">
+        <div className="pt-1">
           {isInstalled ? (
-            <div className="inline-flex items-center space-x-2 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold px-4 py-2 rounded-2xl shadow-2xs">
-              <CheckCircle className="w-4 h-4 text-emerald-600" />
-              <span>Aplicación SIJ Instalada en tu Dispositivo</span>
+            <div className="inline-flex items-center space-x-1.5 bg-emerald-50 border border-emerald-200/80 text-emerald-800 text-[11px] font-semibold px-3 py-1.5 rounded-lg">
+              <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Aplicación instalada</span>
             </div>
           ) : (
             <button
               id="install-pwa-btn"
               onClick={handleInstallClick}
-              className="group cursor-pointer inline-flex items-center space-x-2.5 bg-sij-blue hover:bg-sij-navy text-white font-extrabold text-xs sm:text-sm px-6 py-3.5 rounded-2xl shadow-lg shadow-sij-blue/20 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
+              className="group cursor-pointer inline-flex items-center space-x-2 bg-sij-blue hover:bg-sij-navy text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-95"
             >
-              <Smartphone className="w-5 h-5 text-sij-cyan group-hover:animate-bounce" />
-              <span>📲 Instalar Aplicación SIJ en tu Celular/Dispositivo</span>
-              <Download className="w-4 h-4 text-white/80" />
+              <Smartphone className="w-4 h-4 text-sij-cyan group-hover:animate-bounce" />
+              <span>Instala tu aplicación móvil</span>
+              <Download className="w-3.5 h-3.5 text-white/80" />
             </button>
           )}
         </div>

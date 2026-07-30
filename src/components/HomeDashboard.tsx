@@ -125,7 +125,7 @@ export const HomeDashboard: React.FC = () => {
           onClick={() => setActiveRole('owner')}
           className="group cursor-pointer bg-white border border-sij-orange/20 rounded-2xl sm:rounded-3xl p-4 sm:p-6 flex flex-col items-center justify-center text-center gap-3 shadow-xs hover:shadow-xl hover:border-sij-orange/60 transition-all duration-300"
         >
-          <div className="w-14 h-14 sm:w-16 sm:h-16 bg-sij-orange/10 border border-sij-orange/20 rounded-2xl flex items-center justify-center group-hover:bg-sij-orange transition-colors duration-300 shrink-0">
+          <div className="w-14 h-14 sm:w-18 sm:h-18 bg-sij-orange/10 border border-sij-orange/20 rounded-2xl flex items-center justify-center group-hover:bg-sij-orange transition-colors duration-300 shrink-0">
             <Crown className="w-7 h-7 sm:w-9 sm:h-9 text-sij-orange group-hover:text-white transition-colors duration-300" />
           </div>
           <div>
@@ -138,7 +138,7 @@ export const HomeDashboard: React.FC = () => {
           </div>
           <div className="inline-flex items-center space-x-1 text-xs font-bold text-sij-orange group-hover:translate-x-1 transition-transform">
             <span>Ingresar</span>
-            <ArrowRight className="w-3.5 h-3.5" />
+            <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </div>
         </button>
 
@@ -146,13 +146,13 @@ export const HomeDashboard: React.FC = () => {
         <button
           id="home-role-office"
           onClick={() => setActiveRole('office')}
-          className="group cursor-pointer bg-white border border-sij-blue/20 rounded-2xl sm:rounded-3xl p-4 sm:p-7 flex flex-col items-center justify-center text-center gap-3 sm:gap-4 shadow-xs hover:shadow-xl hover:border-sij-blue transition-all duration-300"
+          className="group cursor-pointer bg-white border border-sij-blue/20 rounded-2xl sm:rounded-3xl p-4 sm:p-6 flex flex-col items-center justify-center text-center gap-3 shadow-xs hover:shadow-xl hover:border-sij-blue transition-all duration-300"
         >
-          <div className="w-14 h-14 sm:w-20 sm:h-20 bg-sij-blue/10 border border-sij-blue/20 rounded-2xl flex items-center justify-center group-hover:bg-sij-blue transition-colors duration-300 shrink-0">
-            <Building2 className="w-7 h-7 sm:w-10 sm:h-10 text-sij-blue group-hover:text-white transition-colors duration-300" />
+          <div className="w-14 h-14 sm:w-18 sm:h-18 bg-sij-blue/10 border border-sij-blue/20 rounded-2xl flex items-center justify-center group-hover:bg-sij-blue transition-colors duration-300 shrink-0">
+            <Building2 className="w-7 h-7 sm:w-9 sm:h-9 text-sij-blue group-hover:text-white transition-colors duration-300" />
           </div>
           <div>
-            <span className="text-sm sm:text-lg font-bold text-sij-dark group-hover:text-sij-blue transition-colors block">
+            <span className="text-sm sm:text-base font-bold text-sij-dark group-hover:text-sij-blue transition-colors block">
               Oficina / Admin
             </span>
             <span className="text-[11px] text-sij-dark/60 hidden sm:block mt-0.5">
@@ -169,13 +169,13 @@ export const HomeDashboard: React.FC = () => {
         <button
           id="home-role-tech"
           onClick={() => setActiveRole('tech')}
-          className="group cursor-pointer bg-white border border-sij-cyan/20 rounded-2xl sm:rounded-3xl p-4 sm:p-7 flex flex-col items-center justify-center text-center gap-3 sm:gap-4 shadow-xs hover:shadow-xl hover:border-sij-cyan transition-all duration-300"
+          className="group cursor-pointer bg-white border border-sij-cyan/20 rounded-2xl sm:rounded-3xl p-4 sm:p-6 flex flex-col items-center justify-center text-center gap-3 shadow-xs hover:shadow-xl hover:border-sij-cyan transition-all duration-300"
         >
-          <div className="w-14 h-14 sm:w-20 sm:h-20 bg-sij-cyan/10 border border-sij-cyan/20 rounded-2xl flex items-center justify-center group-hover:bg-sij-cyan transition-colors duration-300 shrink-0">
-            <Wrench className="w-7 h-7 sm:w-10 sm:h-10 text-sij-cyan group-hover:text-white transition-colors duration-300" />
+          <div className="w-14 h-14 sm:w-18 sm:h-18 bg-sij-cyan/10 border border-sij-cyan/20 rounded-2xl flex items-center justify-center group-hover:bg-sij-cyan transition-colors duration-300 shrink-0">
+            <Wrench className="w-7 h-7 sm:w-9 sm:h-9 text-sij-cyan group-hover:text-white transition-colors duration-300" />
           </div>
           <div>
-            <span className="text-sm sm:text-lg font-bold text-sij-dark group-hover:text-sij-cyan transition-colors block">
+            <span className="text-sm sm:text-base font-bold text-sij-dark group-hover:text-sij-cyan transition-colors block">
               Módulo Técnico
             </span>
             <span className="text-[11px] text-sij-dark/60 hidden sm:block mt-0.5">
@@ -192,13 +192,13 @@ export const HomeDashboard: React.FC = () => {
         <button
           id="home-role-client"
           onClick={() => setActiveRole('client')}
-          className="group cursor-pointer bg-white border border-sij-navy/20 rounded-2xl sm:rounded-3xl p-4 sm:p-7 flex flex-col items-center justify-center text-center gap-3 sm:gap-4 shadow-xs hover:shadow-xl hover:border-sij-navy transition-all duration-300 col-span-2 md:col-span-1"
+          className="group cursor-pointer bg-white border border-sij-navy/20 rounded-2xl sm:rounded-3xl p-4 sm:p-6 flex flex-col items-center justify-center text-center gap-3 shadow-xs hover:shadow-xl hover:border-sij-navy transition-all duration-300"
         >
-          <div className="w-14 h-14 sm:w-20 sm:h-20 bg-sij-navy/10 border border-sij-navy/20 rounded-2xl flex items-center justify-center group-hover:bg-sij-navy transition-colors duration-300 shrink-0">
-            <UserCheck className="w-7 h-7 sm:w-10 sm:h-10 text-sij-navy group-hover:text-white transition-colors duration-300" />
+          <div className="w-14 h-14 sm:w-18 sm:h-18 bg-sij-navy/10 border border-sij-navy/20 rounded-2xl flex items-center justify-center group-hover:bg-sij-navy transition-colors duration-300 shrink-0">
+            <UserCheck className="w-7 h-7 sm:w-9 sm:h-9 text-sij-navy group-hover:text-white transition-colors duration-300" />
           </div>
           <div>
-            <span className="text-sm sm:text-lg font-bold text-sij-dark group-hover:text-sij-navy transition-colors block">
+            <span className="text-sm sm:text-base font-bold text-sij-dark group-hover:text-sij-navy transition-colors block">
               Portal Cliente
             </span>
             <span className="text-[11px] text-sij-dark/60 hidden sm:block mt-0.5">

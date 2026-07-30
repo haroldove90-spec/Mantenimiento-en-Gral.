@@ -2,6 +2,8 @@ export type RoleType = 'home' | 'owner' | 'office' | 'tech' | 'client';
 
 export type PriorityType = 'Alta' | 'Media' | 'Baja';
 
+export type PaymentMethod = 'Efectivo' | 'Tarjeta' | 'Transferencia' | 'Cheque';
+
 export type OrderStatus =
   | 'Pendiente de Visita'
   | 'En Diagnóstico'

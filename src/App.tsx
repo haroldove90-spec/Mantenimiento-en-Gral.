@@ -13,12 +13,12 @@ function MainContent() {
   const [isNavCreateOpen, setIsNavCreateOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-white text-sij-dark font-sans flex flex-col selection:bg-sij-cyan selection:text-white">
+    <div className="min-h-screen bg-white text-sij-dark font-sans flex flex-col selection:bg-sij-cyan selection:text-white max-w-full overflow-x-hidden">
       {/* Navigation (Left Sidebar on desktop, Top Header + Bottom Navbar on Mobile/Tablet) */}
       <Navbar onOpenCreateModal={() => setIsNavCreateOpen(true)} />
 
-      {/* Main Content Area (Offset for Desktop Sidebar when inside a role) */}
-      <main className={`flex-1 transition-all ${activeRole !== 'home' ? 'lg:pl-64 pb-24 lg:pb-0' : 'pb-8'}`}>
+      {/* Main Content Area (Offset for Desktop Sidebar) */}
+      <main className="flex-1 transition-all lg:pl-64 pb-24 lg:pb-0">
         {activeRole === 'home' && <HomeDashboard />}
         {activeRole === 'owner' && <OwnerDashboard />}
         {activeRole === 'office' && <OfficeDashboard />}

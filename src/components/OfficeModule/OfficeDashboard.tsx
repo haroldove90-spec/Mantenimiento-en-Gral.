@@ -96,7 +96,7 @@ export const OfficeDashboard: React.FC = () => {
   };
 
   return (
-    <div id="office-dashboard" className="w-full px-4 sm:px-8 py-6 space-y-6 max-w-7xl mx-auto">
+    <div id="office-dashboard" className="w-full px-3 sm:px-8 py-6 space-y-6 max-w-7xl mx-auto overflow-x-hidden">
       
       {/* Streamlined Top Title Bar */}
       <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -132,69 +132,6 @@ export const OfficeDashboard: React.FC = () => {
             <span>+ Crear Orden de Servicio (OS)</span>
           </button>
         </div>
-      </div>
-
-      {/* Sub-navigation tabs inside Office */}
-      <div className="flex bg-slate-200/80 p-1.5 rounded-2xl border border-slate-300/80 gap-1 overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('orders')}
-          className={`flex-1 min-w-[130px] px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center space-x-2 transition-all ${
-            activeTab === 'orders'
-              ? 'bg-white text-blue-900 shadow-md font-extrabold'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <List className="w-4 h-4 text-blue-600" />
-          <span>Órdenes de Servicio ({orders.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('routes')}
-          className={`flex-1 min-w-[130px] px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center space-x-2 transition-all ${
-            activeTab === 'routes'
-              ? 'bg-white text-blue-900 shadow-md font-extrabold'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <Navigation className="w-4 h-4 text-emerald-600" />
-          <span>Agenda & Rutas de Campo</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('budgets')}
-          className={`flex-1 min-w-[130px] px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center space-x-2 transition-all ${
-            activeTab === 'budgets'
-              ? 'bg-white text-blue-900 shadow-md font-extrabold'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <FileSpreadsheet className="w-4 h-4 text-amber-600" />
-          <span>Cotizaciones & Presupuestos</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('catalogs')}
-          className={`flex-1 min-w-[130px] px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center space-x-2 transition-all ${
-            activeTab === 'catalogs'
-              ? 'bg-white text-blue-900 shadow-md font-extrabold'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <Users className="w-4 h-4 text-purple-600" />
-          <span>Clientes & Catálogo</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('reports')}
-          className={`flex-1 min-w-[130px] px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center space-x-2 transition-all ${
-            activeTab === 'reports'
-              ? 'bg-white text-blue-900 shadow-md font-extrabold'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <BarChart3 className="w-4 h-4 text-indigo-600" />
-          <span>Reportes & Rendimiento</span>
-        </button>
       </div>
 
       {/* SUBMODULE 1: GESTIÓN DE ÓRDENES DE SERVICIO (OS) */}

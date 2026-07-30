@@ -38,10 +38,13 @@ export const OwnerDashboard: React.FC = () => {
     toggleUserStatus,
     addExpense,
     clearSampleData,
-    resetToDemoData
+    resetToDemoData,
+    ownerSubTab,
+    setOwnerSubTab
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'analytics' | 'financials' | 'users'>('analytics');
+  const activeTab = ownerSubTab;
+  const setActiveTab = setOwnerSubTab;
 
   // Filter state for Financial Reports
   const [dateRange, setDateRange] = useState<'weekly' | 'monthly' | 'custom'>('monthly');
@@ -154,7 +157,7 @@ export const OwnerDashboard: React.FC = () => {
   };
 
   return (
-    <div id="owner-dashboard" className="w-full px-4 sm:px-8 py-6 space-y-6 max-w-7xl mx-auto">
+    <div id="owner-dashboard" className="w-full px-3 sm:px-8 py-6 space-y-6 max-w-7xl mx-auto overflow-x-hidden">
       
       {/* Header Bar - Dueño */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-indigo-900/50 rounded-2xl p-6 text-white shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -209,45 +212,6 @@ export const OwnerDashboard: React.FC = () => {
             <span>Exportar Métricas</span>
           </button>
         </div>
-      </div>
-
-      {/* Navigation Sub-Tabs */}
-      <div className="flex bg-slate-200/80 p-1.5 rounded-2xl border border-slate-300/80 gap-1 overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('analytics')}
-          className={`flex-1 min-w-[140px] px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center space-x-2 transition-all ${
-            activeTab === 'analytics'
-              ? 'bg-white text-indigo-950 shadow-md font-extrabold'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <BarChart3 className="w-4 h-4 text-indigo-600" />
-          <span>Analítica & Cobranza</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('financials')}
-          className={`flex-1 min-w-[140px] px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center space-x-2 transition-all ${
-            activeTab === 'financials'
-              ? 'bg-white text-indigo-950 shadow-md font-extrabold'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-          <span>Reportes Financieros</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('users')}
-          className={`flex-1 min-w-[140px] px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center space-x-2 transition-all ${
-            activeTab === 'users'
-              ? 'bg-white text-indigo-950 shadow-md font-extrabold'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <Users className="w-4 h-4 text-blue-600" />
-          <span>Gestión de Usuarios ({systemUsers.length})</span>
-        </button>
       </div>
 
       {/* ------------------- TAB 1: ANALÍTICA & COBRANZA ------------------- */}

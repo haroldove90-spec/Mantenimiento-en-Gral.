@@ -27,6 +27,8 @@ interface AppContextType {
   setActiveRole: (role: RoleType) => void;
   officeSubTab: 'orders' | 'routes' | 'budgets' | 'catalogs' | 'reports';
   setOfficeSubTab: (tab: 'orders' | 'routes' | 'budgets' | 'catalogs' | 'reports') => void;
+  ownerSubTab: 'analytics' | 'financials' | 'users';
+  setOwnerSubTab: (tab: 'analytics' | 'financials' | 'users') => void;
   orders: ServiceOrder[];
   clients: Client[];
   spareParts: SparePart[];
@@ -100,6 +102,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activeRole, setActiveRole] = useState<RoleType>('home');
   const [officeSubTab, setOfficeSubTab] = useState<'orders' | 'routes' | 'budgets' | 'catalogs' | 'reports'>('orders');
+  const [ownerSubTab, setOwnerSubTab] = useState<'analytics' | 'financials' | 'users'>('analytics');
   const [selectedClientOrderFolio, setSelectedClientOrderFolio] = useState<string | null>('OS-1004');
 
   // LocalStorage initialization with fallbacks
@@ -220,6 +223,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: 'Pendiente de Visita',
       technicianId: tech?.id,
       technicianName: tech?.name,
+      createdAt: nowStr,
       scheduledDate: scheduledDate || new Date().toISOString().split('T')[0],
       diagnosticPhotos: [],
       requestedParts: [],
@@ -775,6 +779,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setActiveRole,
         officeSubTab,
         setOfficeSubTab,
+        ownerSubTab,
+        setOwnerSubTab,
         orders,
         clients,
         spareParts,

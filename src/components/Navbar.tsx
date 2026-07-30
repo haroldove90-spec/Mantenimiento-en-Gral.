@@ -59,9 +59,9 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
               className="flex items-center space-x-3 text-left group focus:outline-hidden"
             >
               <img
-                src="https://battwitnhrezwotkcvbc.supabase.co/storage/v1/object/public/logo/sijicono.png"
+                src="https://battwitnhrezwotkcvbc.supabase.co/storage/v1/object/public/logo/sij.png"
                 alt="SIJ Logo"
-                className="h-10 w-auto object-contain shrink-0 drop-shadow-sm"
+                className="h-10 w-auto object-contain shrink-0"
               />
               <div>
                 <span className="font-extrabold text-lg text-white block leading-tight tracking-wider">SIJ</span>
@@ -338,9 +338,9 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
           <div className="px-3.5 py-2.5 flex items-center justify-between">
             <div className="flex items-center space-x-2.5 text-left">
               <img
-                src="https://battwitnhrezwotkcvbc.supabase.co/storage/v1/object/public/logo/sijicono.png"
+                src="https://battwitnhrezwotkcvbc.supabase.co/storage/v1/object/public/logo/sij.png"
                 alt="SIJ Logo"
-                className="h-9 w-auto object-contain shrink-0 drop-shadow-sm"
+                className="h-9 w-auto object-contain shrink-0"
               />
               <div>
                 <span className="font-extrabold text-base text-white block leading-tight tracking-wider">SIJ</span>

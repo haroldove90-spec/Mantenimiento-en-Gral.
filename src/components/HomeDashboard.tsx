@@ -51,15 +51,12 @@ export const HomeDashboard: React.FC = () => {
       {/* Brand Logo & Header above role accesses */}
       <div className="text-center space-y-3 max-w-lg mx-auto">
         <img
-          src="https://battwitnhrezwotkcvbc.supabase.co/storage/v1/object/public/logo/sijicono.png"
+          src="https://battwitnhrezwotkcvbc.supabase.co/storage/v1/object/public/logo/sij.png"
           alt="SIJ Logo"
-          className="w-32 h-32 sm:w-40 sm:h-40 mx-auto object-contain drop-shadow-sm"
+          className="w-28 h-28 sm:w-36 sm:h-36 mx-auto object-contain"
         />
         <div>
-          <h1 className="text-3xl sm:text-4xl font-black text-sij-navy tracking-tight uppercase">
-            SIJ
-          </h1>
-          <p className="text-sm sm:text-base font-bold text-sij-blue mt-0.5">
+          <p className="text-sm sm:text-base font-bold text-sij-blue">
             Sistema de Mantenimiento y Servicios
           </p>
           <p className="text-xs text-sij-dark/70 font-medium mt-1">

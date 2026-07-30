@@ -21,7 +21,10 @@ import {
   Building2,
   Calendar,
   Filter,
-  ArrowUpRight
+  ArrowUpRight,
+  Trash2,
+  RotateCcw,
+  Database
 } from 'lucide-react';
 
 export const OwnerDashboard: React.FC = () => {
@@ -33,7 +36,9 @@ export const OwnerDashboard: React.FC = () => {
     addSystemUser,
     updateSystemUser,
     toggleUserStatus,
-    addExpense
+    addExpense,
+    clearSampleData,
+    resetToDemoData
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'analytics' | 'financials' | 'users'>('analytics');
@@ -168,8 +173,34 @@ export const OwnerDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Action button */}
-        <div className="flex items-center space-x-2">
+        {/* Action buttons */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => {
+              if (window.confirm('⚠️ ¿Estás seguro de que deseas eliminar TODOS los datos de muestra del sistema? Esta acción limpiará órdenes, clientes, refacciones y gastos de prueba.')) {
+                clearSampleData();
+              }
+            }}
+            className="bg-rose-600 hover:bg-rose-500 text-white px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md flex items-center space-x-1.5 shrink-0"
+            title="Borrar datos de prueba/muestra"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Borrar Datos de Muestra</span>
+          </button>
+
+          <button
+            onClick={() => {
+              if (window.confirm('¿Deseas restablecer los datos de muestra iniciales para pruebas?')) {
+                resetToDemoData();
+              }
+            }}
+            className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 shrink-0"
+            title="Restablecer datos demo"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Cargar Demo</span>
+          </button>
+
           <button
             onClick={() => exportReport('PDF')}
             className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-lg flex items-center space-x-1.5 shrink-0"

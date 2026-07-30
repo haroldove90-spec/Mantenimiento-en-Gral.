@@ -89,6 +89,10 @@ interface AppContextType {
 
   // Notifications
   markNotificationRead: (id: string) => void;
+
+  // Data Purge / Reset
+  clearSampleData: () => void;
+  resetToDemoData: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -736,6 +740,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
+  const clearSampleData = () => {
+    localStorage.removeItem('app_service_orders');
+    localStorage.removeItem('app_clients');
+    localStorage.removeItem('app_spare_parts');
+    localStorage.removeItem('app_system_users');
+    localStorage.removeItem('app_operating_expenses');
+
+    setOrders([]);
+    setClients([]);
+    setSpareParts([]);
+    setExpenses([]);
+    setNotifications([]);
+  };
+
+  const resetToDemoData = () => {
+    localStorage.setItem('app_service_orders', JSON.stringify(INITIAL_ORDERS));
+    localStorage.setItem('app_clients', JSON.stringify(INITIAL_CLIENTS));
+    localStorage.setItem('app_spare_parts', JSON.stringify(INITIAL_SPARE_PARTS));
+    localStorage.setItem('app_system_users', JSON.stringify(INITIAL_USERS));
+    localStorage.setItem('app_operating_expenses', JSON.stringify(INITIAL_EXPENSES));
+
+    setOrders(INITIAL_ORDERS);
+    setClients(INITIAL_CLIENTS);
+    setSpareParts(INITIAL_SPARE_PARTS);
+    setSystemUsers(INITIAL_USERS);
+    setExpenses(INITIAL_EXPENSES);
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -771,7 +803,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateSystemUser,
         toggleUserStatus,
         addExpense,
-        markNotificationRead
+        markNotificationRead,
+        clearSampleData,
+        resetToDemoData
       }}
     >
       {children}

@@ -100,9 +100,18 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [activeRole, setActiveRole] = useState<RoleType>('home');
-  const [officeSubTab, setOfficeSubTab] = useState<'orders' | 'routes' | 'budgets' | 'catalogs' | 'reports'>('orders');
-  const [ownerSubTab, setOwnerSubTab] = useState<'analytics' | 'financials' | 'users'>('analytics');
+  const [activeRole, setActiveRole] = useState<RoleType>(() => {
+    const saved = localStorage.getItem('app_active_role');
+    return (saved as RoleType) || 'home';
+  });
+  const [officeSubTab, setOfficeSubTab] = useState<'orders' | 'routes' | 'budgets' | 'catalogs' | 'reports'>(() => {
+    const saved = localStorage.getItem('app_office_subtab');
+    return (saved as any) || 'orders';
+  });
+  const [ownerSubTab, setOwnerSubTab] = useState<'analytics' | 'financials' | 'users'>(() => {
+    const saved = localStorage.getItem('app_owner_subtab');
+    return (saved as any) || 'analytics';
+  });
   const [selectedClientOrderFolio, setSelectedClientOrderFolio] = useState<string | null>('OS-1004');
 
   // LocalStorage initialization with fallbacks
@@ -155,6 +164,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ]);
 
   // Sync state to localStorage
+  useEffect(() => {
+    localStorage.setItem('app_active_role', activeRole);
+  }, [activeRole]);
+
+  useEffect(() => {
+    localStorage.setItem('app_office_subtab', officeSubTab);
+  }, [officeSubTab]);
+
+  useEffect(() => {
+    localStorage.setItem('app_owner_subtab', ownerSubTab);
+  }, [ownerSubTab]);
+
   useEffect(() => {
     localStorage.setItem('app_service_orders', JSON.stringify(orders));
   }, [orders]);

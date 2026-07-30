@@ -58,12 +58,16 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
               onClick={() => setActiveRole('home')}
               className="flex items-center space-x-3 text-left group focus:outline-hidden"
             >
-              <div className="w-10 h-10 rounded-xl bg-blue-600 group-hover:bg-blue-500 transition-colors flex items-center justify-center text-white font-bold shadow-md shadow-blue-500/20">
-                <Wrench className="w-5 h-5" />
+              <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-700/80 p-1 flex items-center justify-center shrink-0 shadow-md">
+                <img
+                  src="https://battwitnhrezwotkcvbc.supabase.co/storage/v1/object/public/logo/sijicono.png"
+                  alt="SIJ Logo"
+                  className="w-full h-full object-contain rounded-lg"
+                />
               </div>
               <div>
-                <span className="font-bold text-base text-white block leading-tight">Gestión OS</span>
-                <span className="text-[10px] text-slate-400 font-normal">Mantenimiento en General</span>
+                <span className="font-extrabold text-lg text-white block leading-tight tracking-wider">SIJ</span>
+                <span className="text-[10px] text-slate-400 font-medium">Mantenimiento y Servicios</span>
               </div>
             </button>
           </div>
@@ -335,11 +339,15 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
         >
           <div className="px-3.5 py-2.5 flex items-center justify-between">
             <div className="flex items-center space-x-2.5 text-left">
-              <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center font-bold text-white shadow-xs shrink-0">
-                <Wrench className="w-5 h-5" />
+              <div className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-700/80 p-0.5 flex items-center justify-center shrink-0 shadow-xs">
+                <img
+                  src="https://battwitnhrezwotkcvbc.supabase.co/storage/v1/object/public/logo/sijicono.png"
+                  alt="SIJ Logo"
+                  className="w-full h-full object-contain rounded-lg"
+                />
               </div>
               <div>
-                <span className="font-bold text-sm text-white block leading-tight">Gestión OS</span>
+                <span className="font-extrabold text-base text-white block leading-tight tracking-wider">SIJ</span>
                 <span className="text-[11px] text-blue-400 font-bold">{getRoleName()}</span>
               </div>
             </div>

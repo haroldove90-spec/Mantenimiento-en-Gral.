@@ -1,0 +1,23 @@
+{
+  "short_name": "SIJ",
+  "name": "SIJ - Sistema de Mantenimiento y Servicios",
+  "icons": [
+    {
+      "src": "https://battwitnhrezwotkcvbc.supabase.co/storage/v1/object/public/logo/sijicono.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://battwitnhrezwotkcvbc.supabase.co/storage/v1/object/public/logo/sijicono.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "display": "standalone",
+  "orientation": "portrait"
+}

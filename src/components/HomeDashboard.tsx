@@ -1,30 +1,126 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Building2, Wrench, UserCheck, ArrowRight, Crown } from 'lucide-react';
+import { Building2, Wrench, UserCheck, ArrowRight, Crown, Download, Smartphone, CheckCircle, Info } from 'lucide-react';
 
 export const HomeDashboard: React.FC = () => {
   const { setActiveRole } = useApp();
 
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+  const [showIosInstructions, setShowIosInstructions] = useState(false);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    if (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone) {
+      setIsInstalled(true);
+    }
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setIsInstalled(true);
+      }
+      setDeferredPrompt(null);
+    } else {
+      // Check if iOS or desktop without prompt
+      const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+      if (isIos) {
+        setShowIosInstructions(true);
+      } else {
+        alert('Para instalar SIJ en tu dispositivo, busca la opción "Agregar a la pantalla principal" o "Instalar aplicación" en el menú de tu navegador.');
+      }
+    }
+  };
+
   return (
-    <div id="home-dashboard" className="max-w-4xl mx-auto px-4 py-6 sm:py-12 flex flex-col items-center justify-center min-h-[80vh] space-y-6 sm:space-y-10">
+    <div id="home-dashboard" className="max-w-4xl mx-auto px-4 py-6 sm:py-10 flex flex-col items-center justify-center min-h-[80vh] space-y-6 sm:space-y-8">
       
       {/* Brand Logo & Header above role accesses */}
       <div className="text-center space-y-3 max-w-lg mx-auto">
-        <div className="w-20 h-20 sm:w-24 sm:h-24 mx-auto rounded-3xl bg-gradient-to-tr from-blue-700 via-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-xl shadow-blue-500/20 ring-8 ring-blue-50">
-          <Wrench className="w-10 h-10 sm:w-12 sm:h-12" />
+        <div className="w-24 h-24 sm:w-32 sm:h-32 mx-auto rounded-3xl bg-slate-900 border-2 border-slate-700/60 p-2 flex items-center justify-center shadow-2xl shadow-blue-900/20 ring-8 ring-blue-50/50">
+          <img
+            src="https://battwitnhrezwotkcvbc.supabase.co/storage/v1/object/public/logo/sijicono.png"
+            alt="SIJ Logo"
+            className="w-full h-full object-contain rounded-2xl"
+          />
         </div>
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            Gestión OS
+          <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight uppercase">
+            SIJ
           </h1>
-          <p className="text-sm sm:text-base font-semibold text-blue-600 mt-1">
+          <p className="text-sm sm:text-base font-bold text-blue-600 mt-1">
             Sistema de Mantenimiento y Servicios
           </p>
           <p className="text-xs text-slate-500 mt-1">
             Selecciona tu perfil de usuario para ingresar al sistema
           </p>
         </div>
+
+        {/* PWA INSTALL BUTTON */}
+        <div className="pt-2">
+          {isInstalled ? (
+            <div className="inline-flex items-center space-x-2 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold px-4 py-2 rounded-2xl shadow-2xs">
+              <CheckCircle className="w-4 h-4 text-emerald-600" />
+              <span>Aplicación SIJ Instalada en tu Dispositivo</span>
+            </div>
+          ) : (
+            <button
+              id="install-pwa-btn"
+              onClick={handleInstallClick}
+              className="group cursor-pointer inline-flex items-center space-x-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs sm:text-sm px-5 py-3 rounded-2xl shadow-lg shadow-blue-500/25 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
+            >
+              <Smartphone className="w-5 h-5 text-blue-200 group-hover:animate-bounce" />
+              <span>📲 Instalar Aplicación SIJ en tu Celular/Dispositivo</span>
+              <Download className="w-4 h-4 text-white/80" />
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* iOS Installation Instruction Modal */}
+      {showIosInstructions && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 space-y-4 text-center shadow-2xl relative border border-slate-100">
+            <div className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto text-blue-600 font-bold">
+              <Info className="w-6 h-6" />
+            </div>
+            <h3 className="font-bold text-slate-900 text-base">Instalar SIJ en iPhone / iPad</h3>
+            <ol className="text-xs text-slate-600 text-left space-y-2 font-medium bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
+              <li className="flex items-start space-x-2">
+                <span className="font-bold text-blue-600">1.</span>
+                <span>Toca el botón de <strong>Compartir</strong> (icono de cuadrado con flecha hacia arriba) en la barra de Safari.</span>
+              </li>
+              <li className="flex items-start space-x-2">
+                <span className="font-bold text-blue-600">2.</span>
+                <span>Desplázate hacia abajo y selecciona <strong>"Agregar a inicio"</strong> (Add to Home Screen).</span>
+              </li>
+              <li className="flex items-start space-x-2">
+                <span className="font-bold text-blue-600">3.</span>
+                <span>Toca <strong>"Agregar"</strong> en la esquina superior derecha.</span>
+              </li>
+            </ol>
+            <button
+              onClick={() => setShowIosInstructions(false)}
+              className="w-full bg-slate-900 text-white font-bold text-xs py-2.5 rounded-xl hover:bg-slate-800 transition-colors"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Role Access Cards (2 columns on mobile, 4 columns on desktop) */}
       <div className="w-full grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">

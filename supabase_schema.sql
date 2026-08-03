@@ -1,5 +1,5 @@
 -- ====================================================================
--- SUPABASE SCHEMA & RLS POLICIES FOR SITEMA DE GESTIÓN DE SERVICIOS
+-- SUPABASE SCHEMA & RLS POLICIES FOR SISTEMA DE GESTIÓN DE SERVICIOS
 -- Project: battwitnhrezwotkcvbc (sij@appdesignproyectos.com's Project)
 -- URL: https://battwitnhrezwotkcvbc.supabase.co
 -- ====================================================================
@@ -43,10 +43,10 @@ EXCEPTION
 END $$;
 
 -- --------------------------------------------------------------------
--- 2. TABLES DEFINITION
+-- 2. TABLAS
 -- --------------------------------------------------------------------
 
--- System Users & Profiles
+-- Usuarios del Sistema
 CREATE TABLE IF NOT EXISTS public.system_users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     auth_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
@@ -59,11 +59,11 @@ CREATE TABLE IF NOT EXISTS public.system_users (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Clients
+-- Clientes
 CREATE TABLE IF NOT EXISTS public.clients (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name TEXT NOT NULL,
-    tax_id TEXT, -- RFC / NIT
+    tax_id TEXT,
     fiscal_address TEXT,
     delivery_address TEXT,
     contact_name TEXT NOT NULL,
@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS public.clients (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Client Departments / Locations
+-- Departamentos / Sucursales
 CREATE TABLE IF NOT EXISTS public.departments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     client_id UUID NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
@@ -83,7 +83,7 @@ CREATE TABLE IF NOT EXISTS public.departments (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Technicians Directory
+-- Técnicos de Campo
 CREATE TABLE IF NOT EXISTS public.technicians (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES public.system_users(id) ON DELETE SET NULL,
@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS public.technicians (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Spare Parts & Catalog (Precios y Refacciones)
+-- Catálogo de Refacciones y Precios
 CREATE TABLE IF NOT EXISTS public.spare_parts (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     code TEXT NOT NULL UNIQUE,
@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS public.spare_parts (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Service Orders (Órdenes de Servicio)
+-- Órdenes de Servicio (OS)
 CREATE TABLE IF NOT EXISTS public.service_orders (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     folio TEXT NOT NULL UNIQUE,
@@ -133,12 +133,12 @@ CREATE TABLE IF NOT EXISTS public.service_orders (
     completed_at TIMESTAMP WITH TIME ZONE
 );
 
--- Budgets / Cotizaciones
+-- Cotizaciones y Presupuestos
 CREATE TABLE IF NOT EXISTS public.budgets (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     order_id UUID NOT NULL UNIQUE REFERENCES public.service_orders(id) ON DELETE CASCADE,
     labor_cost NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
-    tax_rate NUMERIC(5, 4) NOT NULL DEFAULT 0.1600, -- 16% IVA
+    tax_rate NUMERIC(5, 4) NOT NULL DEFAULT 0.1600,
     subtotal NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
     grand_total NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
     status TEXT NOT NULL DEFAULT 'Borrador' CHECK (status IN ('Borrador', 'Enviado', 'Aprobado', 'Rechazado')),
@@ -148,7 +148,7 @@ CREATE TABLE IF NOT EXISTS public.budgets (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Requested Parts per Budget / Order
+-- Refacciones Solicitadas por Orden
 CREATE TABLE IF NOT EXISTS public.requested_parts (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     order_id UUID NOT NULL REFERENCES public.service_orders(id) ON DELETE CASCADE,
@@ -160,7 +160,7 @@ CREATE TABLE IF NOT EXISTS public.requested_parts (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Order Timeline Log
+-- Historial de Cambios (Timeline)
 CREATE TABLE IF NOT EXISTS public.order_timeline (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     order_id UUID NOT NULL REFERENCES public.service_orders(id) ON DELETE CASCADE,
@@ -170,7 +170,7 @@ CREATE TABLE IF NOT EXISTS public.order_timeline (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Operating Expenses (Gastos Operativos - Dueño)
+-- Gastos Operativos (Dueño)
 CREATE TABLE IF NOT EXISTS public.operating_expenses (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     category TEXT NOT NULL CHECK (category IN ('Combustible', 'Herramientas', 'Viáticos', 'Mantenimiento Vehículos', 'Otros')),
@@ -182,7 +182,7 @@ CREATE TABLE IF NOT EXISTS public.operating_expenses (
 );
 
 -- --------------------------------------------------------------------
--- 3. INDEXES FOR PERFORMANCE
+-- 3. ÍNDICES DE RENDIMIENTO
 -- --------------------------------------------------------------------
 CREATE INDEX IF NOT EXISTS idx_orders_client ON public.service_orders(client_id);
 CREATE INDEX IF NOT EXISTS idx_orders_tech ON public.service_orders(technician_id);
@@ -190,9 +190,8 @@ CREATE INDEX IF NOT EXISTS idx_orders_status ON public.service_orders(status);
 CREATE INDEX IF NOT EXISTS idx_timeline_order ON public.order_timeline(order_id);
 
 -- --------------------------------------------------------------------
--- 4. ROW LEVEL SECURITY (RLS) POLICIES & PERMISSIONS
+-- 4. HABILITAR ROW LEVEL SECURITY (RLS)
 -- --------------------------------------------------------------------
-
 ALTER TABLE public.system_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.departments ENABLE ROW LEVEL SECURITY;
@@ -204,7 +203,7 @@ ALTER TABLE public.requested_parts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.order_timeline ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.operating_expenses ENABLE ROW LEVEL SECURITY;
 
--- Helper function to get current authenticated user role
+-- Función aux para obtener el rol del usuario auth
 CREATE OR REPLACE FUNCTION public.get_current_user_role()
 RETURNS user_role_type AS $$
 DECLARE
@@ -218,8 +217,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- --- RLS: SYSTEM USERS & EXPENSES ---
--- Owner has full control over system_users & operating_expenses
+-- --------------------------------------------------------------------
+-- 5. POLÍTICAS DE SEGURIDAD (RLS) IDEMPOTENTES (CON DROP POLICY)
+-- --------------------------------------------------------------------
+
+-- System Users & Expenses (Owner)
 DROP POLICY IF EXISTS owner_full_users ON public.system_users;
 CREATE POLICY owner_full_users ON public.system_users
     FOR ALL USING (public.get_current_user_role() = 'owner');
@@ -228,8 +230,7 @@ DROP POLICY IF EXISTS owner_full_expenses ON public.operating_expenses;
 CREATE POLICY owner_full_expenses ON public.operating_expenses
     FOR ALL USING (public.get_current_user_role() = 'owner');
 
--- --- RLS: CATALOG & SPARE PARTS ---
--- Owner & Office can insert/update spare_parts catalog. Technicians can read only.
+-- Spare Parts / Catalog
 DROP POLICY IF EXISTS catalog_read_all ON public.spare_parts;
 CREATE POLICY catalog_read_all ON public.spare_parts
     FOR SELECT USING (true);
@@ -238,7 +239,7 @@ DROP POLICY IF EXISTS catalog_write_admin ON public.spare_parts;
 CREATE POLICY catalog_write_admin ON public.spare_parts
     FOR ALL USING (public.get_current_user_role() IN ('owner', 'office'));
 
--- --- RLS: CLIENTS & DEPARTMENTS ---
+-- Clients & Departments
 DROP POLICY IF EXISTS clients_admin_all ON public.clients;
 CREATE POLICY clients_admin_all ON public.clients
     FOR ALL USING (public.get_current_user_role() IN ('owner', 'office'));
@@ -255,13 +256,11 @@ DROP POLICY IF EXISTS depts_read_tech ON public.departments;
 CREATE POLICY depts_read_tech ON public.departments
     FOR SELECT USING (public.get_current_user_role() = 'tech');
 
--- --- RLS: SERVICE ORDERS ---
--- Admin & Office can do everything
+-- Service Orders
 DROP POLICY IF EXISTS orders_admin_all ON public.service_orders;
 CREATE POLICY orders_admin_all ON public.service_orders
     FOR ALL USING (public.get_current_user_role() IN ('owner', 'office'));
 
--- Technicians can read assigned orders and update diagnostic/solution fields
 DROP POLICY IF EXISTS orders_tech_select ON public.service_orders;
 CREATE POLICY orders_tech_select ON public.service_orders
     FOR SELECT USING (
@@ -275,30 +274,23 @@ CREATE POLICY orders_tech_update ON public.service_orders
         public.get_current_user_role() = 'tech'
         OR technician_id IN (SELECT id FROM public.technicians WHERE user_id = auth.uid())
     )
-    WITH CHECK (
-        -- Technicians can change status, photos, solution notes, signature & payment method
-        -- but CANNOT modify prices, client_id or budget fields directly
-        true
-    );
+    WITH CHECK (true);
 
--- --- RLS: BUDGETS & COTIZACIONES ---
--- Owner & Office have full CRUD control over Budgets
+-- Budgets
 DROP POLICY IF EXISTS budgets_admin_all ON public.budgets;
 CREATE POLICY budgets_admin_all ON public.budgets
     FOR ALL USING (public.get_current_user_role() IN ('owner', 'office'));
 
--- Technicians can view total amount & budget status (read-only)
 DROP POLICY IF EXISTS budgets_tech_read ON public.budgets;
 CREATE POLICY budgets_tech_read ON public.budgets
     FOR SELECT USING (public.get_current_user_role() IN ('tech', 'client'));
 
--- Clients can update budget status to 'Aprobado' or 'Rechazado'
 DROP POLICY IF EXISTS budgets_client_update ON public.budgets;
 CREATE POLICY budgets_client_update ON public.budgets
     FOR UPDATE USING (public.get_current_user_role() = 'client')
     WITH CHECK (status IN ('Aprobado', 'Rechazado'));
 
--- Timeline log readable by all logged users
+-- Timeline
 DROP POLICY IF EXISTS timeline_read_all ON public.order_timeline;
 CREATE POLICY timeline_read_all ON public.order_timeline
     FOR SELECT USING (true);
@@ -307,7 +299,7 @@ DROP POLICY IF EXISTS timeline_write_authenticated ON public.order_timeline;
 CREATE POLICY timeline_write_authenticated ON public.order_timeline
     FOR INSERT WITH CHECK (auth.role() = 'authenticated' OR true);
 
--- --- Permisos globales para administración y dueño ---
+-- Políticas Globales para Admin / Dueño (Sin duplicidad)
 DROP POLICY IF EXISTS admin_owner_full_orders ON public.service_orders;
 CREATE POLICY admin_owner_full_orders ON public.service_orders FOR ALL USING (true);
 
@@ -323,9 +315,8 @@ CREATE POLICY admin_owner_full_clients ON public.clients FOR ALL USING (true);
 DROP POLICY IF EXISTS admin_owner_full_expenses ON public.operating_expenses;
 CREATE POLICY admin_owner_full_expenses ON public.operating_expenses FOR ALL USING (true);
 
--- Grant privileges to authenticated & anon roles for demo resilience
+-- --------------------------------------------------------------------
+-- 6. PERMISOS GLOBALES
+-- --------------------------------------------------------------------
 GRANT ALL ON ALL TABLES IN SCHEMA public TO postgres, service_role;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated, anon;
-
-COMMENT ON TABLE public.service_orders IS 'Tabla principal de Órdenes de Servicio con trazabilidad de folios';
-COMMENT ON TABLE public.budgets IS 'Cotizaciones con restricción de modificación solo para Oficina/Dueño';

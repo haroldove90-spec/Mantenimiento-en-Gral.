@@ -17,8 +17,8 @@ function MainContent() {
       {/* Navigation (Left Sidebar on desktop, Top Header + Bottom Navbar on Mobile/Tablet) */}
       <Navbar onOpenCreateModal={() => setIsNavCreateOpen(true)} />
 
-      {/* Main Content Area (Offset for Desktop Sidebar) */}
-      <main className="flex-1 transition-all lg:pl-64 pb-24 lg:pb-0">
+      {/* Main Content Area (Offset for Desktop Sidebar when inside a role module) */}
+      <main className={`flex-1 transition-all ${activeRole !== 'home' ? 'lg:pl-64 pb-24 lg:pb-0' : 'pb-8'}`}>
         {activeRole === 'home' && <HomeDashboard />}
         {activeRole === 'owner' && <OwnerDashboard />}
         {activeRole === 'office' && <OfficeDashboard />}

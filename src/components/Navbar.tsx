@@ -49,6 +49,10 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
     }
   };
 
+  if (activeRole === 'home') {
+    return null;
+  }
+
   return (
     <>
       {/* ------------------- DESKTOP LEFT SIDEBAR (lg:flex, ALWAYS VISIBLE ON DESKTOP) ------------------- */}

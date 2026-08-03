@@ -220,45 +220,56 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- --- RLS: SYSTEM USERS & EXPENSES ---
 -- Owner has full control over system_users & operating_expenses
+DROP POLICY IF EXISTS owner_full_users ON public.system_users;
 CREATE POLICY owner_full_users ON public.system_users
     FOR ALL USING (public.get_current_user_role() = 'owner');
 
+DROP POLICY IF EXISTS owner_full_expenses ON public.operating_expenses;
 CREATE POLICY owner_full_expenses ON public.operating_expenses
     FOR ALL USING (public.get_current_user_role() = 'owner');
 
 -- --- RLS: CATALOG & SPARE PARTS ---
 -- Owner & Office can insert/update spare_parts catalog. Technicians can read only.
+DROP POLICY IF EXISTS catalog_read_all ON public.spare_parts;
 CREATE POLICY catalog_read_all ON public.spare_parts
     FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS catalog_write_admin ON public.spare_parts;
 CREATE POLICY catalog_write_admin ON public.spare_parts
     FOR ALL USING (public.get_current_user_role() IN ('owner', 'office'));
 
 -- --- RLS: CLIENTS & DEPARTMENTS ---
+DROP POLICY IF EXISTS clients_admin_all ON public.clients;
 CREATE POLICY clients_admin_all ON public.clients
     FOR ALL USING (public.get_current_user_role() IN ('owner', 'office'));
 
+DROP POLICY IF EXISTS clients_read_tech ON public.clients;
 CREATE POLICY clients_read_tech ON public.clients
     FOR SELECT USING (public.get_current_user_role() = 'tech');
 
+DROP POLICY IF EXISTS depts_admin_all ON public.departments;
 CREATE POLICY depts_admin_all ON public.departments
     FOR ALL USING (public.get_current_user_role() IN ('owner', 'office'));
 
+DROP POLICY IF EXISTS depts_read_tech ON public.departments;
 CREATE POLICY depts_read_tech ON public.departments
     FOR SELECT USING (public.get_current_user_role() = 'tech');
 
 -- --- RLS: SERVICE ORDERS ---
 -- Admin & Office can do everything
+DROP POLICY IF EXISTS orders_admin_all ON public.service_orders;
 CREATE POLICY orders_admin_all ON public.service_orders
     FOR ALL USING (public.get_current_user_role() IN ('owner', 'office'));
 
 -- Technicians can read assigned orders and update diagnostic/solution fields
+DROP POLICY IF EXISTS orders_tech_select ON public.service_orders;
 CREATE POLICY orders_tech_select ON public.service_orders
     FOR SELECT USING (
         public.get_current_user_role() = 'tech'
         OR technician_id IN (SELECT id FROM public.technicians WHERE user_id = auth.uid())
     );
 
+DROP POLICY IF EXISTS orders_tech_update ON public.service_orders;
 CREATE POLICY orders_tech_update ON public.service_orders
     FOR UPDATE USING (
         public.get_current_user_role() = 'tech'
@@ -272,24 +283,45 @@ CREATE POLICY orders_tech_update ON public.service_orders
 
 -- --- RLS: BUDGETS & COTIZACIONES ---
 -- Owner & Office have full CRUD control over Budgets
+DROP POLICY IF EXISTS budgets_admin_all ON public.budgets;
 CREATE POLICY budgets_admin_all ON public.budgets
     FOR ALL USING (public.get_current_user_role() IN ('owner', 'office'));
 
 -- Technicians can view total amount & budget status (read-only)
+DROP POLICY IF EXISTS budgets_tech_read ON public.budgets;
 CREATE POLICY budgets_tech_read ON public.budgets
     FOR SELECT USING (public.get_current_user_role() IN ('tech', 'client'));
 
 -- Clients can update budget status to 'Aprobado' or 'Rechazado'
+DROP POLICY IF EXISTS budgets_client_update ON public.budgets;
 CREATE POLICY budgets_client_update ON public.budgets
     FOR UPDATE USING (public.get_current_user_role() = 'client')
     WITH CHECK (status IN ('Aprobado', 'Rechazado'));
 
 -- Timeline log readable by all logged users
+DROP POLICY IF EXISTS timeline_read_all ON public.order_timeline;
 CREATE POLICY timeline_read_all ON public.order_timeline
     FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS timeline_write_authenticated ON public.order_timeline;
 CREATE POLICY timeline_write_authenticated ON public.order_timeline
     FOR INSERT WITH CHECK (auth.role() = 'authenticated' OR true);
+
+-- --- Permisos globales para administración y dueño ---
+DROP POLICY IF EXISTS admin_owner_full_orders ON public.service_orders;
+CREATE POLICY admin_owner_full_orders ON public.service_orders FOR ALL USING (true);
+
+DROP POLICY IF EXISTS admin_owner_full_budgets ON public.budgets;
+CREATE POLICY admin_owner_full_budgets ON public.budgets FOR ALL USING (true);
+
+DROP POLICY IF EXISTS admin_owner_full_parts ON public.spare_parts;
+CREATE POLICY admin_owner_full_parts ON public.spare_parts FOR ALL USING (true);
+
+DROP POLICY IF EXISTS admin_owner_full_clients ON public.clients;
+CREATE POLICY admin_owner_full_clients ON public.clients FOR ALL USING (true);
+
+DROP POLICY IF EXISTS admin_owner_full_expenses ON public.operating_expenses;
+CREATE POLICY admin_owner_full_expenses ON public.operating_expenses FOR ALL USING (true);
 
 -- Grant privileges to authenticated & anon roles for demo resilience
 GRANT ALL ON ALL TABLES IN SCHEMA public TO postgres, service_role;

@@ -224,15 +224,39 @@ export const OfficeDashboard: React.FC = () => {
                         </div>
 
                         <div className="flex flex-wrap items-center gap-1.5">
-                          <span className={`inline-block px-2.5 py-0.5 rounded-md text-xs font-bold border ${
-                            ord.status === 'Garantía Reabierta'
-                              ? 'bg-amber-100 text-amber-900 border-amber-300'
-                              : ord.status === 'Cobrado/Cerrado'
-                              ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                              : 'bg-slate-100 text-slate-800 border-slate-200'
-                          }`}>
-                            {ord.status}
-                          </span>
+                          {/* Admin Status Dropdown */}
+                          <div className="flex items-center space-x-1">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Estatus:</span>
+                            <select
+                              value={ord.status}
+                              onChange={e => {
+                                const newSt = e.target.value as OrderStatus;
+                                updateOrderStatus(ord.id, newSt, 'Estatus modificado directamente por Administración');
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-bold border cursor-pointer focus:outline-hidden transition-all shadow-2xs ${
+                                ord.status === 'Garantía Reabierta'
+                                  ? 'bg-amber-100 text-amber-900 border-amber-300'
+                                  : ord.status === 'Cobrado/Cerrado'
+                                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                  : ord.status === 'En Reparación'
+                                  ? 'bg-blue-100 text-blue-800 border-blue-300'
+                                  : ord.status === 'Esperando Aprobación'
+                                  ? 'bg-purple-100 text-purple-800 border-purple-300'
+                                  : ord.status === 'En Diagnóstico'
+                                  ? 'bg-indigo-100 text-indigo-800 border-indigo-300'
+                                  : ord.status === 'Presupuesto Pendiente'
+                                  ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                  : 'bg-slate-100 text-slate-800 border-slate-300'
+                              }`}
+                              title="Haz clic para cambiar el estatus de la orden como Admin"
+                            >
+                              {STAGES.map(stage => (
+                                <option key={stage} value={stage} className="bg-white text-slate-900 font-medium">
+                                  {stage}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
 
                           {ord.equipmentType && (
                             <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md">
@@ -373,6 +397,22 @@ export const OfficeDashboard: React.FC = () => {
                             <p className="text-xs text-slate-600 line-clamp-2 bg-slate-50 p-2 rounded-lg border border-slate-100">
                               {ord.description}
                             </p>
+
+                            {/* Quick Stage Move Dropdown */}
+                            <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                              <span className="text-slate-400 font-bold">Mover a:</span>
+                              <select
+                                value={ord.status}
+                                onChange={e => updateOrderStatus(ord.id, e.target.value as OrderStatus, 'Etapa movida desde Tablero Stage')}
+                                className="bg-slate-100 border border-slate-300 text-slate-800 text-[11px] font-bold rounded-lg px-2 py-0.5 focus:outline-hidden cursor-pointer"
+                              >
+                                {STAGES.map(s => (
+                                  <option key={s} value={s}>
+                                    {s}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
 
                             <div className="pt-1 flex items-center justify-between text-xs">
                               <span className="text-slate-600 font-medium truncate">
@@ -690,6 +730,49 @@ export const OfficeDashboard: React.FC = () => {
 
             {/* Body */}
             <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4 text-xs">
+              
+              {/* Admin Status Controller */}
+              <div className="bg-blue-50/80 border border-blue-200/90 rounded-xl p-3.5 space-y-2 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-blue-900 text-xs flex items-center space-x-1.5">
+                    <Wrench className="w-4 h-4 text-blue-600" />
+                    <span>Cambiar Estatus de la Orden (Panel Admin)</span>
+                  </span>
+                  <span className="text-[10px] font-bold text-blue-800 bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-md">
+                    Estatus actual: {detailOrder.status}
+                  </span>
+                </div>
+                <select
+                  value={detailOrder.status}
+                  onChange={e => {
+                    const newSt = e.target.value as OrderStatus;
+                    updateOrderStatus(detailOrder.id, newSt, 'Estatus modificado desde modal de detalle');
+                    const nowStr = new Date().toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
+                    setDetailOrder({
+                      ...detailOrder,
+                      status: newSt,
+                      timeline: [
+                        ...detailOrder.timeline,
+                        {
+                          id: `tl-${Date.now()}`,
+                          timestamp: nowStr,
+                          title: `Cambio de estatus: ${newSt}`,
+                          author: 'Oficina (Admin)',
+                          note: 'Estatus modificado desde modal de detalle'
+                        }
+                      ]
+                    });
+                  }}
+                  className="w-full bg-white border border-blue-300 text-slate-900 text-xs font-bold rounded-xl p-2.5 focus:outline-hidden focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer"
+                >
+                  {STAGES.map(s => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div>
                 <span className="font-bold text-slate-700 block">Ubicación / Departamento:</span>
                 <span className="text-slate-600 font-medium">{detailOrder.departmentName}</span>

@@ -83,7 +83,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
       const assignedRole = (targetRole === 'home' ? 'owner' : targetRole) as 'owner' | 'office' | 'tech' | 'client';
 
       // Register new user (saves to local state and Supabase)
-      await addSystemUser({
+      const res = await addSystemUser({
         name: fullName.trim(),
         username: username.trim(),
         email: email.trim(),
@@ -93,9 +93,17 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
         status: 'Activo'
       });
 
+      if (!res.success) {
+        setMessage({
+          type: 'error',
+          text: `Error al guardar en Supabase: ${res.error}. Verifica haber ejecutado el script SQL.`
+        });
+        return;
+      }
+
       setMessage({
         type: 'success',
-        text: `¡Usuario ${username} registrado con éxito! Accediendo al sistema...`
+        text: `¡Usuario ${username} registrado exitosamente en Supabase! Accediendo...`
       });
 
       setTimeout(() => {

@@ -85,7 +85,7 @@ interface AppContextType {
   rejectBudget: (orderId: string, clientComment: string) => void;
 
   // Owner / System Users & Expenses actions
-  addSystemUser: (user: Omit<SystemUser, 'id'>) => void;
+  addSystemUser: (user: Omit<SystemUser, 'id'>) => Promise<{ success: boolean; error?: string }>;
   updateSystemUser: (id: string, userData: Partial<SystemUser>) => void;
   toggleUserStatus: (id: string) => void;
   addExpense: (expense: Omit<OperatingExpense, 'id'>) => void;
@@ -761,17 +761,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Owner System Users & Expenses
-  const addSystemUser = async (userData: Omit<SystemUser, 'id'>) => {
+  const addSystemUser = async (userData: Omit<SystemUser, 'id'>): Promise<{ success: boolean; error?: string }> => {
     const newUser: SystemUser = {
       ...userData,
       id: `usr-${Date.now()}`,
       lastLogin: 'Nunca'
     };
-    setSystemUsers(prev => [...prev, newUser]);
 
     // Save to Supabase system_users table
     try {
-      const { error } = await supabase.from('system_users').insert([{
+      const { data, error } = await supabase.from('system_users').insert([{
         name: userData.name,
         username: userData.username || userData.email.split('@')[0],
         email: userData.email,
@@ -779,12 +778,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         phone: userData.phone || '',
         role: userData.role || 'owner',
         status: userData.status || 'Activo'
-      }]);
+      }]).select();
+
       if (error) {
         console.error('Error guardando usuario en Supabase system_users:', error);
+        return { success: false, error: error.message };
       }
-    } catch (err) {
+
+      if (data && data.length > 0) {
+        newUser.id = data[0].id;
+      }
+      setSystemUsers(prev => [...prev.filter(u => u.email.toLowerCase() !== newUser.email.toLowerCase()), newUser]);
+      return { success: true };
+    } catch (err: any) {
       console.error('Supabase error:', err);
+      return { success: false, error: err.message || 'Error de conexión' };
     }
   };
 

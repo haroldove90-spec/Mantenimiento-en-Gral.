@@ -227,10 +227,11 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- 5. POLÍTICAS DE SEGURIDAD (RLS) IDEMPOTENTES (CON DROP POLICY)
 -- --------------------------------------------------------------------
 
--- System Users & Expenses (Owner)
+-- System Users & Expenses
 DROP POLICY IF EXISTS owner_full_users ON public.system_users;
-CREATE POLICY owner_full_users ON public.system_users
-    FOR ALL USING (public.get_current_user_role() = 'owner');
+DROP POLICY IF EXISTS allow_all_users ON public.system_users;
+CREATE POLICY allow_all_users ON public.system_users
+    FOR ALL USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS owner_full_expenses ON public.operating_expenses;
 CREATE POLICY owner_full_expenses ON public.operating_expenses

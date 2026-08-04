@@ -1,15 +1,13 @@
 -- ====================================================================
--- SUPABASE SCHEMA & RLS POLICIES FOR SISTEMA DE GESTIÓN DE SERVICIOS
--- Project: battwitnhrezwotkcvbc (sij@appdesignproyectos.com's Project)
+-- SUPABASE SCHEMA & RLS POLICIES FOR SISTEMA DE GESTIÓN DE SERVICIOS (SIJ)
+-- Project: battwitnhrezwotkcvbc
 -- URL: https://battwitnhrezwotkcvbc.supabase.co
 -- ====================================================================
 
--- Enable UUID extension
+-- 1. Habilitar extensión UUID
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- --------------------------------------------------------------------
--- 1. ENUM TYPES
--- --------------------------------------------------------------------
+-- 2. ENUM TYPES
 DO $$ BEGIN
     CREATE TYPE user_role_type AS ENUM ('owner', 'office', 'tech', 'client');
 EXCEPTION
@@ -43,12 +41,12 @@ EXCEPTION
 END $$;
 
 -- --------------------------------------------------------------------
--- 2. TABLAS
+-- 3. CREACIÓN Y ESTRUCTURA DE TABLAS
 -- --------------------------------------------------------------------
 
--- Usuarios del Sistema
+-- Usuarios del Sistema (system_users)
 CREATE TABLE IF NOT EXISTS public.system_users (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     auth_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     name TEXT NOT NULL,
     username TEXT UNIQUE,
@@ -61,13 +59,15 @@ CREATE TABLE IF NOT EXISTS public.system_users (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Asegurar columnas si la tabla ya existía
+-- Agregar columnas en caso de que la tabla ya existiera previamente
 ALTER TABLE public.system_users ADD COLUMN IF NOT EXISTS username TEXT UNIQUE;
 ALTER TABLE public.system_users ADD COLUMN IF NOT EXISTS password TEXT;
+ALTER TABLE public.system_users ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE public.system_users ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Activo';
 
 -- Clientes
 CREATE TABLE IF NOT EXISTS public.clients (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     tax_id TEXT,
     fiscal_address TEXT,
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS public.clients (
 
 -- Departamentos / Sucursales
 CREATE TABLE IF NOT EXISTS public.departments (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     client_id UUID NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     address TEXT NOT NULL,
@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS public.departments (
 
 -- Técnicos de Campo
 CREATE TABLE IF NOT EXISTS public.technicians (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES public.system_users(id) ON DELETE SET NULL,
     name TEXT NOT NULL,
     phone TEXT NOT NULL,
@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS public.technicians (
 
 -- Catálogo de Refacciones y Precios
 CREATE TABLE IF NOT EXISTS public.spare_parts (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     code TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
     category TEXT NOT NULL,
@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS public.spare_parts (
 
 -- Órdenes de Servicio (OS)
 CREATE TABLE IF NOT EXISTS public.service_orders (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     folio TEXT NOT NULL UNIQUE,
     client_id UUID NOT NULL REFERENCES public.clients(id) ON DELETE RESTRICT,
     department_id UUID NOT NULL REFERENCES public.departments(id) ON DELETE RESTRICT,
@@ -141,7 +141,7 @@ CREATE TABLE IF NOT EXISTS public.service_orders (
 
 -- Cotizaciones y Presupuestos
 CREATE TABLE IF NOT EXISTS public.budgets (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     order_id UUID NOT NULL UNIQUE REFERENCES public.service_orders(id) ON DELETE CASCADE,
     labor_cost NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
     tax_rate NUMERIC(5, 4) NOT NULL DEFAULT 0.1600,
@@ -156,7 +156,7 @@ CREATE TABLE IF NOT EXISTS public.budgets (
 
 -- Refacciones Solicitadas por Orden
 CREATE TABLE IF NOT EXISTS public.requested_parts (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     order_id UUID NOT NULL REFERENCES public.service_orders(id) ON DELETE CASCADE,
     budget_id UUID REFERENCES public.budgets(id) ON DELETE CASCADE,
     spare_part_id UUID REFERENCES public.spare_parts(id) ON DELETE SET NULL,
@@ -168,7 +168,7 @@ CREATE TABLE IF NOT EXISTS public.requested_parts (
 
 -- Historial de Cambios (Timeline)
 CREATE TABLE IF NOT EXISTS public.order_timeline (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     order_id UUID NOT NULL REFERENCES public.service_orders(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     author TEXT NOT NULL,
@@ -176,9 +176,9 @@ CREATE TABLE IF NOT EXISTS public.order_timeline (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Gastos Operativos (Dueño)
+-- Gastos Operativos
 CREATE TABLE IF NOT EXISTS public.operating_expenses (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     category TEXT NOT NULL CHECK (category IN ('Combustible', 'Herramientas', 'Viáticos', 'Mantenimiento Vehículos', 'Otros')),
     description TEXT NOT NULL,
     amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
@@ -188,15 +188,17 @@ CREATE TABLE IF NOT EXISTS public.operating_expenses (
 );
 
 -- --------------------------------------------------------------------
--- 3. ÍNDICES DE RENDIMIENTO
+-- 4. ÍNDICES DE RENDIMIENTO
 -- --------------------------------------------------------------------
+CREATE INDEX IF NOT EXISTS idx_users_email ON public.system_users(email);
+CREATE INDEX IF NOT EXISTS idx_users_username ON public.system_users(username);
 CREATE INDEX IF NOT EXISTS idx_orders_client ON public.service_orders(client_id);
 CREATE INDEX IF NOT EXISTS idx_orders_tech ON public.service_orders(technician_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON public.service_orders(status);
 CREATE INDEX IF NOT EXISTS idx_timeline_order ON public.order_timeline(order_id);
 
 -- --------------------------------------------------------------------
--- 4. HABILITAR ROW LEVEL SECURITY (RLS)
+-- 5. SEGURIDAD DE FILAS (RLS) Y POLÍTICAS PERMISIVAS
 -- --------------------------------------------------------------------
 ALTER TABLE public.system_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
@@ -209,121 +211,54 @@ ALTER TABLE public.requested_parts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.order_timeline ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.operating_expenses ENABLE ROW LEVEL SECURITY;
 
--- Función aux para obtener el rol del usuario auth
-CREATE OR REPLACE FUNCTION public.get_current_user_role()
-RETURNS user_role_type AS $$
-DECLARE
-    u_role user_role_type;
-BEGIN
-    SELECT role INTO u_role
-    FROM public.system_users
-    WHERE auth_user_id = auth.uid() OR email = auth.email();
-    
-    RETURN COALESCE(u_role, 'client'::user_role_type);
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- --------------------------------------------------------------------
--- 5. POLÍTICAS DE SEGURIDAD (RLS) IDEMPOTENTES (CON DROP POLICY)
--- --------------------------------------------------------------------
-
--- System Users & Expenses
+-- Eliminar políticas antiguas para evitar conflictos
 DROP POLICY IF EXISTS owner_full_users ON public.system_users;
 DROP POLICY IF EXISTS allow_all_users ON public.system_users;
-CREATE POLICY allow_all_users ON public.system_users
-    FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Permitir lectura publica a system_users" ON public.system_users;
+DROP POLICY IF EXISTS "Permitir insercion a system_users" ON public.system_users;
+DROP POLICY IF EXISTS "Permitir actualizacion a system_users" ON public.system_users;
+DROP POLICY IF EXISTS "Permitir lectura publica de usuarios" ON public.system_users;
+DROP POLICY IF EXISTS "Permitir insercion publica de usuarios" ON public.system_users;
+DROP POLICY IF EXISTS "Permitir actualizacion publica de usuarios" ON public.system_users;
 
-DROP POLICY IF EXISTS owner_full_expenses ON public.operating_expenses;
-CREATE POLICY owner_full_expenses ON public.operating_expenses
-    FOR ALL USING (public.get_current_user_role() = 'owner');
+-- Crear Política Universal Permisiva para system_users
+CREATE POLICY "allow_full_access_system_users" 
+ON public.system_users 
+FOR ALL 
+USING (true) 
+WITH CHECK (true);
 
--- Spare Parts / Catalog
-DROP POLICY IF EXISTS catalog_read_all ON public.spare_parts;
-CREATE POLICY catalog_read_all ON public.spare_parts
-    FOR SELECT USING (true);
+-- Políticas para el resto de tablas
+DROP POLICY IF EXISTS "allow_full_access_clients" ON public.clients;
+CREATE POLICY "allow_full_access_clients" ON public.clients FOR ALL USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS catalog_write_admin ON public.spare_parts;
-CREATE POLICY catalog_write_admin ON public.spare_parts
-    FOR ALL USING (public.get_current_user_role() IN ('owner', 'office'));
+DROP POLICY IF EXISTS "allow_full_access_departments" ON public.departments;
+CREATE POLICY "allow_full_access_departments" ON public.departments FOR ALL USING (true) WITH CHECK (true);
 
--- Clients & Departments
-DROP POLICY IF EXISTS clients_admin_all ON public.clients;
-CREATE POLICY clients_admin_all ON public.clients
-    FOR ALL USING (public.get_current_user_role() IN ('owner', 'office'));
+DROP POLICY IF EXISTS "allow_full_access_technicians" ON public.technicians;
+CREATE POLICY "allow_full_access_technicians" ON public.technicians FOR ALL USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS clients_read_tech ON public.clients;
-CREATE POLICY clients_read_tech ON public.clients
-    FOR SELECT USING (public.get_current_user_role() = 'tech');
+DROP POLICY IF EXISTS "allow_full_access_spare_parts" ON public.spare_parts;
+CREATE POLICY "allow_full_access_spare_parts" ON public.spare_parts FOR ALL USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS depts_admin_all ON public.departments;
-CREATE POLICY depts_admin_all ON public.departments
-    FOR ALL USING (public.get_current_user_role() IN ('owner', 'office'));
+DROP POLICY IF EXISTS "allow_full_access_service_orders" ON public.service_orders;
+CREATE POLICY "allow_full_access_service_orders" ON public.service_orders FOR ALL USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS depts_read_tech ON public.departments;
-CREATE POLICY depts_read_tech ON public.departments
-    FOR SELECT USING (public.get_current_user_role() = 'tech');
+DROP POLICY IF EXISTS "allow_full_access_budgets" ON public.budgets;
+CREATE POLICY "allow_full_access_budgets" ON public.budgets FOR ALL USING (true) WITH CHECK (true);
 
--- Service Orders
-DROP POLICY IF EXISTS orders_admin_all ON public.service_orders;
-CREATE POLICY orders_admin_all ON public.service_orders
-    FOR ALL USING (public.get_current_user_role() IN ('owner', 'office'));
+DROP POLICY IF EXISTS "allow_full_access_requested_parts" ON public.requested_parts;
+CREATE POLICY "allow_full_access_requested_parts" ON public.requested_parts FOR ALL USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS orders_tech_select ON public.service_orders;
-CREATE POLICY orders_tech_select ON public.service_orders
-    FOR SELECT USING (
-        public.get_current_user_role() = 'tech'
-        OR technician_id IN (SELECT id FROM public.technicians WHERE user_id = auth.uid())
-    );
+DROP POLICY IF EXISTS "allow_full_access_order_timeline" ON public.order_timeline;
+CREATE POLICY "allow_full_access_order_timeline" ON public.order_timeline FOR ALL USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS orders_tech_update ON public.service_orders;
-CREATE POLICY orders_tech_update ON public.service_orders
-    FOR UPDATE USING (
-        public.get_current_user_role() = 'tech'
-        OR technician_id IN (SELECT id FROM public.technicians WHERE user_id = auth.uid())
-    )
-    WITH CHECK (true);
-
--- Budgets
-DROP POLICY IF EXISTS budgets_admin_all ON public.budgets;
-CREATE POLICY budgets_admin_all ON public.budgets
-    FOR ALL USING (public.get_current_user_role() IN ('owner', 'office'));
-
-DROP POLICY IF EXISTS budgets_tech_read ON public.budgets;
-CREATE POLICY budgets_tech_read ON public.budgets
-    FOR SELECT USING (public.get_current_user_role() IN ('tech', 'client'));
-
-DROP POLICY IF EXISTS budgets_client_update ON public.budgets;
-CREATE POLICY budgets_client_update ON public.budgets
-    FOR UPDATE USING (public.get_current_user_role() = 'client')
-    WITH CHECK (status IN ('Aprobado', 'Rechazado'));
-
--- Timeline
-DROP POLICY IF EXISTS timeline_read_all ON public.order_timeline;
-CREATE POLICY timeline_read_all ON public.order_timeline
-    FOR SELECT USING (true);
-
-DROP POLICY IF EXISTS timeline_write_authenticated ON public.order_timeline;
-CREATE POLICY timeline_write_authenticated ON public.order_timeline
-    FOR INSERT WITH CHECK (auth.role() = 'authenticated' OR true);
-
--- Políticas Globales para Admin / Dueño (Sin duplicidad)
-DROP POLICY IF EXISTS admin_owner_full_orders ON public.service_orders;
-CREATE POLICY admin_owner_full_orders ON public.service_orders FOR ALL USING (true);
-
-DROP POLICY IF EXISTS admin_owner_full_budgets ON public.budgets;
-CREATE POLICY admin_owner_full_budgets ON public.budgets FOR ALL USING (true);
-
-DROP POLICY IF EXISTS admin_owner_full_parts ON public.spare_parts;
-CREATE POLICY admin_owner_full_parts ON public.spare_parts FOR ALL USING (true);
-
-DROP POLICY IF EXISTS admin_owner_full_clients ON public.clients;
-CREATE POLICY admin_owner_full_clients ON public.clients FOR ALL USING (true);
-
-DROP POLICY IF EXISTS admin_owner_full_expenses ON public.operating_expenses;
-CREATE POLICY admin_owner_full_expenses ON public.operating_expenses FOR ALL USING (true);
+DROP POLICY IF EXISTS "allow_full_access_operating_expenses" ON public.operating_expenses;
+CREATE POLICY "allow_full_access_operating_expenses" ON public.operating_expenses FOR ALL USING (true) WITH CHECK (true);
 
 -- --------------------------------------------------------------------
--- 6. PERMISOS GLOBALES
+-- 6. PERMISOS DE ROL (GRANT)
 -- --------------------------------------------------------------------
-GRANT ALL ON ALL TABLES IN SCHEMA public TO postgres, service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated, anon;
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO postgres, service_role, anon, authenticated;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO postgres, service_role, anon, authenticated;

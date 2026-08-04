@@ -51,13 +51,19 @@ CREATE TABLE IF NOT EXISTS public.system_users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     auth_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     name TEXT NOT NULL,
+    username TEXT UNIQUE,
     email TEXT NOT NULL UNIQUE,
+    password TEXT,
     phone TEXT,
-    role user_role_type NOT NULL DEFAULT 'tech',
+    role user_role_type NOT NULL DEFAULT 'owner',
     status TEXT NOT NULL DEFAULT 'Activo' CHECK (status IN ('Activo', 'Inactivo')),
     last_login TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Asegurar columnas si la tabla ya existía
+ALTER TABLE public.system_users ADD COLUMN IF NOT EXISTS username TEXT UNIQUE;
+ALTER TABLE public.system_users ADD COLUMN IF NOT EXISTS password TEXT;
 
 -- Clientes
 CREATE TABLE IF NOT EXISTS public.clients (

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Building2, Wrench, UserCheck, ArrowRight, Crown, Download, Smartphone, CheckCircle, Info } from 'lucide-react';
+import { Building2, Wrench, UserCheck, ArrowRight, Crown, Download, Smartphone, CheckCircle, Info, UserPlus, LogIn } from 'lucide-react';
+import { UserAuthModal } from './UserAuthModal';
 
 export const HomeDashboard: React.FC = () => {
   const { setActiveRole } = useApp();
@@ -8,6 +9,8 @@ export const HomeDashboard: React.FC = () => {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [showIosInstructions, setShowIosInstructions] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'register' | 'login'>('register');
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: Event) => {
@@ -64,22 +67,38 @@ export const HomeDashboard: React.FC = () => {
           </p>
         </div>
 
-        {/* PWA INSTALL BUTTON */}
-        <div className="pt-1">
-          {isInstalled ? (
-            <div className="inline-flex items-center space-x-1.5 bg-emerald-50 border border-emerald-200/80 text-emerald-800 text-[11px] font-semibold px-3 py-1.5 rounded-lg">
-              <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Aplicación instalada</span>
-            </div>
-          ) : (
+        {/* REGISTER & LOGIN ADMIN BUTTONS */}
+        <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
+          <button
+            onClick={() => {
+              setAuthModalMode('register');
+              setIsAuthModalOpen(true);
+            }}
+            className="cursor-pointer inline-flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-95"
+          >
+            <UserPlus className="w-4 h-4 text-emerald-200" />
+            <span>Registrar Usuario Admin</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setAuthModalMode('login');
+              setIsAuthModalOpen(true);
+            }}
+            className="cursor-pointer inline-flex items-center space-x-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-95"
+          >
+            <LogIn className="w-4 h-4 text-sij-cyan" />
+            <span>Ingresar</span>
+          </button>
+
+          {!isInstalled && (
             <button
               id="install-pwa-btn"
               onClick={handleInstallClick}
               className="group cursor-pointer inline-flex items-center space-x-2 bg-sij-blue hover:bg-sij-navy text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-95"
             >
               <Smartphone className="w-4 h-4 text-sij-cyan group-hover:animate-bounce" />
-              <span>Instala tu aplicación móvil</span>
-              <Download className="w-3.5 h-3.5 text-white/80" />
+              <span>Instalar App Movil</span>
             </button>
           )}
         </div>
@@ -211,6 +230,13 @@ export const HomeDashboard: React.FC = () => {
           </div>
         </button>
       </div>
+
+      {/* User Auth Registration / Login Modal */}
+      <UserAuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        initialMode={authModalMode}
+      />
 
     </div>
   );

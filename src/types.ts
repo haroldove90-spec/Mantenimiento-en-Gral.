@@ -132,8 +132,10 @@ export interface Technician {
 export interface SystemUser {
   id: string;
   name: string;
+  username?: string;
   email: string;
-  phone: string;
+  phone?: string;
+  password?: string;
   role: 'owner' | 'office' | 'tech';
   status: 'Activo' | 'Inactivo';
   lastLogin?: string;

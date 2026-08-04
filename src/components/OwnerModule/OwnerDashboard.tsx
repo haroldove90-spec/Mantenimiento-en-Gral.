@@ -24,7 +24,10 @@ import {
   ArrowUpRight,
   Trash2,
   RotateCcw,
-  Database
+  Database,
+  Eye,
+  EyeOff,
+  Sparkles
 } from 'lucide-react';
 
 export const OwnerDashboard: React.FC = () => {
@@ -58,9 +61,22 @@ export const OwnerDashboard: React.FC = () => {
 
   // New user form state
   const [userName, setUserName] = useState('');
+  const [userUsername, setUserUsername] = useState('');
   const [userEmail, setUserEmail] = useState('');
   const [userPhone, setUserPhone] = useState('');
-  const [userRole, setUserRole] = useState<'owner' | 'office' | 'tech'>('tech');
+  const [userPassword, setUserPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [userRole, setUserRole] = useState<'owner' | 'office' | 'tech'>('owner');
+
+  const generateSecurePassword = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+    let newPass = '';
+    for (let i = 0; i < 12; i++) {
+      newPass += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setUserPassword(newPass);
+    setShowPassword(true);
+  };
 
   // New expense form state
   const [expCategory, setExpCategory] = useState<'Combustible' | 'Herramientas' | 'Viáticos' | 'Mantenimiento Vehículos' | 'Otros'>('Combustible');
@@ -113,7 +129,9 @@ export const OwnerDashboard: React.FC = () => {
     if (editingUser) {
       updateSystemUser(editingUser.id, {
         name: userName,
+        username: userUsername,
         email: userEmail,
+        password: userPassword,
         phone: userPhone,
         role: userRole
       });
@@ -121,7 +139,9 @@ export const OwnerDashboard: React.FC = () => {
     } else {
       addSystemUser({
         name: userName,
+        username: userUsername,
         email: userEmail,
+        password: userPassword,
         phone: userPhone,
         role: userRole,
         status: 'Activo'
@@ -129,7 +149,9 @@ export const OwnerDashboard: React.FC = () => {
     }
 
     setUserName('');
+    setUserUsername('');
     setUserEmail('');
+    setUserPassword('');
     setUserPhone('');
     setIsAddUserOpen(false);
   };
@@ -592,52 +614,91 @@ export const OwnerDashboard: React.FC = () => {
               {editingUser ? 'Editar Usuario de Sistema' : 'Alta de Nuevo Usuario'}
             </h3>
 
-            <form onSubmit={handleCreateUser} className="space-y-3 text-xs">
+            <form onSubmit={handleCreateUser} className="space-y-3.5 text-xs">
+              {/* 1. Nombre Completo */}
               <div>
-                <label className="font-bold text-slate-700 block mb-1">Nombre Completo</label>
+                <label className="font-bold text-slate-700 block mb-1">Nombre Completo *</label>
                 <input
                   type="text"
                   required
                   value={userName}
                   onChange={e => setUserName(e.target.value)}
                   placeholder="Ej. Ing. Carlos Solís"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 font-medium focus:outline-hidden"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 font-semibold focus:outline-hidden focus:border-blue-500"
                 />
               </div>
 
+              {/* 2. Nombre de Usuario */}
               <div>
-                <label className="font-bold text-slate-700 block mb-1">Correo Electrónico (Credencial de Acceso)</label>
+                <label className="font-bold text-slate-700 block mb-1">Nombre de Usuario *</label>
+                <input
+                  type="text"
+                  required
+                  value={userUsername}
+                  onChange={e => setUserUsername(e.target.value)}
+                  placeholder="Ej. admin_csolis"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 font-semibold focus:outline-hidden focus:border-blue-500"
+                />
+              </div>
+
+              {/* 3. Correo Electrónico */}
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Correo Electrónico *</label>
                 <input
                   type="email"
                   required
                   value={userEmail}
                   onChange={e => setUserEmail(e.target.value)}
                   placeholder="ejemplo@empresa.com"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 font-medium focus:outline-hidden"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 font-semibold focus:outline-hidden focus:border-blue-500"
                 />
               </div>
 
+              {/* 4. Clave / Contraseña (Crear clave segura / Ver clave con ojito) */}
               <div>
-                <label className="font-bold text-slate-700 block mb-1">Teléfono Móvil</label>
-                <input
-                  type="tel"
-                  value={userPhone}
-                  onChange={e => setUserPhone(e.target.value)}
-                  placeholder="555-0000"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 font-medium focus:outline-hidden"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-slate-700">Clave / Contraseña *</label>
+                  <button
+                    type="button"
+                    onClick={generateSecurePassword}
+                    className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center space-x-1 cursor-pointer transition-colors"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
+                    <span>Crear clave segura</span>
+                  </button>
+                </div>
+
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={userPassword}
+                    onChange={e => setUserPassword(e.target.value)}
+                    placeholder="Escribe o genera una clave"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-3 pr-10 py-2.5 text-slate-800 font-mono font-bold focus:outline-hidden focus:border-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1 cursor-pointer"
+                    title={showPassword ? 'Ocultar clave' : 'Mostrar clave'}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4 text-blue-600" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
+              {/* 5. Rol Asignado (Por defecto Admin) */}
               <div>
-                <label className="font-bold text-slate-700 block mb-1">Rol / Módulo de Acceso</label>
+                <label className="font-bold text-slate-700 block mb-1">Rol de Usuario</label>
                 <select
                   value={userRole}
                   onChange={e => setUserRole(e.target.value as any)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 font-bold focus:outline-hidden"
                 >
-                  <option value="tech">Técnico (Campo / Interfaz Móvil)</option>
-                  <option value="office">Oficina (Gestión Administrativa y Logística)</option>
-                  <option value="owner">Dueño (Administrador General)</option>
+                  <option value="owner">Dueño / Admin General (Administrador)</option>
+                  <option value="office">Oficina / Logística (Administrador)</option>
+                  <option value="tech">Técnico de Campo</option>
                 </select>
               </div>
 

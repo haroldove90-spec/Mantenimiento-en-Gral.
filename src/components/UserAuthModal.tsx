@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { RoleType } from '../types';
+import { RoleType, SystemUser } from '../types';
 import { supabase } from '../lib/supabase';
 import { Eye, EyeOff, Sparkles, UserPlus, LogIn, Check, ShieldAlert, X, ShieldCheck } from 'lucide-react';
 
@@ -68,21 +68,37 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
         return;
       }
 
-      // Check if username or email already exists
-      const existingUser = systemUsers.find(
-        u => (u.email && u.email.toLowerCase() === email.trim().toLowerCase()) || 
-             (u.username && u.username.toLowerCase() === username.trim().toLowerCase())
-      );
+      const cleanEmail = email.trim().toLowerCase();
+      const cleanUsername = username.trim().toLowerCase();
 
-      if (existingUser) {
-        setMessage({ type: 'error', text: 'El correo electrónico o nombre de usuario ya se encuentra registrado.' });
+      // Check if already exists directly in Supabase
+      let isTakenInDb = false;
+      try {
+        const { data: dbCheck } = await supabase
+          .from('system_users')
+          .select('id, email, username')
+          .or(`email.ilike.${cleanEmail},username.ilike.${cleanUsername}`)
+          .limit(1);
+
+        if (dbCheck && dbCheck.length > 0) {
+          isTakenInDb = true;
+        }
+      } catch (err) {
+        console.warn('Error verificando usuario en Supabase:', err);
+      }
+
+      if (isTakenInDb) {
+        setMessage({
+          type: 'error',
+          text: 'El correo electrónico o nombre de usuario ya existe en la base de datos de Supabase.'
+        });
         return;
       }
 
       // Determine initial assigned role (defaults to owner / targetRole)
       const assignedRole = (targetRole === 'home' ? 'owner' : targetRole) as 'owner' | 'office' | 'tech' | 'client';
 
-      // Register new user (saves to local state and Supabase)
+      // Register new user (saves directly to Supabase and updates state)
       const res = await addSystemUser({
         name: fullName.trim(),
         username: username.trim(),
@@ -96,7 +112,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
       if (!res.success) {
         setMessage({
           type: 'error',
-          text: `Error al guardar en Supabase: ${res.error}. Verifica haber ejecutado el script SQL.`
+          text: `Error de Supabase: ${res.error}. Si la tabla no está creada, ejecuta el script SQL.`
         });
         return;
       }
@@ -122,45 +138,46 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
 
       const input = email.trim().toLowerCase();
 
-      // Find user in systemUsers local state first
-      let foundUser = systemUsers.find(
-        u =>
-          (u.email && u.email.trim().toLowerCase() === input) ||
-          (u.username && u.username.trim().toLowerCase() === input)
-      );
+      // Find user in Supabase first
+      let foundUser: SystemUser | null = null;
+      try {
+        const { data, error } = await supabase
+          .from('system_users')
+          .select('*')
+          .or(`email.ilike.${input},username.ilike.${input}`)
+          .limit(1);
 
-      // If not in state, attempt direct lookup from Supabase database table
-      if (!foundUser) {
-        try {
-          const { data, error } = await supabase
-            .from('system_users')
-            .select('*')
-            .or(`email.ilike.${input},username.ilike.${input}`)
-            .limit(1);
-
-          if (!error && data && data.length > 0) {
-            const dbU = data[0];
-            foundUser = {
-              id: dbU.id,
-              name: dbU.name,
-              username: dbU.username || dbU.email.split('@')[0],
-              email: dbU.email,
-              password: dbU.password || '',
-              phone: dbU.phone || '',
-              role: dbU.role || 'owner',
-              status: dbU.status || 'Activo',
-              lastLogin: 'Ahora mismo'
-            };
-          }
-        } catch (err) {
-          console.error('Error buscando usuario en Supabase:', err);
+        if (!error && data && data.length > 0) {
+          const dbU = data[0];
+          foundUser = {
+            id: dbU.id,
+            name: dbU.name,
+            username: dbU.username || dbU.email.split('@')[0],
+            email: dbU.email,
+            password: dbU.password || '',
+            phone: dbU.phone || '',
+            role: dbU.role || 'owner',
+            status: dbU.status || 'Activo',
+            lastLogin: 'Ahora mismo'
+          };
         }
+      } catch (err) {
+        console.error('Error buscando usuario en Supabase:', err);
+      }
+
+      // Fallback to local state if not found in Supabase
+      if (!foundUser) {
+        foundUser = systemUsers.find(
+          u =>
+            (u.email && u.email.trim().toLowerCase() === input) ||
+            (u.username && u.username.trim().toLowerCase() === input)
+        ) || null;
       }
 
       if (!foundUser) {
         setMessage({
           type: 'error',
-          text: 'Usuario no encontrado. Por favor regístrate primero en la pestaña "Registrarse".'
+          text: 'Usuario no encontrado. Por favor ve a la pestaña "Registrarse" para crear tu cuenta.'
         });
         return;
       }
@@ -180,7 +197,6 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
       });
 
       setTimeout(() => {
-        // Use user's assigned role from database/state
         const userRole = foundUser!.role || (targetRole === 'home' ? 'owner' : targetRole);
         setActiveRole(userRole as RoleType);
         if (userRole === 'owner') setOwnerSubTab('analytics');

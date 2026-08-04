@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 import {
   RoleType,
   ServiceOrder,
@@ -191,6 +192,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem('app_system_users', JSON.stringify(systemUsers));
   }, [systemUsers]);
+
+  // Sync users from Supabase on load
+  useEffect(() => {
+    const fetchSupabaseUsers = async () => {
+      try {
+        const { data, error } = await supabase.from('system_users').select('*');
+        if (!error && data && data.length > 0) {
+          const dbUsers: SystemUser[] = data.map((u: any) => ({
+            id: u.id,
+            name: u.name,
+            username: u.username || u.email.split('@')[0],
+            email: u.email,
+            password: u.password || '',
+            phone: u.phone || '',
+            role: u.role || 'owner',
+            status: u.status || 'Activo',
+            lastLogin: u.last_login ? new Date(u.last_login).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Reciente'
+          }));
+
+          setSystemUsers(prev => {
+            // Merge with local users avoiding duplicates
+            const existingEmails = new Set(dbUsers.map(u => u.email.toLowerCase()));
+            const localOnly = prev.filter(u => !existingEmails.has(u.email.toLowerCase()));
+            return [...dbUsers, ...localOnly];
+          });
+        }
+      } catch (e) {
+        console.warn('Supabase system_users sync skipped/offline', e);
+      }
+    };
+    fetchSupabaseUsers();
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('app_operating_expenses', JSON.stringify(expenses));
@@ -728,19 +761,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Owner System Users & Expenses
-  const addSystemUser = (userData: Omit<SystemUser, 'id'>) => {
+  const addSystemUser = async (userData: Omit<SystemUser, 'id'>) => {
     const newUser: SystemUser = {
       ...userData,
       id: `usr-${Date.now()}`,
       lastLogin: 'Nunca'
     };
     setSystemUsers(prev => [...prev, newUser]);
+
+    // Save to Supabase system_users table
+    try {
+      const { error } = await supabase.from('system_users').insert([{
+        name: userData.name,
+        username: userData.username || userData.email.split('@')[0],
+        email: userData.email,
+        password: userData.password || '',
+        phone: userData.phone || '',
+        role: userData.role || 'owner',
+        status: userData.status || 'Activo'
+      }]);
+      if (error) {
+        console.error('Error guardando usuario en Supabase system_users:', error);
+      }
+    } catch (err) {
+      console.error('Supabase error:', err);
+    }
   };
 
-  const updateSystemUser = (id: string, userData: Partial<SystemUser>) => {
+  const updateSystemUser = async (id: string, userData: Partial<SystemUser>) => {
     setSystemUsers(prev =>
       prev.map(u => (u.id === id ? { ...u, ...userData } : u))
     );
+
+    try {
+      const user = systemUsers.find(u => u.id === id);
+      if (user) {
+        await supabase
+          .from('system_users')
+          .update({
+            name: userData.name ?? user.name,
+            username: userData.username ?? user.username,
+            email: userData.email ?? user.email,
+            password: userData.password ?? user.password,
+            phone: userData.phone ?? user.phone,
+            role: userData.role ?? user.role,
+            status: userData.status ?? user.status
+          })
+          .eq('email', user.email);
+      }
+    } catch (err) {
+      console.error('Error actualizando usuario en Supabase:', err);
+    }
   };
 
   const toggleUserStatus = (id: string) => {

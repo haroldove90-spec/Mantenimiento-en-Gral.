@@ -1,15 +1,22 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Eye, EyeOff, Sparkles, UserPlus, LogIn, KeyRound, Check, ShieldCheck, X } from 'lucide-react';
+import { RoleType } from '../types';
+import { Eye, EyeOff, Sparkles, UserPlus, LogIn, Check, ShieldAlert, X, ShieldCheck } from 'lucide-react';
 
 interface UserAuthModalProps {
   isOpen: boolean;
   onClose: () => void;
+  targetRole?: RoleType;
   initialMode?: 'register' | 'login';
 }
 
-export const UserAuthModal: React.FC<UserAuthModalProps> = ({ isOpen, onClose, initialMode = 'register' }) => {
-  const { addSystemUser, setActiveRole, setOwnerSubTab } = useApp();
+export const UserAuthModal: React.FC<UserAuthModalProps> = ({
+  isOpen,
+  onClose,
+  targetRole = 'owner',
+  initialMode = 'login'
+}) => {
+  const { systemUsers, addSystemUser, setActiveRole, setOwnerSubTab, setOfficeSubTab } = useApp();
 
   const [mode, setMode] = useState<'register' | 'login'>(initialMode);
 
@@ -19,11 +26,21 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({ isOpen, onClose, i
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [role, setRole] = useState<'owner' | 'office'>('owner'); // Default to admin
 
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   if (!isOpen) return null;
+
+  // Role display label
+  const getRoleLabel = (roleKey: RoleType) => {
+    switch (roleKey) {
+      case 'owner': return 'Dueño / Administrador General';
+      case 'office': return 'Oficina / Administración';
+      case 'tech': return 'Módulo Técnico';
+      case 'client': return 'Portal Cliente';
+      default: return 'Sistema SIJ';
+    }
+  };
 
   // Helper to generate a secure random password
   const generateSecurePassword = () => {
@@ -33,7 +50,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({ isOpen, onClose, i
       newPass += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     setPassword(newPass);
-    setShowPassword(true); // Automatically show password when generated so user can see it
+    setShowPassword(true);
     setMessage({
       type: 'success',
       text: '¡Clave segura generada exitosamente!'
@@ -45,50 +62,97 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({ isOpen, onClose, i
     e.preventDefault();
 
     if (mode === 'register') {
-      if (!fullName || !username || !email || !password) {
-        setMessage({ type: 'error', text: 'Por favor completa todos los campos requeridos.' });
+      if (!fullName.trim() || !username.trim() || !email.trim() || !password.trim()) {
+        setMessage({ type: 'error', text: 'Por favor completa todos los campos obligatorios.' });
         return;
       }
 
-      // Add user to AppContext state / LocalStorage
+      // Check if username or email already exists
+      const existingUser = systemUsers.find(
+        u => u.email.toLowerCase() === email.toLowerCase() || (u.username && u.username.toLowerCase() === username.toLowerCase())
+      );
+
+      if (existingUser) {
+        setMessage({ type: 'error', text: 'El correo electrónico o nombre de usuario ya se encuentra registrado.' });
+        return;
+      }
+
+      // Determine initial assigned role (defaults to owner / targetRole)
+      const assignedRole = (targetRole === 'home' ? 'owner' : targetRole) as 'owner' | 'office' | 'tech' | 'client';
+
+      // Register new user
       addSystemUser({
-        name: fullName,
-        username: username,
-        email: email,
-        password: password,
+        name: fullName.trim(),
+        username: username.trim(),
+        email: email.trim(),
+        password: password.trim(),
         phone: '',
-        role: role,
+        role: assignedRole,
         status: 'Activo'
       });
 
       setMessage({
         type: 'success',
-        text: `¡Usuario ${username} registrado correctamente con rol Administrador!`
+        text: `¡Usuario ${username} registrado con éxito! Accediendo al sistema...`
       });
 
-      // Switch to active role and subtab
       setTimeout(() => {
-        setActiveRole(role);
-        if (role === 'owner') setOwnerSubTab('users');
+        setActiveRole(assignedRole);
+        if (assignedRole === 'owner') setOwnerSubTab('analytics');
+        if (assignedRole === 'office') setOfficeSubTab('orders');
         onClose();
-      }, 1200);
+      }, 1000);
+
     } else {
-      // Login mode
-      if (!email || !password) {
-        setMessage({ type: 'error', text: 'Ingresa correo/usuario y contraseña.' });
+      // LOGIN MODE
+      if (!email.trim() || !password.trim()) {
+        setMessage({ type: 'error', text: 'Ingresa tu usuario/correo y contraseña.' });
         return;
       }
 
-      setMessage({ type: 'success', text: '¡Sesión iniciada correctamente!' });
+      const input = email.trim().toLowerCase();
+
+      // Find user in systemUsers
+      const foundUser = systemUsers.find(
+        u =>
+          (u.email.toLowerCase() === input || (u.username && u.username.toLowerCase() === input))
+      );
+
+      if (!foundUser) {
+        setMessage({
+          type: 'error',
+          text: 'Usuario no encontrado. Por favor regístrate primero.'
+        });
+        return;
+      }
+
+      if (foundUser.password && foundUser.password !== password) {
+        setMessage({
+          type: 'error',
+          text: 'Contraseña incorrecta. Verifica tus credenciales.'
+        });
+        return;
+      }
+
+      // Login successful!
+      setMessage({
+        type: 'success',
+        text: `¡Bienvenido de nuevo, ${foundUser.name}! Iniciando sesión...`
+      });
+
       setTimeout(() => {
-        setActiveRole('owner');
+        // Use user's assigned role from database/state
+        const userRole = foundUser.role || (targetRole === 'home' ? 'owner' : targetRole);
+        setActiveRole(userRole);
+        if (userRole === 'owner') setOwnerSubTab('analytics');
+        if (userRole === 'office') setOfficeSubTab('orders');
         onClose();
       }, 800);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-slate-900/75 backdrop-blur-xs z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
         
         {/* Close Button */}
@@ -101,16 +165,14 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({ isOpen, onClose, i
 
         {/* Header Icon & Title */}
         <div className="text-center space-y-2 mb-6">
-          <div className="w-14 h-14 bg-gradient-to-tr from-sij-blue to-sij-cyan text-white rounded-2xl flex items-center justify-center mx-auto shadow-md">
-            {mode === 'register' ? <UserPlus className="w-7 h-7" /> : <LogIn className="w-7 h-7" />}
+          <div className="w-14 h-14 bg-gradient-to-tr from-sij-blue to-sij-navy text-white rounded-2xl flex items-center justify-center mx-auto shadow-md">
+            {mode === 'register' ? <UserPlus className="w-7 h-7 text-sij-cyan" /> : <LogIn className="w-7 h-7 text-sij-cyan" />}
           </div>
           <h3 className="font-extrabold text-slate-900 text-xl">
-            {mode === 'register' ? 'Registro de Usuario Admin' : 'Ingresar al Sistema SIJ'}
+            {mode === 'register' ? 'Registro de Usuario' : 'Ingreso al Sistema'}
           </h3>
           <p className="text-xs text-slate-500 font-medium">
-            {mode === 'register' 
-              ? 'Crea tu cuenta administrativa con credenciales personalizadas' 
-              : 'Ingresa con tu correo o usuario y contraseña'}
+            Acceso para <span className="font-bold text-sij-blue">{getRoleLabel(targetRole as RoleType)}</span>
           </p>
         </div>
 
@@ -119,35 +181,37 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({ isOpen, onClose, i
           <button
             type="button"
             onClick={() => {
-              setMode('register');
+              setMode('login');
               setMessage(null);
             }}
-            className={`flex-1 py-2 rounded-xl transition-all ${
-              mode === 'register' ? 'bg-white text-sij-blue shadow-xs' : 'text-slate-500 hover:text-slate-800'
+            className={`flex-1 py-2.5 rounded-xl transition-all cursor-pointer ${
+              mode === 'login' ? 'bg-white text-sij-blue shadow-xs font-extrabold' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            Registrarse (Admin)
+            Iniciar Sesión
           </button>
           <button
             type="button"
             onClick={() => {
-              setMode('login');
+              setMode('register');
               setMessage(null);
             }}
-            className={`flex-1 py-2 rounded-xl transition-all ${
-              mode === 'login' ? 'bg-white text-sij-blue shadow-xs' : 'text-slate-500 hover:text-slate-800'
+            className={`flex-1 py-2.5 rounded-xl transition-all cursor-pointer ${
+              mode === 'register' ? 'bg-white text-sij-blue shadow-xs font-extrabold' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            Iniciar Sesión
+            Registrarse
           </button>
         </div>
 
         {/* Feedback Alert */}
         {message && (
           <div className={`p-3 rounded-2xl text-xs font-bold flex items-center space-x-2 mb-4 ${
-            message.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'
+            message.type === 'success' 
+              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' 
+              : 'bg-rose-50 text-rose-800 border border-rose-200'
           }`}>
-            {message.type === 'success' ? <Check className="w-4 h-4 text-emerald-600 shrink-0" /> : <ShieldCheck className="w-4 h-4 text-rose-600 shrink-0" />}
+            {message.type === 'success' ? <Check className="w-4 h-4 text-emerald-600 shrink-0" /> : <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />}
             <span>{message.text}</span>
           </div>
         )}
@@ -155,7 +219,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({ isOpen, onClose, i
         {/* FORM */}
         <form onSubmit={handleSubmit} className="space-y-4 text-xs font-medium">
           
-          {/* REGISTER FIELDS */}
+          {/* REGISTER FIELDS ONLY */}
           {mode === 'register' && (
             <>
               {/* 1. Nombre Completo */}
@@ -179,7 +243,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({ isOpen, onClose, i
                   required
                   value={username}
                   onChange={e => setUsername(e.target.value)}
-                  placeholder="Ej. admin_carlos"
+                  placeholder="Ej. cmendoza"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-800 font-semibold focus:outline-hidden focus:ring-2 focus:ring-sij-blue/30 focus:border-sij-blue transition-all"
                 />
               </div>
@@ -196,12 +260,12 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({ isOpen, onClose, i
               required
               value={email}
               onChange={e => setEmail(e.target.value)}
-              placeholder="ejemplo@empresa.com"
+              placeholder={mode === 'register' ? 'ejemplo@empresa.com' : 'Ingresa tu usuario o correo'}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-800 font-semibold focus:outline-hidden focus:ring-2 focus:ring-sij-blue/30 focus:border-sij-blue transition-all"
             />
           </div>
 
-          {/* 4. Clave / Contraseña con opción segura e icono del ojito */}
+          {/* 4. Clave / Contraseña con opción de crear clave segura e icono del ojito */}
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="font-bold text-slate-700">Clave / Contraseña *</label>
@@ -239,18 +303,10 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({ isOpen, onClose, i
             </div>
           </div>
 
-          {/* Initial Role info */}
           {mode === 'register' && (
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">Rol Inicial Asignado</label>
-              <select
-                value={role}
-                onChange={e => setRole(e.target.value as 'owner' | 'office')}
-                className="w-full bg-blue-50/70 border border-blue-200 text-sij-blue rounded-xl px-3 py-2 text-xs font-extrabold focus:outline-hidden cursor-pointer"
-              >
-                <option value="owner">Dueño / Administrador General (Rol Admin)</option>
-                <option value="office">Oficina / Logística (Rol Admin)</option>
-              </select>
+            <div className="bg-blue-50/80 border border-blue-200/80 rounded-xl p-2.5 text-[11px] text-sij-navy font-semibold flex items-center space-x-2">
+              <ShieldCheck className="w-4 h-4 text-sij-blue shrink-0" />
+              <span>Los roles asignados se pueden sincronizar o modificar directamente en Supabase.</span>
             </div>
           )}
 
@@ -263,7 +319,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({ isOpen, onClose, i
               {mode === 'register' ? (
                 <>
                   <UserPlus className="w-4 h-4 text-sij-cyan" />
-                  <span>Completar Registro (Admin)</span>
+                  <span>Completar Registro</span>
                 </>
               ) : (
                 <>

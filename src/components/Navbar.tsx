@@ -373,10 +373,10 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
           {activeRole !== 'home' && (
             <button
               onClick={() => setActiveRole('home')}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-bold text-xs transition-colors border border-rose-500/20"
-              title="Volver al menú de roles"
+              className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-bold text-xs transition-colors border border-rose-500/20 cursor-pointer"
+              title="Cerrar sesión y volver al menú principal"
             >
-              <span>Cambiar de Rol</span>
+              <span>Cerrar Sesión</span>
               <LogOut className="w-4 h-4" />
             </button>
           )}
@@ -418,15 +418,15 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
               )}
             </button>
 
-            {/* Switch Role Button */}
+            {/* Logout Button Mobile */}
             {activeRole !== 'home' && (
               <button
                 onClick={() => setActiveRole('home')}
-                className="flex items-center space-x-1 bg-sij-blue hover:bg-blue-600 text-white px-2.5 py-1 rounded-xl text-xs font-bold transition-all shadow-xs"
-                title="Cambiar de Rol / Menú Principal"
+                className="flex items-center space-x-1.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 px-2.5 py-1 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                title="Cerrar Sesión"
               >
-                <Home className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Inicio</span>
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Salir</span>
               </button>
             )}
           </div>

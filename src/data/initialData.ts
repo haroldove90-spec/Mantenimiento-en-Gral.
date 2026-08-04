@@ -70,10 +70,10 @@ export const INITIAL_TECHNICIANS: Technician[] = [
 ];
 
 export const INITIAL_USERS: SystemUser[] = [
-  { id: 'usr-1', name: 'Ing. Fernando Valdés', email: 'director@empresa.com', phone: '555-0001', role: 'owner', status: 'Activo', lastLogin: 'Hoy 09:12' },
-  { id: 'usr-2', name: 'Mariana Ríos (Oficina)', email: 'oficina@empresa.com', phone: '555-0002', role: 'office', status: 'Activo', lastLogin: 'Hoy 08:30' },
-  { id: 'usr-3', name: 'Carlos Ruiz (Técnico)', email: 'carlos.tech@mantenimiento.com', phone: '555-8811', role: 'tech', status: 'Activo', lastLogin: 'Hoy 10:15' },
-  { id: 'usr-4', name: 'Ana Mendoza (Técnico)', email: 'ana.tech@mantenimiento.com', phone: '555-8822', role: 'tech', status: 'Activo', lastLogin: 'Ayer 18:40' }
+  { id: 'usr-1', name: 'Ing. Fernando Valdés', username: 'admin', email: 'director@empresa.com', password: 'admin', phone: '555-0001', role: 'owner', status: 'Activo', lastLogin: 'Hoy 09:12' },
+  { id: 'usr-2', name: 'Mariana Ríos (Oficina)', username: 'oficina', email: 'oficina@empresa.com', password: 'admin', phone: '555-0002', role: 'office', status: 'Activo', lastLogin: 'Hoy 08:30' },
+  { id: 'usr-3', name: 'Carlos Ruiz (Técnico)', username: 'tecnico1', email: 'carlos.tech@mantenimiento.com', password: 'admin', phone: '555-8811', role: 'tech', status: 'Activo', lastLogin: 'Hoy 10:15' },
+  { id: 'usr-4', name: 'Ana Mendoza (Técnico)', username: 'tecnico2', email: 'ana.tech@mantenimiento.com', password: 'admin', phone: '555-8822', role: 'tech', status: 'Activo', lastLogin: 'Ayer 18:40' }
 ];
 
 export const INITIAL_EXPENSES: OperatingExpense[] = [

@@ -136,7 +136,7 @@ export interface SystemUser {
   email: string;
   phone?: string;
   password?: string;
-  role: 'owner' | 'office' | 'tech';
+  role: 'owner' | 'office' | 'tech' | 'client';
   status: 'Activo' | 'Inactivo';
   lastLogin?: string;
 }

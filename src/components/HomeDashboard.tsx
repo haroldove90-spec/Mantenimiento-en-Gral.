@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Building2, Wrench, UserCheck, ArrowRight, Crown, Download, Smartphone, CheckCircle, Info, UserPlus, LogIn } from 'lucide-react';
+import { RoleType } from '../types';
+import { Building2, Wrench, UserCheck, ArrowRight, Crown, Smartphone, Info } from 'lucide-react';
 import { UserAuthModal } from './UserAuthModal';
 
 export const HomeDashboard: React.FC = () => {
@@ -9,8 +10,11 @@ export const HomeDashboard: React.FC = () => {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [showIosInstructions, setShowIosInstructions] = useState(false);
+  
+  // Auth modal state
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authModalMode, setAuthModalMode] = useState<'register' | 'login'>('register');
+  const [selectedRole, setSelectedRole] = useState<RoleType>('owner');
+  const [authModalMode, setAuthModalMode] = useState<'register' | 'login'>('login');
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: Event) => {
@@ -38,7 +42,6 @@ export const HomeDashboard: React.FC = () => {
       }
       setDeferredPrompt(null);
     } else {
-      // Check if iOS or desktop without prompt
       const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
       if (isIos) {
         setShowIosInstructions(true);
@@ -46,6 +49,12 @@ export const HomeDashboard: React.FC = () => {
         alert('Para instalar SIJ en tu dispositivo, busca la opción "Agregar a la pantalla principal" o "Instalar aplicación" en el menú de tu navegador.');
       }
     }
+  };
+
+  const handleRoleCardClick = (role: RoleType) => {
+    setSelectedRole(role);
+    setAuthModalMode('login'); // Default to login mode when clicking a role card
+    setIsAuthModalOpen(true);
   };
 
   return (
@@ -63,45 +72,23 @@ export const HomeDashboard: React.FC = () => {
             Sistema de Mantenimiento y Servicios
           </p>
           <p className="text-xs text-sij-dark/70 font-medium mt-1">
-            Selecciona tu perfil de usuario para ingresar al sistema
+            Selecciona tu perfil de usuario para ingresar o registrarte
           </p>
         </div>
 
-        {/* REGISTER & LOGIN ADMIN BUTTONS */}
-        <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
-          <button
-            onClick={() => {
-              setAuthModalMode('register');
-              setIsAuthModalOpen(true);
-            }}
-            className="cursor-pointer inline-flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-95"
-          >
-            <UserPlus className="w-4 h-4 text-emerald-200" />
-            <span>Registrar Usuario Admin</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setAuthModalMode('login');
-              setIsAuthModalOpen(true);
-            }}
-            className="cursor-pointer inline-flex items-center space-x-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-95"
-          >
-            <LogIn className="w-4 h-4 text-sij-cyan" />
-            <span>Ingresar</span>
-          </button>
-
-          {!isInstalled && (
+        {/* PWA Install button only if not installed */}
+        {!isInstalled && (
+          <div className="pt-2 flex justify-center">
             <button
               id="install-pwa-btn"
               onClick={handleInstallClick}
               className="group cursor-pointer inline-flex items-center space-x-2 bg-sij-blue hover:bg-sij-navy text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-95"
             >
               <Smartphone className="w-4 h-4 text-sij-cyan group-hover:animate-bounce" />
-              <span>Instalar App Movil</span>
+              <span>Instalar App Móvil</span>
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* iOS Installation Instruction Modal */}
@@ -115,20 +102,20 @@ export const HomeDashboard: React.FC = () => {
             <ol className="text-xs text-slate-600 text-left space-y-2 font-medium bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
               <li className="flex items-start space-x-2">
                 <span className="font-bold text-blue-600">1.</span>
-                <span>Toca el botón de <strong>Compartir</strong> (icono de cuadrado con flecha hacia arriba) en la barra de Safari.</span>
+                <span>Toca el botón de <strong>Compartir</strong> (icono de cuadrado con flecha hacia arriba) en Safari.</span>
               </li>
               <li className="flex items-start space-x-2">
                 <span className="font-bold text-blue-600">2.</span>
-                <span>Desplázate hacia abajo y selecciona <strong>"Agregar a inicio"</strong> (Add to Home Screen).</span>
+                <span>Selecciona <strong>"Agregar a inicio"</strong> (Add to Home Screen).</span>
               </li>
               <li className="flex items-start space-x-2">
                 <span className="font-bold text-blue-600">3.</span>
-                <span>Toca <strong>"Agregar"</strong> en la esquina superior derecha.</span>
+                <span>Toca <strong>"Agregar"</strong>.</span>
               </li>
             </ol>
             <button
               onClick={() => setShowIosInstructions(false)}
-              className="w-full bg-slate-900 text-white font-bold text-xs py-2.5 rounded-xl hover:bg-slate-800 transition-colors"
+              className="w-full bg-slate-900 text-white font-bold text-xs py-2.5 rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
             >
               Entendido
             </button>
@@ -141,7 +128,7 @@ export const HomeDashboard: React.FC = () => {
         {/* Role 0: Dueño / Administrador General */}
         <button
           id="home-role-owner"
-          onClick={() => setActiveRole('owner')}
+          onClick={() => handleRoleCardClick('owner')}
           className="group cursor-pointer bg-white border border-sij-orange/20 rounded-2xl sm:rounded-3xl p-4 sm:p-6 flex flex-col items-center justify-center text-center gap-3 shadow-xs hover:shadow-xl hover:border-sij-orange/60 transition-all duration-300"
         >
           <div className="w-14 h-14 sm:w-18 sm:h-18 bg-sij-orange/10 border border-sij-orange/20 rounded-2xl flex items-center justify-center group-hover:bg-sij-orange transition-colors duration-300 shrink-0">
@@ -164,7 +151,7 @@ export const HomeDashboard: React.FC = () => {
         {/* Role 1: Oficina / Administración */}
         <button
           id="home-role-office"
-          onClick={() => setActiveRole('office')}
+          onClick={() => handleRoleCardClick('office')}
           className="group cursor-pointer bg-white border border-sij-blue/20 rounded-2xl sm:rounded-3xl p-4 sm:p-6 flex flex-col items-center justify-center text-center gap-3 shadow-xs hover:shadow-xl hover:border-sij-blue transition-all duration-300"
         >
           <div className="w-14 h-14 sm:w-18 sm:h-18 bg-sij-blue/10 border border-sij-blue/20 rounded-2xl flex items-center justify-center group-hover:bg-sij-blue transition-colors duration-300 shrink-0">
@@ -187,7 +174,7 @@ export const HomeDashboard: React.FC = () => {
         {/* Role 2: Técnico */}
         <button
           id="home-role-tech"
-          onClick={() => setActiveRole('tech')}
+          onClick={() => handleRoleCardClick('tech')}
           className="group cursor-pointer bg-white border border-sij-cyan/20 rounded-2xl sm:rounded-3xl p-4 sm:p-6 flex flex-col items-center justify-center text-center gap-3 shadow-xs hover:shadow-xl hover:border-sij-cyan transition-all duration-300"
         >
           <div className="w-14 h-14 sm:w-18 sm:h-18 bg-sij-cyan/10 border border-sij-cyan/20 rounded-2xl flex items-center justify-center group-hover:bg-sij-cyan transition-colors duration-300 shrink-0">
@@ -210,7 +197,7 @@ export const HomeDashboard: React.FC = () => {
         {/* Role 3: Cliente */}
         <button
           id="home-role-client"
-          onClick={() => setActiveRole('client')}
+          onClick={() => handleRoleCardClick('client')}
           className="group cursor-pointer bg-white border border-sij-navy/20 rounded-2xl sm:rounded-3xl p-4 sm:p-6 flex flex-col items-center justify-center text-center gap-3 shadow-xs hover:shadow-xl hover:border-sij-navy transition-all duration-300"
         >
           <div className="w-14 h-14 sm:w-18 sm:h-18 bg-sij-navy/10 border border-sij-navy/20 rounded-2xl flex items-center justify-center group-hover:bg-sij-navy transition-colors duration-300 shrink-0">
@@ -231,15 +218,14 @@ export const HomeDashboard: React.FC = () => {
         </button>
       </div>
 
-      {/* User Auth Registration / Login Modal */}
+      {/* User Auth Modal */}
       <UserAuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
+        targetRole={selectedRole}
         initialMode={authModalMode}
       />
 
     </div>
   );
 };
-
-

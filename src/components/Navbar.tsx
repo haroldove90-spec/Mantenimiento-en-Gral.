@@ -24,6 +24,8 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
   const {
     activeRole,
     setActiveRole,
+    currentUser,
+    setCurrentUser,
     officeSubTab,
     setOfficeSubTab,
     ownerSubTab,
@@ -369,10 +371,26 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
             </div>
           )}
 
+          {/* Logged-in User Profile Card */}
+          {currentUser && (
+            <div className="bg-white/10 p-3 rounded-2xl border border-white/10 mb-2 flex items-center space-x-3">
+              <div className="w-9 h-9 rounded-xl bg-sij-cyan/20 border border-sij-cyan/40 text-sij-cyan flex items-center justify-center font-bold text-xs uppercase shrink-0 shadow-xs">
+                {currentUser.name ? currentUser.name.charAt(0) : (currentUser.username ? currentUser.username.charAt(0) : 'U')}
+              </div>
+              <div className="overflow-hidden flex-1">
+                <p className="text-xs font-extrabold text-white truncate leading-tight">{currentUser.name || currentUser.username}</p>
+                <p className="text-[10px] text-sij-cyan truncate font-medium">@{currentUser.username || currentUser.email.split('@')[0]}</p>
+              </div>
+            </div>
+          )}
+
           {/* Logout / Switch Role Button */}
           {activeRole !== 'home' && (
             <button
-              onClick={() => setActiveRole('home')}
+              onClick={() => {
+                setCurrentUser(null);
+                setActiveRole('home');
+              }}
               className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-bold text-xs transition-colors border border-rose-500/20 cursor-pointer"
               title="Cerrar sesión y volver al menú principal"
             >
@@ -402,6 +420,11 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
             />
             <div>
               <span className="text-xs sm:text-sm font-bold text-sij-cyan block leading-tight">{getRoleName()}</span>
+              {currentUser && (
+                <span className="text-[10px] text-slate-300 font-semibold block truncate max-w-[130px]">
+                  👤 {currentUser.name || currentUser.username}
+                </span>
+              )}
             </div>
           </div>
 
@@ -421,7 +444,10 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
             {/* Logout Button Mobile */}
             {activeRole !== 'home' && (
               <button
-                onClick={() => setActiveRole('home')}
+                onClick={() => {
+                  setCurrentUser(null);
+                  setActiveRole('home');
+                }}
                 className="flex items-center space-x-1.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 px-2.5 py-1 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
                 title="Cerrar Sesión"
               >

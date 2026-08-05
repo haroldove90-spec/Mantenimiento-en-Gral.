@@ -211,9 +211,10 @@ ALTER TABLE public.requested_parts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.order_timeline ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.operating_expenses ENABLE ROW LEVEL SECURITY;
 
--- Eliminar políticas antiguas para evitar conflictos
+-- Eliminar políticas antiguas para evitar conflictos (ERROR: 42710 policy already exists)
 DROP POLICY IF EXISTS owner_full_users ON public.system_users;
 DROP POLICY IF EXISTS allow_all_users ON public.system_users;
+DROP POLICY IF EXISTS "allow_full_access_system_users" ON public.system_users;
 DROP POLICY IF EXISTS "Permitir lectura publica a system_users" ON public.system_users;
 DROP POLICY IF EXISTS "Permitir insercion a system_users" ON public.system_users;
 DROP POLICY IF EXISTS "Permitir actualizacion a system_users" ON public.system_users;

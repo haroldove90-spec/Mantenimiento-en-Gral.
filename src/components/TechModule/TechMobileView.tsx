@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 
 export const TechMobileView: React.FC = () => {
-  const { orders, technicians, notifications } = useApp();
+  const { orders, technicians, notifications, currentUser } = useApp();
 
   const [activeTechId, setActiveTechId] = useState<string>(technicians[0]?.id || 'tech-1');
   const [sortBy, setSortBy] = useState<'priority' | 'date'>('priority');
@@ -60,8 +60,13 @@ export const TechMobileView: React.FC = () => {
             <Wrench className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Módulo Técnico de Campo
+            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center space-x-2">
+              <span>Módulo Técnico de Campo</span>
+              {currentUser && (
+                <span className="text-[10px] text-emerald-700 bg-emerald-100 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                  Usuario: {currentUser.name}
+                </span>
+              )}
             </div>
             <h2 className="text-lg font-bold text-slate-900">{currentTech?.name} ({currentTech?.specialty})</h2>
           </div>

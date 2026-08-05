@@ -17,7 +17,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
   targetRole = 'owner',
   initialMode = 'login'
 }) => {
-  const { systemUsers, addSystemUser, syncUsersToSupabase, setActiveRole, setOwnerSubTab, setOfficeSubTab } = useApp();
+  const { systemUsers, addSystemUser, setCurrentUser, setActiveRole, setOwnerSubTab, setOfficeSubTab } = useApp();
 
   const [mode, setMode] = useState<'register' | 'login'>(initialMode);
 
@@ -28,11 +28,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  // SQL & Supabase Feedback state
-  const [showSqlHelp, setShowSqlHelp] = useState(false);
-  const [copiedSql, setCopiedSql] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
-
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null);
 
   if (!isOpen) return null;
@@ -64,32 +60,6 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
     setTimeout(() => setMessage(null), 3000);
   };
 
-    const SQL_SCRIPT = `CREATE TABLE IF NOT EXISTS public.system_users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    auth_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-    name TEXT NOT NULL,
-    username TEXT UNIQUE,
-    email TEXT NOT NULL UNIQUE,
-    password TEXT,
-    phone TEXT,
-    role TEXT NOT NULL DEFAULT 'owner',
-    status TEXT NOT NULL DEFAULT 'Activo',
-    last_login TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-ALTER TABLE public.system_users ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "allow_full_access_system_users" ON public.system_users;
-CREATE POLICY "allow_full_access_system_users" ON public.system_users FOR ALL USING (true) WITH CHECK (true);
-GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role, postgres;
-NOTIFY pgrst, 'reload schema';`;
-
-  const copySqlScript = () => {
-    navigator.clipboard.writeText(SQL_SCRIPT);
-    setCopiedSql(true);
-    setTimeout(() => setCopiedSql(false), 2500);
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -103,114 +73,64 @@ NOTIFY pgrst, 'reload schema';`;
       const cleanUsername = username.trim().toLowerCase();
       const assignedRole = (targetRole === 'home' ? 'owner' : targetRole) as 'owner' | 'office' | 'tech' | 'client';
 
+      setIsSubmitting(true);
+
       // Check if user already exists in local state
       const existingUserLocally = systemUsers.find(
         u => (u.email && u.email.toLowerCase() === cleanEmail) ||
              (u.username && u.username.toLowerCase() === cleanUsername)
       );
 
-      // If already in local state, try pushing to Supabase now
       if (existingUserLocally) {
-        setIsSyncing(true);
-        try {
-          const { error: upsertErr } = await supabase.from('system_users').upsert([{
-            name: fullName.trim() || existingUserLocally.name,
-            username: username.trim() || existingUserLocally.username,
-            email: cleanEmail,
-            password: password.trim() || existingUserLocally.password,
-            phone: existingUserLocally.phone || '',
-            role: assignedRole,
-            status: 'Activo'
-          }], { onConflict: 'email' });
-
-          setIsSyncing(false);
-
-          if (!upsertErr) {
-            setMessage({
-              type: 'success',
-              text: `¡Usuario ${cleanUsername} guardado y sincronizado con éxito en la base de datos de Supabase! Accediendo...`
-            });
-            setTimeout(() => {
-              setActiveRole(assignedRole);
-              if (assignedRole === 'owner') setOwnerSubTab('analytics');
-              if (assignedRole === 'office') setOfficeSubTab('orders');
-              onClose();
-            }, 1000);
-            return;
-          } else {
-            setShowSqlHelp(true);
-            setMessage({
-              type: 'warning',
-              text: `El usuario está en el navegador, pero no se pudo guardar en Supabase: ${upsertErr.message}. Si no has creado la tabla system_users, ejecuta el script SQL.`
-            });
-            return;
-          }
-        } catch (err: any) {
-          setIsSyncing(false);
-          setShowSqlHelp(true);
-          setMessage({
-            type: 'warning',
-            text: `Error de conexión con Supabase: ${err.message || 'Sin respuesta'}. Ejecuta el script SQL.`
-          });
-          return;
-        }
-      }
-
-      // Check in Supabase if accessible
-      let isTakenInDb = false;
-      try {
-        const { data: dbCheck, error: checkErr } = await supabase
-          .from('system_users')
-          .select('id, email, username')
-          .or(`email.ilike.${cleanEmail},username.ilike.${cleanUsername}`)
-          .limit(1);
-
-        if (!checkErr && dbCheck && dbCheck.length > 0) {
-          isTakenInDb = true;
-        }
-      } catch (err) {
-        console.warn('Advertencia al consultar Supabase:', err);
-      }
-
-      if (isTakenInDb) {
-        setMessage({
-          type: 'error',
-          text: 'El correo electrónico o nombre de usuario ya está registrado en Supabase.'
-        });
+        // Log in as existing local user
+        setCurrentUser(existingUserLocally);
+        setActiveRole(assignedRole);
+        if (assignedRole === 'owner') setOwnerSubTab('analytics');
+        if (assignedRole === 'office') setOfficeSubTab('orders');
+        setIsSubmitting(false);
+        onClose();
         return;
       }
 
-      // Register new user (saves to local state and attempts Supabase save)
-      setIsSyncing(true);
+      // Register new user (saves to Supabase & local state)
       const res = await addSystemUser({
         name: fullName.trim(),
-        username: username.trim(),
-        email: email.trim(),
+        username: cleanUsername,
+        email: cleanEmail,
         password: password.trim(),
         phone: '',
         role: assignedRole,
         status: 'Activo'
       });
-      setIsSyncing(false);
 
-      if (res.savedInDb) {
-        setMessage({
-          type: 'success',
-          text: `¡Usuario ${username} registrado y guardado con éxito en la base de datos de Supabase! Accediendo...`
-        });
-        setTimeout(() => {
-          setActiveRole(assignedRole);
-          if (assignedRole === 'owner') setOwnerSubTab('analytics');
-          if (assignedRole === 'office') setOfficeSubTab('orders');
-          onClose();
-        }, 1200);
-      } else {
-        setShowSqlHelp(true);
-        setMessage({
-          type: 'warning',
-          text: `El usuario se creó en la app, pero NO en Supabase. Error: ${res.error}`
-        });
-      }
+      setIsSubmitting(false);
+
+      const newUser: SystemUser = {
+        id: `usr-${Date.now()}`,
+        name: fullName.trim(),
+        username: cleanUsername,
+        email: cleanEmail,
+        password: password.trim(),
+        role: assignedRole,
+        status: 'Activo',
+        lastLogin: 'Ahora mismo'
+      };
+
+      setCurrentUser(newUser);
+
+      setMessage({
+        type: 'success',
+        text: res.savedInDb 
+          ? `¡Usuario ${cleanUsername} registrado y guardado con éxito en Supabase!` 
+          : `¡Usuario ${cleanUsername} registrado con éxito!`
+      });
+
+      setTimeout(() => {
+        setActiveRole(assignedRole);
+        if (assignedRole === 'owner') setOwnerSubTab('analytics');
+        if (assignedRole === 'office') setOfficeSubTab('orders');
+        onClose();
+      }, 1000);
 
     } else {
       // LOGIN MODE
@@ -219,6 +139,7 @@ NOTIFY pgrst, 'reload schema';`;
         return;
       }
 
+      setIsSubmitting(true);
       const input = email.trim().toLowerCase();
 
       // Find user in local state first
@@ -234,7 +155,7 @@ NOTIFY pgrst, 'reload schema';`;
           const { data, error } = await supabase
             .from('system_users')
             .select('*')
-            .or(`email.ilike.${input},username.ilike.${input}`)
+            .or(`email.eq.${input},username.eq.${input},email.ilike.${input},username.ilike.${input}`)
             .limit(1);
 
           if (!error && data && data.length > 0) {
@@ -256,6 +177,8 @@ NOTIFY pgrst, 'reload schema';`;
         }
       }
 
+      setIsSubmitting(false);
+
       if (!foundUser) {
         setMessage({
           type: 'error',
@@ -264,7 +187,7 @@ NOTIFY pgrst, 'reload schema';`;
         return;
       }
 
-      if (foundUser.password && foundUser.password !== password) {
+      if (foundUser.password && foundUser.password !== password.trim()) {
         setMessage({
           type: 'error',
           text: 'Contraseña incorrecta. Verifica tus credenciales.'
@@ -273,6 +196,7 @@ NOTIFY pgrst, 'reload schema';`;
       }
 
       // Login successful!
+      setCurrentUser(foundUser);
       setMessage({
         type: 'success',
         text: `¡Bienvenido de nuevo, ${foundUser.name}! Iniciando sesión...`
@@ -358,60 +282,6 @@ NOTIFY pgrst, 'reload schema';`;
               <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
             )}
             <div className="flex-1 leading-snug">{message.text}</div>
-          </div>
-        )}
-
-        {/* SQL SCRIPT HELP BANNER IF SUPABASE FAILED */}
-        {showSqlHelp && (
-          <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl mb-4 text-xs space-y-3 border border-slate-800 shadow-lg">
-            <div className="flex items-center space-x-2 text-amber-400 font-extrabold">
-              <Database className="w-4 h-4 text-sij-cyan" />
-              <span>Para guardar en Supabase ejecuta el Script SQL:</span>
-            </div>
-            <p className="text-[11px] text-slate-300 leading-relaxed">
-              Pega este código en el <b>SQL Editor</b> de tu consola de Supabase (<code className="text-sij-cyan">battwitnhrezwotkcvbc.supabase.co</code>) y presiona <b>Run</b>.
-            </p>
-
-            <div className="bg-slate-950 p-2.5 rounded-xl font-mono text-[10px] text-emerald-400 overflow-x-auto max-h-28 border border-slate-800 select-all">
-              <pre className="whitespace-pre-wrap">{SQL_SCRIPT}</pre>
-            </div>
-
-            <div className="flex items-center space-x-2 pt-1">
-              <button
-                type="button"
-                onClick={copySqlScript}
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-xl text-[11px] flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
-              >
-                {copiedSql ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedSql ? '¡Copiado!' : 'Copiar Script SQL'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={async () => {
-                  setIsSyncing(true);
-                  const res = await syncUsersToSupabase();
-                  setIsSyncing(false);
-                  if (res.success) {
-                    setMessage({
-                      type: 'success',
-                      text: `¡Sincronización exitosa! Se guardaron ${res.count} usuarios en Supabase.`
-                    });
-                    setShowSqlHelp(false);
-                  } else {
-                    setMessage({
-                      type: 'warning',
-                      text: `Aún no se pudo guardar en Supabase: ${res.error}`
-                    });
-                  }
-                }}
-                disabled={isSyncing}
-                className="bg-sij-blue hover:bg-sij-navy text-white font-bold px-3 py-2 rounded-xl text-[11px] flex items-center space-x-1 transition-colors cursor-pointer"
-              >
-                <RotateCcw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                <span>Reintentar</span>
-              </button>
-            </div>
           </div>
         )}
 
@@ -513,18 +383,18 @@ NOTIFY pgrst, 'reload schema';`;
           <div className="pt-2">
             <button
               type="submit"
-              disabled={isSyncing}
+              disabled={isSubmitting}
               className="w-full bg-gradient-to-r from-sij-blue to-sij-navy hover:from-sij-navy hover:to-slate-900 text-white font-bold py-3 rounded-2xl shadow-md hover:shadow-lg transition-all text-xs flex items-center justify-center space-x-2 cursor-pointer active:scale-98 disabled:opacity-50"
             >
               {mode === 'register' ? (
                 <>
                   <UserPlus className="w-4 h-4 text-sij-cyan" />
-                  <span>{isSyncing ? 'Guardando en Supabase...' : 'Completar Registro'}</span>
+                  <span>{isSubmitting ? 'Registrando...' : 'Completar Registro'}</span>
                 </>
               ) : (
                 <>
                   <LogIn className="w-4 h-4 text-sij-cyan" />
-                  <span>Ingresar al Sistema</span>
+                  <span>{isSubmitting ? 'Verificando...' : 'Ingresar al Sistema'}</span>
                 </>
               )}
             </button>

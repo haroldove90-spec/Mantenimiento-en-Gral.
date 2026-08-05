@@ -47,6 +47,7 @@ export const OfficeDashboard: React.FC = () => {
     orders,
     technicians,
     clients,
+    currentUser,
     assignTechnician,
     updateOrderStatus,
     updateOrderRoute,
@@ -105,7 +106,16 @@ export const OfficeDashboard: React.FC = () => {
             <Building2 className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-slate-900 leading-tight">Módulo de Administración y Oficina</h2>
+            <div className="flex items-center space-x-2">
+              <h2 className="text-xl font-bold text-slate-900 leading-tight">
+                {currentUser?.name ? `¡Bienvenido, ${currentUser.name}!` : 'Módulo de Administración y Oficina'}
+              </h2>
+              {currentUser && (
+                <span className="bg-blue-100 text-blue-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-blue-200">
+                  @{currentUser.username || currentUser.email.split('@')[0]}
+                </span>
+              )}
+            </div>
             <p className="text-sm text-slate-500 mt-0.5">Gestión global de órdenes de servicio, agenda de rutas, presupuestos y garantías</p>
           </div>
         </div>

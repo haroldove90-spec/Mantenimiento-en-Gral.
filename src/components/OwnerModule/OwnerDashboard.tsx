@@ -35,6 +35,7 @@ export const OwnerDashboard: React.FC = () => {
     orders,
     technicians,
     systemUsers,
+    currentUser,
     expenses,
     addSystemUser,
     syncUsersToSupabase,
@@ -213,12 +214,20 @@ export const OwnerDashboard: React.FC = () => {
             <Crown className="w-8 h-8" />
           </div>
           <div>
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full">
                 Rol: Dueño (Administrador General)
               </span>
+              {currentUser && (
+                <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center space-x-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>Usuario: {currentUser.name} (@{currentUser.username || currentUser.email.split('@')[0]})</span>
+                </span>
+              )}
             </div>
-            <h2 className="text-2xl font-black tracking-tight text-white mt-1">Supervisión Operativa & Métricas Financieras</h2>
+            <h2 className="text-2xl font-black tracking-tight text-white mt-1">
+              {currentUser?.name ? `¡Bienvenido, ${currentUser.name}!` : 'Supervisión Operativa & Métricas Financieras'}
+            </h2>
             <p className="text-xs text-slate-300 mt-0.5">Control de ingresos, rendimiento de técnicos, reportes de gastos y gestión de personal</p>
           </div>
         </div>

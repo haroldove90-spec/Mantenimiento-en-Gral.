@@ -35,6 +35,8 @@ interface AppContextType {
   spareParts: SparePart[];
   technicians: Technician[];
   systemUsers: SystemUser[];
+  currentUser: SystemUser | null;
+  setCurrentUser: (user: SystemUser | null) => void;
   expenses: OperatingExpense[];
   notifications: Notification[];
   selectedClientOrderFolio: string | null;
@@ -139,6 +141,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : INITIAL_USERS;
   });
 
+  const [currentUser, setCurrentUser] = useState<SystemUser | null>(() => {
+    const saved = localStorage.getItem('app_current_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+
   const [expenses, setExpenses] = useState<OperatingExpense[]>(() => {
     const saved = localStorage.getItem('app_operating_expenses');
     return saved ? JSON.parse(saved) : INITIAL_EXPENSES;
@@ -193,6 +200,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem('app_system_users', JSON.stringify(systemUsers));
   }, [systemUsers]);
+
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('app_current_user', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('app_current_user');
+    }
+  }, [currentUser]);
 
   // Sync users from Supabase on load
   useEffect(() => {
@@ -780,26 +795,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Attempt to save to Supabase system_users table
     try {
-      const { data, error } = await supabase.from('system_users').insert([{
+      const payload = {
         name: userData.name,
         username: userData.username || userData.email.split('@')[0],
-        email: userData.email,
+        email: userData.email.trim().toLowerCase(),
         password: userData.password || '',
         phone: userData.phone || '',
         role: userData.role || 'owner',
         status: userData.status || 'Activo'
-      }]).select();
+      };
+
+      const { data, error } = await supabase.from('system_users').upsert([payload], { onConflict: 'email' }).select();
 
       if (error) {
         console.error('Error guardando usuario en Supabase system_users:', error);
         dbError = error.message;
         if (error.message.includes('Invalid path') || error.message.includes('relation') || error.message.includes('does not exist')) {
-          dbError = 'La tabla "system_users" no existe en tu base de datos de Supabase. Ejecuta el script SQL en el Editor SQL de Supabase.';
+          dbError = 'La tabla "system_users" no existe en Supabase. Ejecuta el script SQL en el Editor SQL de Supabase.';
         }
-      } else if (data && data.length > 0) {
-        newUser.id = data[0].id;
+      } else {
         savedInDb = true;
-        setSystemUsers(prev => prev.map(u => u.email.toLowerCase() === newUser.email.toLowerCase() ? newUser : u));
+        if (data && data.length > 0) {
+          newUser.id = data[0].id;
+          setSystemUsers(prev => prev.map(u => u.email.toLowerCase() === newUser.email.toLowerCase() ? newUser : u));
+        }
       }
     } catch (err: any) {
       console.error('Supabase error:', err);
@@ -936,6 +955,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         spareParts,
         technicians,
         systemUsers,
+        currentUser,
+        setCurrentUser,
         expenses,
         notifications,
         selectedClientOrderFolio,

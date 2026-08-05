@@ -31,15 +31,17 @@ export const ClientsAndCatalog: React.FC = () => {
   const [partPrice, setPartPrice] = useState(500);
   const [partStock, setPartStock] = useState(10);
 
+  const q = (searchQuery || '').toLowerCase();
   const filteredClients = clients.filter(c =>
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.taxId.toLowerCase().includes(searchQuery.toLowerCase())
+    (c.name || '').toLowerCase().includes(q) ||
+    (c.taxId || '').toLowerCase().includes(q) ||
+    (c.contactName || '').toLowerCase().includes(q)
   );
 
   const filteredParts = spareParts.filter(p =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.category.toLowerCase().includes(searchQuery.toLowerCase())
+    (p.name || '').toLowerCase().includes(q) ||
+    (p.code || '').toLowerCase().includes(q) ||
+    (p.category || '').toLowerCase().includes(q)
   );
 
   const handleCreateClient = (e: React.FormEvent) => {

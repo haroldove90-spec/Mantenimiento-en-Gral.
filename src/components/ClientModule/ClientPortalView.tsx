@@ -25,7 +25,7 @@ export const ClientPortalView: React.FC = () => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const currentOrder = orders.find(
-    o => o.folio.toLowerCase() === selectedFolio.toLowerCase()
+    o => (o.folio || '').toLowerCase() === (selectedFolio || '').toLowerCase()
   ) || orders[0];
 
   const budget = currentOrder?.budget;

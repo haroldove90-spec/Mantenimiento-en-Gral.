@@ -75,12 +75,13 @@ export const OfficeDashboard: React.FC = () => {
   const [warrantyOrder, setWarrantyOrder] = useState<ServiceOrder | null>(null);
   const [warrantyReason, setWarrantyReason] = useState('');
 
+  const q = (searchQuery || '').toLowerCase();
   const filteredOrders = orders.filter(
     o =>
-      o.folio.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      o.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      o.departmentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (o.equipmentType && o.equipmentType.toLowerCase().includes(searchQuery.toLowerCase()))
+      (o.folio || '').toLowerCase().includes(q) ||
+      (o.clientName || '').toLowerCase().includes(q) ||
+      (o.departmentName || '').toLowerCase().includes(q) ||
+      (o.equipmentType || '').toLowerCase().includes(q)
   );
 
   // Route calculation for active technician

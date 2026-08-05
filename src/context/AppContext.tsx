@@ -214,23 +214,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const fetchSupabaseUsers = async () => {
       try {
         const { data, error } = await supabase.from('system_users').select('*');
-        if (!error && data && data.length > 0) {
-          const dbUsers: SystemUser[] = data.map((u: any) => ({
-            id: u.id,
-            name: u.name,
-            username: u.username || u.email.split('@')[0],
-            email: u.email,
-            password: u.password || '',
-            phone: u.phone || '',
-            role: u.role || 'owner',
-            status: u.status || 'Activo',
-            lastLogin: u.last_login ? new Date(u.last_login).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Reciente'
-          }));
+        if (!error && data && Array.isArray(data) && data.length > 0) {
+          const dbUsers: SystemUser[] = data
+            .filter((u: any) => u && typeof u === 'object')
+            .map((u: any) => {
+              const email = u.email || '';
+              const username = u.username || (email ? email.split('@')[0] : 'usuario');
+              return {
+                id: u.id || `usr-${Math.random()}`,
+                name: u.name || username || 'Usuario',
+                username,
+                email,
+                password: u.password || '',
+                phone: u.phone || '',
+                role: u.role || 'owner',
+                status: u.status || 'Activo',
+                lastLogin: u.last_login ? new Date(u.last_login).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Reciente'
+              };
+            });
 
           setSystemUsers(prev => {
             // Merge with local users avoiding duplicates
-            const existingEmails = new Set(dbUsers.map(u => u.email.toLowerCase()));
-            const localOnly = prev.filter(u => !existingEmails.has(u.email.toLowerCase()));
+            const existingEmails = new Set(dbUsers.map(u => (u.email || '').toLowerCase()).filter(Boolean));
+            const localOnly = prev.filter(u => u && u.email && !existingEmails.has((u.email || '').toLowerCase()));
             return [...dbUsers, ...localOnly];
           });
         }
@@ -786,7 +792,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Always update local state & localStorage immediately so user is registered and can login
     setSystemUsers(prev => {
-      const filtered = prev.filter(u => u.email.toLowerCase() !== newUser.email.toLowerCase() && u.username.toLowerCase() !== (newUser.username || '').toLowerCase());
+      const filtered = prev.filter(u => 
+        u && u.email && 
+        (u.email || '').toLowerCase() !== (newUser.email || '').toLowerCase() && 
+        (u.username || '').toLowerCase() !== (newUser.username || '').toLowerCase()
+      );
       return [...filtered, newUser];
     });
 
@@ -795,10 +805,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Attempt to save to Supabase system_users table
     try {
+      const userEmail = (userData.email || '').trim().toLowerCase();
       const payload = {
-        name: userData.name,
-        username: userData.username || userData.email.split('@')[0],
-        email: userData.email.trim().toLowerCase(),
+        name: userData.name || 'Usuario',
+        username: userData.username || (userEmail ? userEmail.split('@')[0] : 'usuario'),
+        email: userEmail,
         password: userData.password || '',
         phone: userData.phone || '',
         role: userData.role || 'owner',
@@ -808,7 +819,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const { data, error } = await supabase.from('system_users').upsert([payload], { onConflict: 'email' }).select();
 
       if (error) {
-        console.error('Error guardando usuario en Supabase system_users:', error);
+        console.warn('Advertencia guardando usuario en Supabase system_users:', error.message || error);
         dbError = error.message;
         if (error.message.includes('Invalid path') || error.message.includes('relation') || error.message.includes('does not exist')) {
           dbError = 'La tabla "system_users" no existe en Supabase. Ejecuta el script SQL en el Editor SQL de Supabase.';
@@ -817,11 +828,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         savedInDb = true;
         if (data && data.length > 0) {
           newUser.id = data[0].id;
-          setSystemUsers(prev => prev.map(u => u.email.toLowerCase() === newUser.email.toLowerCase() ? newUser : u));
+          setSystemUsers(prev => prev.map(u => u && (u.email || '').toLowerCase() === userEmail ? newUser : u));
         }
       }
     } catch (err: any) {
-      console.error('Supabase error:', err);
+      console.warn('Supabase error:', err);
       dbError = err.message || 'Error de conexión con Supabase';
     }
 

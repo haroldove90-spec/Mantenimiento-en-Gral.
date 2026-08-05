@@ -796,31 +796,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Owner System Users & Expenses
   const addSystemUser = async (userData: Omit<SystemUser, 'id'>): Promise<{ success: boolean; savedInDb: boolean; error?: string }> => {
-    const newUser: SystemUser = {
-      ...userData,
-      id: `usr-${Date.now()}`,
-      lastLogin: 'Ahora mismo'
-    };
-
-    // Always update local state & localStorage immediately so user is registered and can login
-    setSystemUsers(prev => {
-      const filtered = prev.filter(u => 
-        u && u.email && 
-        (u.email || '').toLowerCase() !== (newUser.email || '').toLowerCase() && 
-        (u.username || '').toLowerCase() !== (newUser.username || '').toLowerCase()
-      );
-      return [...filtered, newUser];
-    });
+    const userEmail = (userData.email || '').trim().toLowerCase();
+    const userUsername = (userData.username || '').trim().toLowerCase() || userEmail.split('@')[0];
 
     let savedInDb = false;
     let dbError = '';
 
-    // Attempt to save to Supabase system_users table
+    // Attempt to save to Supabase system_users table FIRST
     try {
-      const userEmail = (userData.email || '').trim().toLowerCase();
       const payload = {
         name: userData.name || 'Usuario',
-        username: userData.username || (userEmail ? userEmail.split('@')[0] : 'usuario'),
+        username: userUsername,
         email: userEmail,
         password: userData.password || '',
         phone: userData.phone || '',
@@ -828,27 +814,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         status: userData.status || 'Activo'
       };
 
-      const { data, error } = await supabase.from('system_users').upsert([payload], { onConflict: 'email' }).select();
+      const { data, error } = await supabase
+        .from('system_users')
+        .upsert([payload], { onConflict: 'email' })
+        .select();
 
       if (error) {
-        console.warn('Advertencia guardando usuario en Supabase system_users:', error.message || error);
-        dbError = error.message;
+        console.warn('Error guardando usuario en Supabase system_users:', error.message || error);
+        dbError = error.message || 'Error al guardar en Supabase';
         if (error.message.includes('Invalid path') || error.message.includes('relation') || error.message.includes('does not exist')) {
           dbError = 'La tabla "system_users" no existe en Supabase. Ejecuta el script SQL en el Editor SQL de Supabase.';
         }
-      } else {
+      } else if (data && data.length > 0) {
         savedInDb = true;
-        if (data && data.length > 0) {
-          newUser.id = data[0].id;
-          setSystemUsers(prev => prev.map(u => u && (u.email || '').toLowerCase() === userEmail ? newUser : u));
-        }
+        const dbU = data[0];
+        const savedUser: SystemUser = {
+          id: dbU.id,
+          name: dbU.name,
+          username: dbU.username || userUsername,
+          email: dbU.email,
+          password: dbU.password || userData.password || '',
+          phone: dbU.phone || '',
+          role: dbU.role || userData.role || 'owner',
+          status: dbU.status || 'Activo',
+          lastLogin: 'Ahora mismo'
+        };
+
+        // Update local state ONLY when Supabase registration succeeds
+        setSystemUsers(prev => {
+          const filtered = prev.filter(u => u && (u.email || '').toLowerCase() !== userEmail && (u.username || '').toLowerCase() !== userUsername);
+          return [...filtered, savedUser];
+        });
+      } else {
+        dbError = 'Supabase no confirmó la inserción del usuario en la base de datos.';
       }
     } catch (err: any) {
       console.warn('Supabase error:', err);
-      dbError = err.message || 'Error de conexión con Supabase';
+      dbError = err.message || 'Error de conexión con la base de datos de Supabase';
     }
 
-    return { success: true, savedInDb, error: dbError };
+    return { success: savedInDb, savedInDb, error: dbError };
   };
 
   const syncUsersToSupabase = async (): Promise<{ success: boolean; count: number; error?: string }> => {

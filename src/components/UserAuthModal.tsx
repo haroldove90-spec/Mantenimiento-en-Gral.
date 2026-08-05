@@ -74,25 +74,9 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
       const assignedRole = (targetRole === 'home' ? 'owner' : targetRole) as 'owner' | 'office' | 'tech' | 'client';
 
       setIsSubmitting(true);
+      setMessage({ type: 'warning', text: 'Registrando usuario en la base de datos de Supabase...' });
 
-      // Check if user already exists in local state
-      const existingUserLocally = systemUsers.find(
-        u => (u.email && u.email.toLowerCase() === cleanEmail) ||
-             (u.username && u.username.toLowerCase() === cleanUsername)
-      );
-
-      if (existingUserLocally) {
-        // Log in as existing local user
-        setCurrentUser(existingUserLocally);
-        setActiveRole(assignedRole);
-        if (assignedRole === 'owner') setOwnerSubTab('analytics');
-        if (assignedRole === 'office') setOfficeSubTab('orders');
-        setIsSubmitting(false);
-        onClose();
-        return;
-      }
-
-      // Register new user (saves to Supabase & local state)
+      // Register new user (saves to Supabase first)
       const res = await addSystemUser({
         name: fullName.trim(),
         username: cleanUsername,
@@ -105,7 +89,17 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
 
       setIsSubmitting(false);
 
-      const newUser: SystemUser = {
+      if (!res.savedInDb || !res.success) {
+        // DO NOT LET USER IN IF SUPABASE REGISTRATION FAILED!
+        setMessage({
+          type: 'error',
+          text: `❌ Supabase no pudo registrar al usuario: ${res.error || 'No se pudo guardar la cuenta en la base de datos'}. No es posible ingresar sin un registro guardado en Supabase.`
+        });
+        return;
+      }
+
+      // Registration in Supabase succeeded
+      const registeredUser = systemUsers.find(u => u.email.toLowerCase() === cleanEmail) || {
         id: `usr-${Date.now()}`,
         name: fullName.trim(),
         username: cleanUsername,
@@ -116,13 +110,11 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
         lastLogin: 'Ahora mismo'
       };
 
-      setCurrentUser(newUser);
+      setCurrentUser(registeredUser);
 
       setMessage({
         type: 'success',
-        text: res.savedInDb 
-          ? `¡Usuario ${cleanUsername} registrado y guardado con éxito en Supabase!` 
-          : `¡Usuario ${cleanUsername} registrado con éxito!`
+        text: `¡Usuario ${cleanUsername} registrado y guardado con éxito en Supabase!`
       });
 
       setTimeout(() => {
@@ -140,41 +132,44 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
       }
 
       setIsSubmitting(true);
+      setMessage({ type: 'warning', text: 'Consultando usuario en Supabase...' });
       const input = email.trim().toLowerCase();
 
-      // Find user in local state first
-      let foundUser: SystemUser | null = systemUsers.find(
-        u =>
-          (u.email && u.email.trim().toLowerCase() === input) ||
-          (u.username && u.username.trim().toLowerCase() === input)
-      ) || null;
+      let foundUser: SystemUser | null = null;
 
-      // If not in local state, try Supabase database lookup
-      if (!foundUser) {
-        try {
-          const { data, error } = await supabase
-            .from('system_users')
-            .select('*')
-            .or(`email.eq.${input},username.eq.${input},email.ilike.${input},username.ilike.${input}`)
-            .limit(1);
+      // 1. Check Supabase database FIRST
+      try {
+        const { data, error } = await supabase
+          .from('system_users')
+          .select('*')
+          .or(`email.eq.${input},username.eq.${input},email.ilike.${input},username.ilike.${input}`)
+          .limit(1);
 
-          if (!error && data && data.length > 0) {
-            const dbU = data[0];
-            foundUser = {
-              id: dbU.id,
-              name: dbU.name,
-              username: dbU.username || dbU.email.split('@')[0],
-              email: dbU.email,
-              password: dbU.password || '',
-              phone: dbU.phone || '',
-              role: dbU.role || 'owner',
-              status: dbU.status || 'Activo',
-              lastLogin: 'Ahora mismo'
-            };
-          }
-        } catch (err) {
-          console.error('Error buscando usuario en Supabase:', err);
+        if (!error && data && data.length > 0) {
+          const dbU = data[0];
+          foundUser = {
+            id: dbU.id,
+            name: dbU.name,
+            username: dbU.username || dbU.email.split('@')[0],
+            email: dbU.email,
+            password: dbU.password || '',
+            phone: dbU.phone || '',
+            role: dbU.role || 'owner',
+            status: dbU.status || 'Activo',
+            lastLogin: 'Ahora mismo'
+          };
         }
+      } catch (err) {
+        console.error('Error buscando usuario en Supabase:', err);
+      }
+
+      // 2. If not found directly, check local systemUsers state
+      if (!foundUser) {
+        foundUser = systemUsers.find(
+          u =>
+            (u.email && u.email.trim().toLowerCase() === input) ||
+            (u.username && u.username.trim().toLowerCase() === input)
+        ) || null;
       }
 
       setIsSubmitting(false);
@@ -182,7 +177,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
       if (!foundUser) {
         setMessage({
           type: 'error',
-          text: 'Usuario no encontrado. Por favor ve a la pestaña "Registrarse" para crear tu cuenta.'
+          text: '❌ Usuario no encontrado en la base de datos de Supabase. Debes registrarte primero antes de ingresar.'
         });
         return;
       }
@@ -190,7 +185,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
       if (foundUser.password && foundUser.password !== password.trim()) {
         setMessage({
           type: 'error',
-          text: 'Contraseña incorrecta. Verifica tus credenciales.'
+          text: '❌ Contraseña incorrecta. Verifica tus credenciales de ingreso.'
         });
         return;
       }
@@ -199,7 +194,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
       setCurrentUser(foundUser);
       setMessage({
         type: 'success',
-        text: `¡Bienvenido de nuevo, ${foundUser.name}! Iniciando sesión...`
+        text: `¡Bienvenido de nuevo, ${foundUser.name}! Accediendo al sistema...`
       });
 
       setTimeout(() => {

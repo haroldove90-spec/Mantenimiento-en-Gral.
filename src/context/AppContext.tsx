@@ -793,6 +793,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (error) {
         console.error('Error guardando usuario en Supabase system_users:', error);
         dbError = error.message;
+        if (error.message.includes('Invalid path') || error.message.includes('relation') || error.message.includes('does not exist')) {
+          dbError = 'La tabla "system_users" no existe en tu base de datos de Supabase. Ejecuta el script SQL en el Editor SQL de Supabase.';
+        }
       } else if (data && data.length > 0) {
         newUser.id = data[0].id;
         savedInDb = true;
@@ -800,7 +803,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     } catch (err: any) {
       console.error('Supabase error:', err);
-      dbError = err.message || 'Error de conexión';
+      dbError = err.message || 'Error de conexión con Supabase';
     }
 
     return { success: true, savedInDb, error: dbError };
@@ -825,18 +828,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (error) {
           console.error('Error sincronizando usuario con Supabase:', u.email, error);
           lastError = error.message;
+          if (error.message.includes('Invalid path') || error.message.includes('relation') || error.message.includes('does not exist')) {
+            lastError = 'La tabla "system_users" no existe en Supabase. Ejecuta el script SQL en el SQL Editor de Supabase.';
+          }
         } else {
           syncedCount++;
         }
       } catch (err: any) {
-        lastError = err.message || 'Error de red';
+        lastError = err.message || 'Error de red con Supabase';
       }
     }
 
     if (syncedCount > 0) {
       return { success: true, count: syncedCount };
     } else {
-      return { success: false, count: 0, error: lastError || 'No se pudieron sincronizar usuarios' };
+      return { success: false, count: 0, error: lastError || 'No se pudieron sincronizar los usuarios con Supabase.' };
     }
   };
 

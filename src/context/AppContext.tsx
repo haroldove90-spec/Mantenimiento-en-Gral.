@@ -820,10 +820,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .select();
 
       if (error) {
-        console.warn('Error guardando usuario en Supabase system_users:', error.message || error);
-        dbError = error.message || 'Error al guardar en Supabase';
-        if (error.message.includes('Invalid path') || error.message.includes('relation') || error.message.includes('does not exist')) {
+        console.warn('Error guardando usuario en Supabase system_users:', error);
+        if (error.code === '23505' || (error.message && error.message.includes('unique constraint'))) {
+          if (error.message.includes('username') || (error.details && error.details.includes('username'))) {
+            dbError = 'El nombre de usuario ya está registrado en Supabase. Elige otro nombre de usuario.';
+          } else {
+            dbError = 'El correo electrónico ya está registrado en Supabase.';
+          }
+        } else if (error.code === '42P01' || (error.message && (error.message.includes('relation') || error.message.includes('does not exist')))) {
           dbError = 'La tabla "system_users" no existe en Supabase. Ejecuta el script SQL en el Editor SQL de Supabase.';
+        } else if (error.code === '42501' || (error.message && (error.message.includes('permission') || error.message.includes('policy')))) {
+          dbError = 'Permiso denegado por políticas RLS en Supabase. Ejecuta el script SQL para otorgar los permisos.';
+        } else {
+          dbError = error.message || 'Error al guardar el usuario en Supabase.';
         }
       } else if (data && data.length > 0) {
         savedInDb = true;

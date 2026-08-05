@@ -16,11 +16,16 @@ const isValidUrl = (url: any): boolean => {
   }
 };
 
+const isValidKey = (key: any): boolean => {
+  if (typeof key !== 'string' || !key.trim()) return false;
+  return key.trim().startsWith('eyJ') && key.trim().length > 50;
+};
+
 const rawUrl = env.VITE_SUPABASE_URL;
 const rawKey = env.VITE_SUPABASE_ANON_KEY;
 
 const SUPABASE_URL = isValidUrl(rawUrl) ? rawUrl : FALLBACK_URL;
-const SUPABASE_ANON_KEY = (typeof rawKey === 'string' && rawKey.trim()) ? rawKey : FALLBACK_KEY;
+const SUPABASE_ANON_KEY = isValidKey(rawKey) ? rawKey : FALLBACK_KEY;
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 

@@ -239,6 +239,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const localOnly = prev.filter(u => u && u.email && !existingEmails.has((u.email || '').toLowerCase()));
             return [...dbUsers, ...localOnly];
           });
+        } else if (!error && data && Array.isArray(data) && data.length === 0) {
+          // Table exists but is empty -> Auto-seed default initial users into Supabase system_users table
+          const seedPayloads = INITIAL_USERS.map(initU => ({
+            name: initU.name,
+            username: initU.username || initU.email.split('@')[0],
+            email: initU.email.toLowerCase(),
+            password: initU.password || '123456',
+            phone: initU.phone || '',
+            role: initU.role || 'owner',
+            status: initU.status || 'Activo'
+          }));
+          await supabase.from('system_users').upsert(seedPayloads, { onConflict: 'email' });
         }
       } catch (e) {
         console.warn('Supabase system_users sync skipped/offline', e);

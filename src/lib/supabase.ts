@@ -6,13 +6,14 @@ const FALLBACK_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 const env = (import.meta as any).env || {};
 
-const isValidUrl = (url: any): boolean => {
-  if (typeof url !== 'string' || !url.trim()) return false;
+const sanitizeUrl = (url: any): string => {
+  if (typeof url !== 'string' || !url.trim()) return FALLBACK_URL;
   try {
-    const parsed = new URL(url);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    const parsed = new URL(url.trim());
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return FALLBACK_URL;
+    return parsed.origin;
   } catch {
-    return false;
+    return FALLBACK_URL;
   }
 };
 
@@ -24,7 +25,7 @@ const isValidKey = (key: any): boolean => {
 const rawUrl = env.VITE_SUPABASE_URL;
 const rawKey = env.VITE_SUPABASE_ANON_KEY;
 
-const SUPABASE_URL = isValidUrl(rawUrl) ? rawUrl : FALLBACK_URL;
+const SUPABASE_URL = sanitizeUrl(rawUrl);
 const SUPABASE_ANON_KEY = isValidKey(rawKey) ? rawKey : FALLBACK_KEY;
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);

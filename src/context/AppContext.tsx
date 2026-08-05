@@ -85,7 +85,7 @@ interface AppContextType {
   rejectBudget: (orderId: string, clientComment: string) => void;
 
   // Owner / System Users & Expenses actions
-  addSystemUser: (user: Omit<SystemUser, 'id'>) => Promise<{ success: boolean; error?: string }>;
+  addSystemUser: (user: Omit<SystemUser, 'id'>) => Promise<{ success: boolean; savedInDb: boolean; error?: string }>;
   updateSystemUser: (id: string, userData: Partial<SystemUser>) => void;
   toggleUserStatus: (id: string) => void;
   addExpense: (expense: Omit<OperatingExpense, 'id'>) => void;
@@ -761,14 +761,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Owner System Users & Expenses
-  const addSystemUser = async (userData: Omit<SystemUser, 'id'>): Promise<{ success: boolean; error?: string }> => {
+  const addSystemUser = async (userData: Omit<SystemUser, 'id'>): Promise<{ success: boolean; savedInDb: boolean; error?: string }> => {
     const newUser: SystemUser = {
       ...userData,
       id: `usr-${Date.now()}`,
-      lastLogin: 'Nunca'
+      lastLogin: 'Ahora mismo'
     };
 
-    // Save to Supabase system_users table
+    // Always update local state & localStorage immediately so user is registered and can login
+    setSystemUsers(prev => {
+      const filtered = prev.filter(u => u.email.toLowerCase() !== newUser.email.toLowerCase() && u.username.toLowerCase() !== (newUser.username || '').toLowerCase());
+      return [...filtered, newUser];
+    });
+
+    let savedInDb = false;
+    let dbError = '';
+
+    // Attempt to save to Supabase system_users table
     try {
       const { data, error } = await supabase.from('system_users').insert([{
         name: userData.name,
@@ -782,18 +791,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (error) {
         console.error('Error guardando usuario en Supabase system_users:', error);
-        return { success: false, error: error.message };
-      }
-
-      if (data && data.length > 0) {
+        dbError = error.message;
+      } else if (data && data.length > 0) {
         newUser.id = data[0].id;
+        savedInDb = true;
+        setSystemUsers(prev => prev.map(u => u.email.toLowerCase() === newUser.email.toLowerCase() ? newUser : u));
       }
-      setSystemUsers(prev => [...prev.filter(u => u.email.toLowerCase() !== newUser.email.toLowerCase()), newUser]);
-      return { success: true };
     } catch (err: any) {
       console.error('Supabase error:', err);
-      return { success: false, error: err.message || 'Error de conexión' };
+      dbError = err.message || 'Error de conexión';
     }
+
+    return { success: true, savedInDb, error: dbError };
   };
 
   const updateSystemUser = async (id: string, userData: Partial<SystemUser>) => {

@@ -257,8 +257,11 @@ DROP POLICY IF EXISTS "allow_full_access_operating_expenses" ON public.operating
 CREATE POLICY "allow_full_access_operating_expenses" ON public.operating_expenses FOR ALL USING (true) WITH CHECK (true);
 
 -- --------------------------------------------------------------------
--- 6. PERMISOS DE ROL (GRANT)
+-- 6. PERMISOS DE ROL (GRANT) Y RECARGA DE ESQUEMA POSTGREST
 -- --------------------------------------------------------------------
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO postgres, service_role, anon, authenticated;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO postgres, service_role, anon, authenticated;
+
+-- Notificar a PostgREST para recargar la caché de esquema inmediatamente
+NOTIFY pgrst, 'reload schema';

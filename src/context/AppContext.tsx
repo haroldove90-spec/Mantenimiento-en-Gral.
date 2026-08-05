@@ -86,6 +86,7 @@ interface AppContextType {
 
   // Owner / System Users & Expenses actions
   addSystemUser: (user: Omit<SystemUser, 'id'>) => Promise<{ success: boolean; savedInDb: boolean; error?: string }>;
+  syncUsersToSupabase: () => Promise<{ success: boolean; count: number; error?: string }>;
   updateSystemUser: (id: string, userData: Partial<SystemUser>) => void;
   toggleUserStatus: (id: string) => void;
   addExpense: (expense: Omit<OperatingExpense, 'id'>) => void;
@@ -805,6 +806,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { success: true, savedInDb, error: dbError };
   };
 
+  const syncUsersToSupabase = async (): Promise<{ success: boolean; count: number; error?: string }> => {
+    let syncedCount = 0;
+    let lastError = '';
+
+    for (const u of systemUsers) {
+      try {
+        const { error } = await supabase.from('system_users').upsert([{
+          name: u.name,
+          username: u.username || u.email.split('@')[0],
+          email: u.email,
+          password: u.password || '',
+          phone: u.phone || '',
+          role: u.role || 'owner',
+          status: u.status || 'Activo'
+        }], { onConflict: 'email' });
+
+        if (error) {
+          console.error('Error sincronizando usuario con Supabase:', u.email, error);
+          lastError = error.message;
+        } else {
+          syncedCount++;
+        }
+      } catch (err: any) {
+        lastError = err.message || 'Error de red';
+      }
+    }
+
+    if (syncedCount > 0) {
+      return { success: true, count: syncedCount };
+    } else {
+      return { success: false, count: 0, error: lastError || 'No se pudieron sincronizar usuarios' };
+    }
+  };
+
   const updateSystemUser = async (id: string, userData: Partial<SystemUser>) => {
     setSystemUsers(prev =>
       prev.map(u => (u.id === id ? { ...u, ...userData } : u))
@@ -915,6 +950,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         approveBudget,
         rejectBudget,
         addSystemUser,
+        syncUsersToSupabase,
         updateSystemUser,
         toggleUserStatus,
         addExpense,

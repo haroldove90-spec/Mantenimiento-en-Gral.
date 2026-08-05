@@ -37,6 +37,7 @@ export const OwnerDashboard: React.FC = () => {
     systemUsers,
     expenses,
     addSystemUser,
+    syncUsersToSupabase,
     updateSystemUser,
     toggleUserStatus,
     addExpense,
@@ -58,6 +59,30 @@ export const OwnerDashboard: React.FC = () => {
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<SystemUser | null>(null);
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
+
+  // Supabase Sync & SQL Modal state
+  const [isSqlModalOpen, setIsSqlModalOpen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [copiedSql, setCopiedSql] = useState(false);
+
+  const handleSyncSupabase = async () => {
+    setIsSyncing(true);
+    setSyncResult(null);
+    const res = await syncUsersToSupabase();
+    setIsSyncing(false);
+    if (res.success && res.count > 0) {
+      setSyncResult({
+        type: 'success',
+        text: `¡Se sincronizaron ${res.count} usuarios exitosamente en la base de datos de Supabase!`
+      });
+    } else {
+      setSyncResult({
+        type: 'error',
+        text: `Error al sincronizar: ${res.error || 'Asegúrate de haber creado la tabla system_users ejecutando el script SQL.'}`
+      });
+    }
+  };
 
   // New user form state
   const [userName, setUserName] = useState('');
@@ -516,6 +541,54 @@ export const OwnerDashboard: React.FC = () => {
             </button>
           </div>
 
+          {/* Supabase Cloud Connection & Sync Banner */}
+          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-sij-navy text-white p-5 rounded-2xl shadow-lg border border-indigo-900/50 space-y-3">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2">
+                  <Database className="w-5 h-5 text-sij-cyan animate-pulse" />
+                  <h4 className="font-extrabold text-sm text-white">Sincronización con Base de Datos Supabase</h4>
+                  <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-mono px-2 py-0.5 rounded-full border border-emerald-500/30">
+                    Nube Conectada
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300">
+                  Si registraste usuarios pero no los ves en tu panel de Supabase, ejecuta el script SQL para crear las tablas y haz clic en "Sincronizar Usuarios".
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setIsSqlModalOpen(true)}
+                  className="bg-slate-800 hover:bg-slate-700 text-sij-cyan border border-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer"
+                >
+                  <BarChart3 className="w-4 h-4" />
+                  <span>Ver Script SQL Supabase</span>
+                </button>
+
+                <button
+                  onClick={handleSyncSupabase}
+                  disabled={isSyncing}
+                  className="bg-gradient-to-r from-sij-blue to-indigo-600 hover:from-sij-navy hover:to-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-extrabold shadow-md transition-all flex items-center space-x-2 disabled:opacity-50 cursor-pointer"
+                >
+                  <RotateCcw className={`w-4 h-4 text-sij-cyan ${isSyncing ? 'animate-spin' : ''}`} />
+                  <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar Usuarios a Supabase'}</span>
+                </button>
+              </div>
+            </div>
+
+            {syncResult && (
+              <div className={`p-3 rounded-xl text-xs font-bold flex items-center space-x-2 ${
+                syncResult.type === 'success' 
+                  ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-500/30' 
+                  : 'bg-rose-500/20 text-rose-200 border border-rose-500/30'
+              }`}>
+                {syncResult.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" /> : <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />}
+                <span>{syncResult.text}</span>
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {systemUsers.map(usr => (
               <div
@@ -785,6 +858,121 @@ export const OwnerDashboard: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: SUPABASE SQL SCRIPT */}
+      {isSqlModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl relative space-y-4 max-h-[90vh] flex flex-col border border-slate-100">
+            <div className="flex items-start justify-between border-b border-slate-100 pb-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-emerald-100 text-emerald-800 rounded-2xl flex items-center justify-center font-bold">
+                  <Database className="w-5 h-5 text-emerald-600" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-lg">Script SQL para Supabase</h3>
+                  <p className="text-xs text-slate-500">
+                    Copia este código y ejecútalo en el <b>SQL Editor de tu dashboard de Supabase</b>.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setIsSqlModalOpen(false)}
+                className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100"
+              >
+                <Database className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-slate-900 rounded-2xl p-4 overflow-y-auto font-mono text-xs text-emerald-400 space-y-2 max-h-60 border border-slate-800">
+              <p className="text-slate-400 font-semibold mb-2">-- Estructura de la tabla system_users y permisos:</p>
+              <pre className="whitespace-pre-wrap select-all">
+{`CREATE TABLE IF NOT EXISTS public.system_users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    auth_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    name TEXT NOT NULL,
+    username TEXT UNIQUE,
+    email TEXT NOT NULL UNIQUE,
+    password TEXT,
+    phone TEXT,
+    role TEXT NOT NULL DEFAULT 'owner',
+    status TEXT NOT NULL DEFAULT 'Activo',
+    last_login TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Asegurar permisos y RLS
+ALTER TABLE public.system_users ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "allow_full_access_system_users" ON public.system_users;
+CREATE POLICY "allow_full_access_system_users" ON public.system_users FOR ALL USING (true) WITH CHECK (true);
+
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO postgres, service_role, anon, authenticated;
+
+-- Notificar recarga de caché a PostgREST
+NOTIFY pgrst, 'reload schema';`}
+              </pre>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 text-xs text-amber-900 space-y-1">
+              <p className="font-bold">Pasos para aplicar en Supabase (30 segundos):</p>
+              <ol className="list-decimal list-inside space-y-1 text-slate-700 font-medium">
+                <li>Ve a tu consola de Supabase: <code className="bg-amber-100 px-1 py-0.5 rounded text-amber-900 font-mono">battwitnhrezwotkcvbc.supabase.co</code></li>
+                <li>Haz clic en <b>SQL Editor</b> en el menú lateral izquierdo.</li>
+                <li>Pega este código y presiona <b>Run</b> (Ejecutar).</li>
+                <li>Regresa aquí y presiona <b>"Sincronizar Usuarios a Supabase"</b>.</li>
+              </ol>
+            </div>
+
+            <div className="flex items-center justify-end space-x-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const sql = `CREATE TABLE IF NOT EXISTS public.system_users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    auth_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    name TEXT NOT NULL,
+    username TEXT UNIQUE,
+    email TEXT NOT NULL UNIQUE,
+    password TEXT,
+    phone TEXT,
+    role TEXT NOT NULL DEFAULT 'owner',
+    status TEXT NOT NULL DEFAULT 'Activo',
+    last_login TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE public.system_users ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "allow_full_access_system_users" ON public.system_users;
+CREATE POLICY "allow_full_access_system_users" ON public.system_users FOR ALL USING (true) WITH CHECK (true);
+
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO postgres, service_role, anon, authenticated;
+
+NOTIFY pgrst, 'reload schema';`;
+                  navigator.clipboard.writeText(sql);
+                  setCopiedSql(true);
+                  setTimeout(() => setCopiedSql(false), 2000);
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs flex items-center space-x-2 shadow-md cursor-pointer transition-all"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>{copiedSql ? '¡Código SQL Copiado!' : 'Copiar Script SQL al Portapapeles'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsSqlModalOpen(false)}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2.5 rounded-xl text-xs cursor-pointer"
+              >
+                Cerrar
+              </button>
+            </div>
           </div>
         </div>
       )}

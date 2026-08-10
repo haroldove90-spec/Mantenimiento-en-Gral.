@@ -72,11 +72,25 @@ CREATE TABLE IF NOT EXISTS public.clients (
     tax_id TEXT,
     fiscal_address TEXT,
     delivery_address TEXT,
-    contact_name TEXT NOT NULL,
-    contact_phone TEXT NOT NULL,
-    contact_email TEXT NOT NULL,
+    contact_name TEXT,
+    contact_phone TEXT,
+    contact_email TEXT,
+    address TEXT,
+    phone TEXT,
+    whatsapp TEXT,
+    model TEXT,
+    fault TEXT,
+    status TEXT NOT NULL DEFAULT 'Activo' CHECK (status IN ('Activo', 'Inactivo')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Agregar columnas en caso de que la tabla ya existiera previamente
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS whatsapp TEXT;
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS model TEXT;
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS fault TEXT;
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Activo';
 
 -- Departamentos / Sucursales
 CREATE TABLE IF NOT EXISTS public.departments (

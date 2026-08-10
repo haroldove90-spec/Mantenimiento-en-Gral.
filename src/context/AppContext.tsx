@@ -75,12 +75,16 @@ interface AppContextType {
     signature?: string;
   }) => void;
 
-  // Office actions
+  // Office & Catalog actions
   saveBudget: (orderId: string, budgetData: { laborCost: number; parts: RequestedPart[]; taxRate: number; notes?: string }) => void;
   sendBudgetToClient: (orderId: string) => void;
   addClient: (client: Omit<Client, 'id'>) => void;
   updateClient: (id: string, clientData: Partial<Client>) => void;
+  deleteClient: (id: string) => void;
+  toggleClientStatus: (id: string) => void;
   addSparePart: (part: Omit<SparePart, 'id'>) => void;
+  deleteSparePart: (id: string) => void;
+  deleteOrder: (id: string) => void;
 
   // Client actions
   approveBudget: (orderId: string, clientComment?: string) => void;
@@ -91,7 +95,9 @@ interface AppContextType {
   syncUsersToSupabase: () => Promise<{ success: boolean; count: number; error?: string }>;
   updateSystemUser: (id: string, userData: Partial<SystemUser>) => void;
   toggleUserStatus: (id: string) => void;
+  deleteSystemUser: (id: string) => void;
   addExpense: (expense: Omit<OperatingExpense, 'id'>) => void;
+  deleteExpense: (id: string) => void;
 
   // Notifications
   markNotificationRead: (id: string) => void;
@@ -772,18 +778,78 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const addClient = (clientData: Omit<Client, 'id'>) => {
+  const addClient = async (clientData: Omit<Client, 'id'>) => {
     const newClient: Client = {
       ...clientData,
       id: `cli-${Date.now()}`
     };
     setClients(prev => [...prev, newClient]);
+
+    // Sync to Supabase clients table
+    try {
+      await supabase.from('clients').upsert([{
+        name: clientData.name,
+        tax_id: clientData.taxId,
+        contact_email: clientData.email,
+        contact_phone: clientData.phone || '',
+        address: clientData.address || '',
+        phone: clientData.phone || '',
+        whatsapp: clientData.whatsapp || '',
+        model: clientData.model || '',
+        fault: clientData.fault || '',
+        status: clientData.status || 'Activo',
+        contact_name: clientData.name
+      }]);
+    } catch (err) {
+      console.warn('Error sincronizando cliente en Supabase:', err);
+    }
   };
 
-  const updateClient = (id: string, clientData: Partial<Client>) => {
+  const updateClient = async (id: string, clientData: Partial<Client>) => {
     setClients(prev =>
       prev.map(c => (c.id === id ? { ...c, ...clientData } : c))
     );
+
+    try {
+      const client = clients.find(c => c.id === id);
+      if (client) {
+        await supabase
+          .from('clients')
+          .update({
+            name: clientData.name ?? client.name,
+            tax_id: clientData.taxId ?? client.taxId,
+            contact_email: clientData.email ?? client.email,
+            address: clientData.address ?? client.address,
+            phone: clientData.phone ?? client.phone,
+            whatsapp: clientData.whatsapp ?? client.whatsapp,
+            model: clientData.model ?? client.model,
+            fault: clientData.fault ?? client.fault,
+            status: clientData.status ?? client.status
+          })
+          .eq('contact_email', client.email);
+      }
+    } catch (err) {
+      console.warn('Error actualizando cliente en Supabase:', err);
+    }
+  };
+
+  const deleteClient = async (id: string) => {
+    const clientToDelete = clients.find(c => c.id === id);
+    setClients(prev => prev.filter(c => c.id !== id));
+    if (clientToDelete?.email) {
+      try {
+        await supabase.from('clients').delete().eq('contact_email', clientToDelete.email);
+      } catch (e) {
+        console.warn('Error borrando cliente en Supabase:', e);
+      }
+    }
+  };
+
+  const toggleClientStatus = async (id: string) => {
+    const client = clients.find(c => c.id === id);
+    if (!client) return;
+    const newStatus = client.status === 'Inactivo' ? 'Activo' : 'Inactivo';
+    updateClient(id, { status: newStatus });
   };
 
   const addSparePart = (partData: Omit<SparePart, 'id'>) => {
@@ -792,6 +858,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `sp-${Date.now()}`
     };
     setSpareParts(prev => [...prev, newPart]);
+  };
+
+  const deleteSparePart = (id: string) => {
+    setSpareParts(prev => prev.filter(p => p.id !== id));
+  };
+
+  const deleteOrder = (id: string) => {
+    setOrders(prev => prev.filter(o => o.id !== id));
   };
 
   // Owner System Users & Expenses
@@ -928,12 +1002,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const toggleUserStatus = (id: string) => {
+  const toggleUserStatus = async (id: string) => {
+    const user = systemUsers.find(u => u.id === id);
+    const newStatus = user?.status === 'Activo' ? 'Inactivo' : 'Activo';
     setSystemUsers(prev =>
       prev.map(u =>
-        u.id === id ? { ...u, status: u.status === 'Activo' ? 'Inactivo' : 'Activo' } : u
+        u.id === id ? { ...u, status: newStatus } : u
       )
     );
+    if (user) {
+      try {
+        await supabase.from('system_users').update({ status: newStatus }).eq('email', user.email);
+      } catch (err) {
+        console.warn('Error actualizando estatus en Supabase:', err);
+      }
+    }
+  };
+
+  const deleteSystemUser = async (id: string) => {
+    const userToDelete = systemUsers.find(u => u.id === id);
+    setSystemUsers(prev => prev.filter(u => u.id !== id));
+    if (userToDelete?.email) {
+      try {
+        await supabase.from('system_users').delete().eq('email', userToDelete.email);
+      } catch (e) {
+        console.warn('Error borrando usuario en Supabase:', e);
+      }
+    }
   };
 
   const addExpense = (expenseData: Omit<OperatingExpense, 'id'>) => {
@@ -942,6 +1037,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `exp-${Date.now()}`
     };
     setExpenses(prev => [newExp, ...prev]);
+  };
+
+  const deleteExpense = (id: string) => {
+    setExpenses(prev => prev.filter(e => e.id !== id));
   };
 
   const markNotificationRead = (id: string) => {
@@ -1010,14 +1109,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         sendBudgetToClient,
         addClient,
         updateClient,
+        deleteClient,
+        toggleClientStatus,
         addSparePart,
+        deleteSparePart,
+        deleteOrder,
         approveBudget,
         rejectBudget,
         addSystemUser,
         syncUsersToSupabase,
         updateSystemUser,
         toggleUserStatus,
+        deleteSystemUser,
         addExpense,
+        deleteExpense,
         markNotificationRead,
         clearSampleData,
         resetToDemoData

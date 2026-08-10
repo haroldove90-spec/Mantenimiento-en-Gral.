@@ -41,7 +41,9 @@ export const OwnerDashboard: React.FC = () => {
     syncUsersToSupabase,
     updateSystemUser,
     toggleUserStatus,
+    deleteSystemUser,
     addExpense,
+    deleteExpense,
     clearSampleData,
     resetToDemoData,
     ownerSubTab,
@@ -646,7 +648,7 @@ export const OwnerDashboard: React.FC = () => {
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs gap-1">
                   <button
                     onClick={() => {
                       setEditingUser(usr);
@@ -656,7 +658,7 @@ export const OwnerDashboard: React.FC = () => {
                       setUserRole(usr.role);
                       setIsAddUserOpen(true);
                     }}
-                    className="text-blue-600 hover:text-blue-800 font-bold flex items-center space-x-1"
+                    className="text-blue-600 hover:text-blue-800 font-bold flex items-center space-x-1 cursor-pointer"
                   >
                     <Edit className="w-3.5 h-3.5" />
                     <span>Editar</span>
@@ -664,8 +666,8 @@ export const OwnerDashboard: React.FC = () => {
 
                   <button
                     onClick={() => toggleUserStatus(usr.id)}
-                    className={`font-bold flex items-center space-x-1 ${
-                      usr.status === 'Activo' ? 'text-rose-600 hover:text-rose-800' : 'text-emerald-600 hover:text-emerald-800'
+                    className={`font-bold flex items-center space-x-1 cursor-pointer ${
+                      usr.status === 'Activo' ? 'text-amber-600 hover:text-amber-800' : 'text-emerald-600 hover:text-emerald-800'
                     }`}
                   >
                     {usr.status === 'Activo' ? (
@@ -679,6 +681,18 @@ export const OwnerDashboard: React.FC = () => {
                         <span>Activar</span>
                       </>
                     )}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (confirm(`¿Estás seguro de eliminar permanentemente al usuario ${usr.name}?`)) {
+                        deleteSystemUser(usr.id);
+                      }
+                    }}
+                    className="text-rose-600 hover:text-rose-800 font-bold flex items-center space-x-1 cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Borrar</span>
                   </button>
                 </div>
               </div>

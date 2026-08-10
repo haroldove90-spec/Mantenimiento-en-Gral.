@@ -51,6 +51,12 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
     }
   };
 
+  const userRole = currentUser?.role;
+  const canSeeOwner = !userRole || userRole === 'owner';
+  const canSeeOffice = !userRole || userRole === 'owner' || userRole === 'office';
+  const canSeeTech = !userRole || userRole === 'owner' || userRole === 'tech';
+  const canSeeClient = !userRole || userRole === 'owner' || userRole === 'client';
+
   if (activeRole === 'home') {
     return null;
   }
@@ -102,186 +108,194 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
             </button>
           </div>
 
-          {/* Section: DUEÑO */}
-          <div className="space-y-1">
-            <div className="px-2 mb-2 text-xs font-bold text-white/50 uppercase tracking-wider flex items-center justify-between">
-              <span>Administración</span>
-              <Crown className="w-4 h-4 text-sij-orange" />
+          {/* Section: DUEÑO / ADMINISTRACIÓN (Only for Owner/Admin) */}
+          {canSeeOwner && (
+            <div className="space-y-1">
+              <div className="px-2 mb-2 text-xs font-bold text-white/50 uppercase tracking-wider flex items-center justify-between">
+                <span>Administración</span>
+                <Crown className="w-4 h-4 text-sij-orange" />
+              </div>
+
+              <button
+                id="role-btn-owner-analytics"
+                onClick={() => {
+                  setActiveRole('owner');
+                  setOwnerSubTab('analytics');
+                }}
+                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                  activeRole === 'owner' && ownerSubTab === 'analytics'
+                    ? 'bg-sij-orange text-white shadow-md font-bold'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <BarChart3 className="w-4 h-4 shrink-0 text-sij-orange" />
+                <span>Analítica & Cobranza</span>
+              </button>
+
+              <button
+                id="role-btn-owner-financials"
+                onClick={() => {
+                  setActiveRole('owner');
+                  setOwnerSubTab('financials');
+                }}
+                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                  activeRole === 'owner' && ownerSubTab === 'financials'
+                    ? 'bg-sij-orange text-white shadow-md font-bold'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <FileSpreadsheet className="w-4 h-4 shrink-0 text-emerald-400" />
+                <span>Reportes Financieros</span>
+              </button>
+
+              <button
+                id="role-btn-owner-users"
+                onClick={() => {
+                  setActiveRole('owner');
+                  setOwnerSubTab('users');
+                }}
+                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                  activeRole === 'owner' && ownerSubTab === 'users'
+                    ? 'bg-sij-orange text-white shadow-md font-bold'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <Users className="w-4 h-4 shrink-0 text-sij-cyan" />
+                <span>Gestión de Usuarios</span>
+              </button>
             </div>
+          )}
 
-            <button
-              id="role-btn-owner-analytics"
-              onClick={() => {
-                setActiveRole('owner');
-                setOwnerSubTab('analytics');
-              }}
-              className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
-                activeRole === 'owner' && ownerSubTab === 'analytics'
-                  ? 'bg-sij-orange text-white shadow-md font-bold'
-                  : 'text-white/80 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              <BarChart3 className="w-4 h-4 shrink-0 text-sij-orange" />
-              <span>Analítica & Cobranza</span>
-            </button>
+          {/* Section: OFICINA & SUB-MÓDULOS (Owner and Office) */}
+          {canSeeOffice && (
+            <div className="space-y-1">
+              <div className="px-2 mb-2 text-xs font-bold text-white/50 uppercase tracking-wider flex items-center justify-between">
+                <span>Módulos de Oficina</span>
+                <Building2 className="w-4 h-4 text-sij-cyan" />
+              </div>
 
-            <button
-              id="role-btn-owner-financials"
-              onClick={() => {
-                setActiveRole('owner');
-                setOwnerSubTab('financials');
-              }}
-              className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
-                activeRole === 'owner' && ownerSubTab === 'financials'
-                  ? 'bg-sij-orange text-white shadow-md font-bold'
-                  : 'text-white/80 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              <FileSpreadsheet className="w-4 h-4 shrink-0 text-emerald-400" />
-              <span>Reportes Financieros</span>
-            </button>
+              <button
+                onClick={() => {
+                  setActiveRole('office');
+                  setOfficeSubTab('orders');
+                }}
+                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                  activeRole === 'office' && officeSubTab === 'orders'
+                    ? 'bg-sij-blue text-white shadow-md font-bold'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <FileText className="w-4 h-4 shrink-0 text-sij-cyan" />
+                <span>Órdenes de Servicio</span>
+              </button>
 
-            <button
-              id="role-btn-owner-users"
-              onClick={() => {
-                setActiveRole('owner');
-                setOwnerSubTab('users');
-              }}
-              className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
-                activeRole === 'owner' && ownerSubTab === 'users'
-                  ? 'bg-sij-orange text-white shadow-md font-bold'
-                  : 'text-white/80 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              <Users className="w-4 h-4 shrink-0 text-sij-cyan" />
-              <span>Gestión de Usuarios</span>
-            </button>
-          </div>
+              <button
+                onClick={() => {
+                  setActiveRole('office');
+                  setOfficeSubTab('routes');
+                }}
+                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                  activeRole === 'office' && officeSubTab === 'routes'
+                    ? 'bg-sij-blue text-white shadow-md font-bold'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <Navigation className="w-4 h-4 shrink-0 text-emerald-400" />
+                <span>Agenda & Rutas</span>
+              </button>
 
-          {/* Section: OFICINA & SUB-MÓDULOS */}
-          <div className="space-y-1">
-            <div className="px-2 mb-2 text-xs font-bold text-white/50 uppercase tracking-wider flex items-center justify-between">
-              <span>Módulos de Oficina</span>
-              <Building2 className="w-4 h-4 text-sij-cyan" />
+              <button
+                onClick={() => {
+                  setActiveRole('office');
+                  setOfficeSubTab('budgets');
+                }}
+                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                  activeRole === 'office' && officeSubTab === 'budgets'
+                    ? 'bg-sij-blue text-white shadow-md font-bold'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <FileSpreadsheet className="w-4 h-4 shrink-0 text-amber-400" />
+                <span>Cotizaciones & Presupuestos</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveRole('office');
+                  setOfficeSubTab('catalogs');
+                }}
+                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                  activeRole === 'office' && officeSubTab === 'catalogs'
+                    ? 'bg-sij-blue text-white shadow-md font-bold'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <Users className="w-4 h-4 shrink-0 text-purple-400" />
+                <span>Clientes & Catálogo</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveRole('office');
+                  setOfficeSubTab('reports');
+                }}
+                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                  activeRole === 'office' && officeSubTab === 'reports'
+                    ? 'bg-sij-blue text-white shadow-md font-bold'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <BarChart3 className="w-4 h-4 shrink-0 text-sij-cyan" />
+                <span>Reportes & Rendimiento</span>
+              </button>
             </div>
+          )}
 
-            <button
-              onClick={() => {
-                setActiveRole('office');
-                setOfficeSubTab('orders');
-              }}
-              className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
-                activeRole === 'office' && officeSubTab === 'orders'
-                  ? 'bg-sij-blue text-white shadow-md font-bold'
-                  : 'text-white/80 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              <FileText className="w-4 h-4 shrink-0 text-sij-cyan" />
-              <span>Órdenes de Servicio</span>
-            </button>
+          {/* Section: TÉCNICO DE CAMPO (Owner and Tech) */}
+          {canSeeTech && (
+            <div>
+              <div className="px-2 mb-2 text-xs font-bold text-white/50 uppercase tracking-wider flex items-center justify-between">
+                <span>Módulo Técnico</span>
+                <Wrench className="w-4 h-4 text-emerald-400" />
+              </div>
 
-            <button
-              onClick={() => {
-                setActiveRole('office');
-                setOfficeSubTab('routes');
-              }}
-              className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
-                activeRole === 'office' && officeSubTab === 'routes'
-                  ? 'bg-sij-blue text-white shadow-md font-bold'
-                  : 'text-white/80 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              <Navigation className="w-4 h-4 shrink-0 text-emerald-400" />
-              <span>Agenda & Rutas</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveRole('office');
-                setOfficeSubTab('budgets');
-              }}
-              className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
-                activeRole === 'office' && officeSubTab === 'budgets'
-                  ? 'bg-sij-blue text-white shadow-md font-bold'
-                  : 'text-white/80 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              <FileSpreadsheet className="w-4 h-4 shrink-0 text-amber-400" />
-              <span>Cotizaciones & Presupuestos</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveRole('office');
-                setOfficeSubTab('catalogs');
-              }}
-              className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
-                activeRole === 'office' && officeSubTab === 'catalogs'
-                  ? 'bg-sij-blue text-white shadow-md font-bold'
-                  : 'text-white/80 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              <Users className="w-4 h-4 shrink-0 text-purple-400" />
-              <span>Clientes & Catálogo</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveRole('office');
-                setOfficeSubTab('reports');
-              }}
-              className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
-                activeRole === 'office' && officeSubTab === 'reports'
-                  ? 'bg-sij-blue text-white shadow-md font-bold'
-                  : 'text-white/80 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              <BarChart3 className="w-4 h-4 shrink-0 text-sij-cyan" />
-              <span>Reportes & Rendimiento</span>
-            </button>
-          </div>
-
-          {/* Section: TÉCNICO DE CAMPO */}
-          <div>
-            <div className="px-2 mb-2 text-xs font-bold text-white/50 uppercase tracking-wider flex items-center justify-between">
-              <span>Módulo Técnico</span>
-              <Wrench className="w-4 h-4 text-emerald-400" />
+              <button
+                id="role-btn-tech"
+                onClick={() => setActiveRole('tech')}
+                className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                  activeRole === 'tech'
+                    ? 'bg-emerald-600 text-white shadow-md font-bold'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <Wrench className="w-4 h-4 shrink-0 text-emerald-400" />
+                <span>Mis Trabajos Asignados</span>
+              </button>
             </div>
+          )}
 
-            <button
-              id="role-btn-tech"
-              onClick={() => setActiveRole('tech')}
-              className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                activeRole === 'tech'
-                  ? 'bg-emerald-600 text-white shadow-md font-bold'
-                  : 'text-white/80 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              <Wrench className="w-4 h-4 shrink-0 text-emerald-400" />
-              <span>Mis Trabajos Asignados</span>
-            </button>
-          </div>
+          {/* Section: PORTAL DEL CLIENTE (Owner and Client) */}
+          {canSeeClient && (
+            <div>
+              <div className="px-2 mb-2 text-xs font-bold text-white/50 uppercase tracking-wider flex items-center justify-between">
+                <span>Portal de Cliente</span>
+                <UserCheck className="w-4 h-4 text-purple-400" />
+              </div>
 
-          {/* Section: PORTAL DEL CLIENTE */}
-          <div>
-            <div className="px-2 mb-2 text-xs font-bold text-white/50 uppercase tracking-wider flex items-center justify-between">
-              <span>Portal de Cliente</span>
-              <UserCheck className="w-4 h-4 text-purple-400" />
+              <button
+                id="role-btn-client"
+                onClick={() => setActiveRole('client')}
+                className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                  activeRole === 'client'
+                    ? 'bg-purple-600 text-white shadow-md font-bold'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <UserCheck className="w-4 h-4 shrink-0 text-purple-400" />
+                <span>Aprobación de Cotizaciones</span>
+              </button>
             </div>
-
-            <button
-              id="role-btn-client"
-              onClick={() => setActiveRole('client')}
-              className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                activeRole === 'client'
-                  ? 'bg-purple-600 text-white shadow-md font-bold'
-                  : 'text-white/80 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              <UserCheck className="w-4 h-4 shrink-0 text-purple-400" />
-              <span>Aprobación de Cotizaciones</span>
-            </button>
-          </div>
+          )}
 
         </div>
 

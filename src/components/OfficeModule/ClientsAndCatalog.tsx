@@ -1,27 +1,24 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Building2, Package, Plus, MapPin, Phone, Mail, Search, Tag, Database } from 'lucide-react';
+import { Building2, Package, Plus, MapPin, Phone, Mail, Search, Tag, Database, Edit, Trash2, CheckCircle2, XCircle, UserX, UserCheck } from 'lucide-react';
 
 export const ClientsAndCatalog: React.FC = () => {
-  const { clients, spareParts, addClient, addSparePart } = useApp();
+  const { clients, spareParts, addClient, updateClient, deleteClient, toggleClientStatus, addSparePart, deleteSparePart } = useApp();
   const [activeTab, setActiveTab] = useState<'clients' | 'catalog'>('clients');
 
   const [searchQuery, setSearchQuery] = useState('');
 
-  // New Client Modal State
+  // Client Modal State (Create or Edit)
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+  const [editingClientId, setEditingClientId] = useState<string | null>(null);
   const [newClientName, setNewClientName] = useState('');
   const [newClientTaxId, setNewClientTaxId] = useState('');
   const [newClientEmail, setNewClientEmail] = useState('');
-  const [dep1Name, setDep1Name] = useState('');
-  const [dep1Contact, setDep1Contact] = useState('');
-  const [dep1Phone, setDep1Phone] = useState('');
-  const [dep2Name, setDep2Name] = useState('');
-  const [dep2Contact, setDep2Contact] = useState('');
-  const [dep2Phone, setDep2Phone] = useState('');
-  const [dep3Name, setDep3Name] = useState('');
-  const [dep3Contact, setDep3Contact] = useState('');
-  const [dep3Phone, setDep3Phone] = useState('');
+  const [newClientAddress, setNewClientAddress] = useState('');
+  const [newClientPhone, setNewClientPhone] = useState('');
+  const [newClientWhatsapp, setNewClientWhatsapp] = useState('');
+  const [newClientModel, setNewClientModel] = useState('');
+  const [newClientFault, setNewClientFault] = useState('');
 
   // New Spare Part Modal State
   const [isPartModalOpen, setIsPartModalOpen] = useState(false);
@@ -48,21 +45,44 @@ export const ClientsAndCatalog: React.FC = () => {
     e.preventDefault();
     if (!newClientName.trim()) return;
 
-    addClient({
-      name: newClientName,
-      taxId: newClientTaxId || 'XAXX010101000',
-      email: newClientEmail || 'contacto@cliente.com',
-      departments: [
-        { id: `dep-${Date.now()}-1`, name: dep1Name || 'Planta Principal', contactName: dep1Contact || 'Contacto 1', phone: dep1Phone || '555-0001' },
-        { id: `dep-${Date.now()}-2`, name: dep2Name || 'Sucursal Norte', contactName: dep2Contact || 'Contacto 2', phone: dep2Phone || '555-0002' },
-        { id: `dep-${Date.now()}-3`, name: dep3Name || 'Almacén Central', contactName: dep3Contact || 'Contacto 3', phone: dep3Phone || '555-0003' }
-      ]
-    });
+    if (editingClientId) {
+      updateClient(editingClientId, {
+        name: newClientName,
+        taxId: newClientTaxId,
+        email: newClientEmail,
+        address: newClientAddress,
+        phone: newClientPhone,
+        whatsapp: newClientWhatsapp,
+        model: newClientModel,
+        fault: newClientFault
+      });
+      setEditingClientId(null);
+    } else {
+      addClient({
+        name: newClientName,
+        taxId: newClientTaxId || 'XAXX010101000',
+        email: newClientEmail || 'contacto@cliente.com',
+        address: newClientAddress,
+        phone: newClientPhone,
+        whatsapp: newClientWhatsapp,
+        model: newClientModel,
+        fault: newClientFault,
+        status: 'Activo',
+        departments: [
+          { id: `dep-${Date.now()}-1`, name: 'Planta Principal', contactName: newClientName, phone: newClientPhone || '555-0001', address: newClientAddress }
+        ]
+      });
+    }
 
     setIsClientModalOpen(false);
     setNewClientName('');
     setNewClientTaxId('');
     setNewClientEmail('');
+    setNewClientAddress('');
+    setNewClientPhone('');
+    setNewClientWhatsapp('');
+    setNewClientModel('');
+    setNewClientFault('');
   };
 
   const handleCreatePart = (e: React.FormEvent) => {
@@ -170,33 +190,103 @@ export const ClientsAndCatalog: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-2 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-                  <Mail className="w-4 h-4 text-slate-400 shrink-0" />
-                  <span className="truncate font-medium">{client.email}</span>
+                <div className="space-y-1.5 text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <div className="flex items-center space-x-2">
+                    <Mail className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span className="truncate font-medium">{client.email}</span>
+                  </div>
+                  {(client.phone || client.contactPhone) && (
+                    <div className="flex items-center space-x-2">
+                      <Phone className="w-4 h-4 text-slate-400 shrink-0" />
+                      <span className="font-medium">Tel: {client.phone || client.contactPhone}</span>
+                    </div>
+                  )}
+                  {client.whatsapp && (
+                    <div className="flex items-center space-x-2 text-emerald-700 font-semibold">
+                      <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px] font-bold">WA</span>
+                      <span>WhatsApp: {client.whatsapp}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Departments Block (Horizontal Row) */}
-              <div className="flex-1 space-y-2">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
-                  Departamentos / Ubicaciones Registradas ({client.departments.length}):
-                </span>
+              {/* Client Service Details & Actions */}
+              <div className="flex-1 flex flex-col justify-between gap-3">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {client.departments.map(dep => (
-                    <div
-                      key={dep.id}
-                      className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1 hover:border-blue-300 transition-colors"
-                    >
-                      <div className="font-bold text-slate-800 flex items-center space-x-1">
-                        <MapPin className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                        <span className="truncate">{dep.name}</span>
-                      </div>
-                      <div className="text-slate-500 text-[11px] space-y-0.5 pt-0.5">
-                        <div className="truncate">Contacto: <span className="text-slate-700 font-medium">{dep.contactName}</span></div>
-                        <div className="font-mono text-slate-700">Tel: {dep.phone}</div>
-                      </div>
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Dirección</span>
+                    <div className="font-semibold text-slate-800 flex items-start space-x-1">
+                      <MapPin className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" />
+                      <span className="line-clamp-2">{client.address || client.fiscalAddress || 'Sin dirección registrada'}</span>
                     </div>
-                  ))}
+                  </div>
+
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Modelo de Equipo / Aparato</span>
+                    <div className="font-bold text-slate-900 bg-blue-50 text-blue-800 p-2 rounded-lg border border-blue-100">
+                      {client.model || 'No especificado'}
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Falla / Reporte Inicial</span>
+                    <div className="font-medium text-slate-700 bg-amber-50 text-amber-900 p-2 rounded-lg border border-amber-200 line-clamp-3">
+                      {client.fault || 'Sin reporte inicial'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Client CRUD Action Buttons */}
+                <div className="flex items-center justify-end space-x-3 pt-2 border-t border-slate-100 text-xs">
+                  <button
+                    onClick={() => {
+                      setEditingClientId(client.id);
+                      setNewClientName(client.name);
+                      setNewClientTaxId(client.taxId || '');
+                      setNewClientEmail(client.email);
+                      setNewClientAddress(client.address || '');
+                      setNewClientPhone(client.phone || '');
+                      setNewClientWhatsapp(client.whatsapp || '');
+                      setNewClientModel(client.model || '');
+                      setNewClientFault(client.fault || '');
+                      setIsClientModalOpen(true);
+                    }}
+                    className="text-blue-600 hover:text-blue-800 font-bold flex items-center space-x-1 cursor-pointer"
+                  >
+                    <Edit className="w-3.5 h-3.5" />
+                    <span>Editar</span>
+                  </button>
+
+                  <button
+                    onClick={() => toggleClientStatus(client.id)}
+                    className={`font-bold flex items-center space-x-1 cursor-pointer ${
+                      client.status === 'Inactivo' ? 'text-emerald-600 hover:text-emerald-800' : 'text-amber-600 hover:text-amber-800'
+                    }`}
+                  >
+                    {client.status === 'Inactivo' ? (
+                      <>
+                        <UserCheck className="w-3.5 h-3.5" />
+                        <span>Activar</span>
+                      </>
+                    ) : (
+                      <>
+                        <UserX className="w-3.5 h-3.5" />
+                        <span>Desactivar</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (confirm(`¿Estás seguro de eliminar el cliente ${client.name}?`)) {
+                        deleteClient(client.id);
+                      }
+                    }}
+                    className="text-rose-600 hover:text-rose-800 font-bold flex items-center space-x-1 cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Borrar</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -215,6 +305,7 @@ export const ClientsAndCatalog: React.FC = () => {
                 <th className="py-3 px-4">Categoría</th>
                 <th className="py-3 px-4 text-center">Stock</th>
                 <th className="py-3 px-4 text-right">Precio Base (MXN)</th>
+                <th className="py-3 px-4 text-center">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -240,6 +331,19 @@ export const ClientsAndCatalog: React.FC = () => {
                   </td>
                   <td className="py-3 px-4 text-right font-bold text-slate-800">
                     ${part.unitPrice.toLocaleString('es-MX')} MXN
+                  </td>
+                  <td className="py-3 px-4 text-center">
+                    <button
+                      onClick={() => {
+                        if (confirm(`¿Eliminar refacción ${part.name}?`)) {
+                          deleteSparePart(part.id);
+                        }
+                      }}
+                      className="text-rose-600 hover:text-rose-800 p-1.5 rounded-lg hover:bg-rose-50 cursor-pointer"
+                      title="Eliminar refacción"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -299,31 +403,67 @@ export const ClientsAndCatalog: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="pt-3 border-t border-slate-200">
-                  <span className="font-bold text-slate-800 block mb-2">Departamentos / Ubicaciones (3 por defecto):</span>
-                  <div className="space-y-2">
+                {/* Dirección */}
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Dirección *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newClientAddress}
+                    onChange={e => setNewClientAddress(e.target.value)}
+                    placeholder="Ej. Calle 16 de Septiembre #450, Col. Centro, Monterrey"
+                    className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white text-slate-800 text-xs font-medium"
+                  />
+                </div>
+
+                {/* Teléfono & WhatsApp */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Teléfono *</label>
                     <input
-                      type="text"
-                      placeholder="Dep 1: Ej. Nave A - Producción"
-                      value={dep1Name}
-                      onChange={e => setDep1Name(e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white text-slate-800 text-xs"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Dep 2: Ej. Edificio B - Laboratorio"
-                      value={dep2Name}
-                      onChange={e => setDep2Name(e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white text-slate-800 text-xs"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Dep 3: Ej. Almacén Central"
-                      value={dep3Name}
-                      onChange={e => setDep3Name(e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white text-slate-800 text-xs"
+                      type="tel"
+                      required
+                      value={newClientPhone}
+                      onChange={e => setNewClientPhone(e.target.value)}
+                      placeholder="811-234-5678"
+                      className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white text-slate-800 text-xs font-medium"
                     />
                   </div>
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">WhatsApp</label>
+                    <input
+                      type="tel"
+                      value={newClientWhatsapp}
+                      onChange={e => setNewClientWhatsapp(e.target.value)}
+                      placeholder="811-987-6543"
+                      className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white text-slate-800 text-xs font-medium"
+                    />
+                  </div>
+                </div>
+
+                {/* Modelo y Falla */}
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Modelo de Equipo / Aparato *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newClientModel}
+                    onChange={e => setNewClientModel(e.target.value)}
+                    placeholder="Ej. Minisplit Inverter Carrier 2 TR / Refrigerador Industrial Mabe"
+                    className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white text-slate-800 text-xs font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Falla / Descripción del Problema *</label>
+                  <textarea
+                    required
+                    rows={3}
+                    value={newClientFault}
+                    onChange={e => setNewClientFault(e.target.value)}
+                    placeholder="Ej. No enciende, tira agua por la bandeja principal y hace un ruido metálico inusual..."
+                    className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white text-slate-800 text-xs font-medium resize-none"
+                  />
                 </div>
               </div>
 

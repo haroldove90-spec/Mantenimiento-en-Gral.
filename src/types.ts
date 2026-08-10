@@ -27,12 +27,17 @@ export interface Client {
   taxId: string;
   email: string;
   phone?: string;
+  whatsapp?: string;
+  address?: string;
+  model?: string;
+  fault?: string;
+  status?: 'Activo' | 'Inactivo';
   fiscalAddress?: string;
   deliveryAddress?: string;
   creditLimit?: number;
   creditDays?: number;
   category?: 'VIP' | 'Regular' | 'Corporativo' | 'Residencial';
-  departments: Department[];
+  departments?: Department[];
 }
 
 export interface SparePart {

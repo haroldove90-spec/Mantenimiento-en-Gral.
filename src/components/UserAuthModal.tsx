@@ -154,7 +154,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
             email: dbU.email,
             password: dbU.password || '',
             phone: dbU.phone || '',
-            role: dbU.role || 'owner',
+            role: (dbU.role || 'client') as RoleType,
             status: dbU.status || 'Activo',
             lastLogin: 'Ahora mismo'
           };

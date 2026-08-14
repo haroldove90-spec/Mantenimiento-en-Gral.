@@ -234,7 +234,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   email,
                   password: u.password || '',
                   phone: u.phone || '',
-                  role: u.role || 'owner',
+                  role: u.role || 'client',
                   status: u.status || 'Activo',
                   lastLogin: u.last_login ? new Date(u.last_login).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Reciente'
                 };
@@ -876,7 +876,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         email: userEmail,
         password: userData.password || '',
         phone: userData.phone || '',
-        role: userData.role || 'owner',
+        role: userData.role || 'client',
         status: userData.status || 'Activo'
       };
 

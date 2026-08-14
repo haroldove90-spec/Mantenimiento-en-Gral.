@@ -13,11 +13,12 @@ import {
   Search,
   ExternalLink,
   ThumbsUp,
-  ThumbsDown
+  ThumbsDown,
+  Trash2
 } from 'lucide-react';
 
 export const ClientPortalView: React.FC = () => {
-  const { orders, approveBudget, rejectBudget } = useApp();
+  const { orders, approveBudget, rejectBudget, clearSampleData } = useApp();
 
   const [selectedFolio, setSelectedFolio] = useState<string>('OS-1004');
   const [rejectComment, setRejectComment] = useState('');
@@ -91,20 +92,35 @@ export const ClientPortalView: React.FC = () => {
           </div>
         </div>
 
-        {/* Quick Folio Selector */}
-        <div className="flex items-center space-x-2 w-full sm:w-auto">
-          <label className="text-xs font-semibold text-slate-600 whitespace-nowrap">Ver Orden (Folio):</label>
-          <select
-            value={selectedFolio}
-            onChange={e => setSelectedFolio(e.target.value)}
-            className="bg-slate-50 border border-slate-300 text-slate-800 text-xs font-bold rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 outline-hidden"
+        {/* Quick Folio Selector & Admin action */}
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+          <div className="flex items-center space-x-2">
+            <label className="text-xs font-semibold text-slate-600 whitespace-nowrap">Ver Orden (Folio):</label>
+            <select
+              value={selectedFolio}
+              onChange={e => setSelectedFolio(e.target.value)}
+              className="bg-slate-50 border border-slate-300 text-slate-800 text-xs font-bold rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 outline-hidden"
+            >
+              {orders.map(o => (
+                <option key={o.id} value={o.folio}>
+                  {o.folio} - {o.clientName} ({o.status})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            onClick={() => {
+              if (window.confirm('⚠️ ¿Deseas eliminar las órdenes y datos de muestra del sistema?')) {
+                clearSampleData();
+              }
+            }}
+            className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer shrink-0"
+            title="Borrar órdenes y cotizaciones de muestra"
           >
-            {orders.map(o => (
-              <option key={o.id} value={o.folio}>
-                {o.folio} - {o.clientName} ({o.status})
-              </option>
-            ))}
-          </select>
+            <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+            <span>Borrar Datos de Muestra</span>
+          </button>
         </div>
       </div>
 

@@ -17,7 +17,9 @@ import {
   Crown,
   Navigation,
   Sparkles,
-  PieChart
+  PieChart,
+  Trash2,
+  RotateCcw
 } from 'lucide-react';
 
 export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCreateModal }) => {
@@ -31,7 +33,9 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
     ownerSubTab,
     setOwnerSubTab,
     notifications,
-    markNotificationRead
+    markNotificationRead,
+    clearSampleData,
+    resetToDemoData
   } = useApp();
 
   const [showNotifMenu, setShowNotifMenu] = useState(false);
@@ -398,6 +402,24 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
             </div>
           )}
 
+          {/* Admin Sample Data Purge Button in Sidebar Footer */}
+          <div className="pt-2 border-t border-white/10 space-y-1">
+            <button
+              onClick={() => {
+                if (window.confirm('⚠️ ¿Deseas eliminar todos los registros de prueba y muestra del sistema (Órdenes, Clientes, Refacciones y Gastos demo)?')) {
+                  clearSampleData();
+                }
+              }}
+              className="w-full flex items-center justify-between px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 font-bold text-[11px] transition-colors border border-rose-500/20 cursor-pointer"
+              title="Limpiar datos de prueba"
+            >
+              <span className="flex items-center space-x-1.5">
+                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                <span>Borrar Datos de Muestra</span>
+              </span>
+            </button>
+          </div>
+
           {/* Logout / Switch Role Button */}
           {activeRole !== 'home' && (
             <button
@@ -405,7 +427,7 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
                 setCurrentUser(null);
                 setActiveRole('home');
               }}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-bold text-xs transition-colors border border-rose-500/20 cursor-pointer"
+              className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors border border-slate-700 cursor-pointer"
               title="Cerrar sesión y volver al menú principal"
             >
               <span>Cerrar Sesión</span>
@@ -443,6 +465,19 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
           </div>
 
           <div className="flex items-center space-x-1.5 shrink-0">
+            {/* Quick Purge Sample Data Mobile */}
+            <button
+              onClick={() => {
+                if (window.confirm('⚠️ ¿Deseas eliminar todos los registros de prueba y muestra del sistema (Órdenes, Clientes, Refacciones y Gastos demo)?')) {
+                  clearSampleData();
+                }
+              }}
+              className="p-1.5 rounded-xl text-rose-300 hover:text-rose-100 bg-rose-600/20 border border-rose-500/30 cursor-pointer"
+              title="Borrar datos de muestra"
+            >
+              <Trash2 className="w-4 h-4 text-rose-400" />
+            </button>
+
             {/* Notifications Button */}
             <button
               onClick={() => setShowNotifMenu(!showNotifMenu)}

@@ -54,7 +54,9 @@ export const OfficeDashboard: React.FC = () => {
     reopenWarrantyOrder,
     officeSubTab,
     setOfficeSubTab,
-    clearSampleData
+    clearSampleData,
+    resetToDemoData,
+    deleteOrder
   } = useApp();
 
   const activeTab = officeSubTab;
@@ -342,10 +344,22 @@ export const OfficeDashboard: React.FC = () => {
 
                       <button
                         onClick={() => setDetailOrder(ord)}
-                        className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs sm:text-sm font-bold px-4 py-2.5 rounded-xl transition-colors flex items-center space-x-1"
+                        className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs sm:text-sm font-bold px-4 py-2.5 rounded-xl transition-colors flex items-center space-x-1 cursor-pointer"
                       >
                         <span>Ver Detalles</span>
                         <ChevronRight className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          if (window.confirm(`¿Eliminar permanentemente la orden ${ord.folio}?`)) {
+                            deleteOrder(ord.id);
+                          }
+                        }}
+                        className="p-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-colors cursor-pointer"
+                        title="Eliminar Orden"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -434,13 +448,27 @@ export const OfficeDashboard: React.FC = () => {
                                 )}
                               </span>
 
-                              <button
-                                onClick={() => setDetailOrder(ord)}
-                                className="text-blue-600 hover:text-blue-800 font-bold flex items-center space-x-0.5"
-                              >
-                                <span>Ver</span>
-                                <ChevronRight className="w-3.5 h-3.5" />
-                              </button>
+                              <div className="flex items-center space-x-2">
+                                <button
+                                  onClick={() => setDetailOrder(ord)}
+                                  className="text-blue-600 hover:text-blue-800 font-bold flex items-center space-x-0.5 cursor-pointer"
+                                >
+                                  <span>Ver</span>
+                                  <ChevronRight className="w-3.5 h-3.5" />
+                                </button>
+
+                                <button
+                                  onClick={() => {
+                                    if (window.confirm(`¿Eliminar orden ${ord.folio}?`)) {
+                                      deleteOrder(ord.id);
+                                    }
+                                  }}
+                                  className="text-rose-600 hover:text-rose-800 p-1 rounded-md hover:bg-rose-50 cursor-pointer"
+                                  title="Eliminar orden"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
                           </div>
                         ))

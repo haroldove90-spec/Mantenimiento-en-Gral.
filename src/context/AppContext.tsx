@@ -1050,11 +1050,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const clearSampleData = () => {
-    localStorage.removeItem('app_service_orders');
-    localStorage.removeItem('app_clients');
-    localStorage.removeItem('app_spare_parts');
-    localStorage.removeItem('app_system_users');
-    localStorage.removeItem('app_operating_expenses');
+    localStorage.setItem('app_service_orders', JSON.stringify([]));
+    localStorage.setItem('app_clients', JSON.stringify([]));
+    localStorage.setItem('app_spare_parts', JSON.stringify([]));
+    localStorage.setItem('app_operating_expenses', JSON.stringify([]));
 
     setOrders([]);
     setClients([]);

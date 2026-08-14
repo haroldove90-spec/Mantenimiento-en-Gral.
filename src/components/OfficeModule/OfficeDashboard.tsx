@@ -6,6 +6,7 @@ import { BudgetGeneratorModal } from './BudgetGeneratorModal';
 import { PdfQuoteModal } from '../PdfQuoteModal';
 import { ClientsAndCatalog } from './ClientsAndCatalog';
 import { ReportsAndMetrics } from './ReportsAndMetrics';
+import { ConfirmDeleteModal } from '../ConfirmDeleteModal';
 import {
   Building2,
   LayoutGrid,
@@ -73,6 +74,9 @@ export const OfficeDashboard: React.FC = () => {
   const [pdfOrder, setPdfOrder] = useState<ServiceOrder | null>(null);
   const [detailOrder, setDetailOrder] = useState<ServiceOrder | null>(null);
 
+  // Delete modal state
+  const [orderToDelete, setOrderToDelete] = useState<ServiceOrder | null>(null);
+
   // Warranty reopen modal
   const [warrantyOrder, setWarrantyOrder] = useState<ServiceOrder | null>(null);
   const [warrantyReason, setWarrantyReason] = useState('');
@@ -125,21 +129,8 @@ export const OfficeDashboard: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => {
-              if (window.confirm('⚠️ ¿Deseas borrar los datos de muestra del sistema (órdenes, clientes y refacciones de prueba)?')) {
-                clearSampleData();
-              }
-            }}
-            className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 shrink-0"
-            title="Limpiar datos de prueba"
-          >
-            <Trash2 className="w-4 h-4 text-rose-600" />
-            <span>Borrar Datos de Muestra</span>
-          </button>
-
-          <button
             onClick={() => setIsCreateOpen(true)}
-            className="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-xs flex items-center justify-center space-x-2 shrink-0"
+            className="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-xs flex items-center justify-center space-x-2 shrink-0 cursor-pointer"
           >
             <PlusCircle className="w-5 h-5" />
             <span>+ Crear Orden de Servicio (OS)</span>
@@ -351,13 +342,9 @@ export const OfficeDashboard: React.FC = () => {
                       </button>
 
                       <button
-                        onClick={() => {
-                          if (window.confirm(`¿Eliminar permanentemente la orden ${ord.folio}?`)) {
-                            deleteOrder(ord.id);
-                          }
-                        }}
+                        onClick={() => setOrderToDelete(ord)}
                         className="p-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-colors cursor-pointer"
-                        title="Eliminar Orden"
+                        title="Eliminar Orden de la base de datos"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -458,11 +445,7 @@ export const OfficeDashboard: React.FC = () => {
                                 </button>
 
                                 <button
-                                  onClick={() => {
-                                    if (window.confirm(`¿Eliminar orden ${ord.folio}?`)) {
-                                      deleteOrder(ord.id);
-                                    }
-                                  }}
+                                  onClick={() => setOrderToDelete(ord)}
                                   className="text-rose-600 hover:text-rose-800 p-1 rounded-md hover:bg-rose-50 cursor-pointer"
                                   title="Eliminar orden"
                                 >
@@ -870,6 +853,21 @@ export const OfficeDashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Reusable Confirm Delete Modal */}
+      <ConfirmDeleteModal
+        isOpen={!!orderToDelete}
+        onClose={() => setOrderToDelete(null)}
+        onConfirm={() => {
+          if (orderToDelete) {
+            deleteOrder(orderToDelete.id);
+            setOrderToDelete(null);
+          }
+        }}
+        title="¿Eliminar orden de servicio permanentemente?"
+        itemDescription={orderToDelete ? `la orden con Folio "${orderToDelete.folio}" (${orderToDelete.clientName})` : 'este registro'}
+        itemType="orden de servicio"
+      />
 
     </div>
   );

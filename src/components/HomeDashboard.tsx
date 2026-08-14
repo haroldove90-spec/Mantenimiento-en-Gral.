@@ -241,41 +241,6 @@ export const HomeDashboard: React.FC = () => {
         </button>
       </div>
 
-      {/* Admin Quick Data Actions */}
-      <div className="w-full max-w-2xl bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-        <div className="flex items-center space-x-2 text-slate-600">
-          <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0" />
-          <span className="font-semibold">Mantenimiento de Datos (Administrador):</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => {
-              if (window.confirm('⚠️ ¿Deseas eliminar TODOS los registros de muestra (órdenes, clientes, refacciones y gastos demo)?')) {
-                clearSampleData();
-              }
-            }}
-            className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-3 py-1.5 rounded-xl font-bold flex items-center space-x-1.5 transition-all cursor-pointer"
-            title="Borrar todos los datos de muestra"
-          >
-            <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-            <span>Borrar Datos de Muestra</span>
-          </button>
-
-          <button
-            onClick={() => {
-              if (window.confirm('🔄 ¿Deseas restablecer los datos de demostración predeterminados?')) {
-                resetToDemoData();
-              }
-            }}
-            className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1.5 rounded-xl font-bold flex items-center space-x-1.5 transition-all cursor-pointer"
-            title="Recargar datos demo"
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-slate-600" />
-            <span>Cargar Demo</span>
-          </button>
-        </div>
-      </div>
-
       {/* User Auth Modal */}
       <UserAuthModal
         isOpen={isAuthModalOpen}

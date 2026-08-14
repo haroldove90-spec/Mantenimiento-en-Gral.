@@ -1,12 +1,17 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Building2, Package, Plus, MapPin, Phone, Mail, Search, Tag, Database, Edit, Trash2, CheckCircle2, XCircle, UserX, UserCheck } from 'lucide-react';
+import { ConfirmDeleteModal } from '../ConfirmDeleteModal';
+import { Client, SparePart } from '../../types';
 
 export const ClientsAndCatalog: React.FC = () => {
   const { clients, spareParts, addClient, updateClient, deleteClient, toggleClientStatus, addSparePart, updateSparePart, toggleSparePartStatus, deleteSparePart } = useApp();
   const [activeTab, setActiveTab] = useState<'clients' | 'catalog'>('clients');
 
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Delete modal state
+  const [itemToDelete, setItemToDelete] = useState<{ id: string; type: 'client' | 'part'; name: string; description: string } | null>(null);
 
   // Client Modal State (Create or Edit)
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
@@ -292,11 +297,14 @@ export const ClientsAndCatalog: React.FC = () => {
                   </button>
 
                   <button
-                    onClick={() => {
-                      if (confirm(`¿Estás seguro de eliminar el cliente ${client.name}?`)) {
-                        deleteClient(client.id);
-                      }
-                    }}
+                    onClick={() =>
+                      setItemToDelete({
+                        id: client.id,
+                        type: 'client',
+                        name: client.name,
+                        description: `al cliente "${client.name}" (RFC: ${client.taxId || 'N/A'})`
+                      })
+                    }
                     className="text-rose-600 hover:text-rose-800 font-bold flex items-center space-x-1 cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -378,13 +386,16 @@ export const ClientsAndCatalog: React.FC = () => {
                       </button>
 
                       <button
-                        onClick={() => {
-                          if (confirm(`¿Eliminar refacción ${part.name}?`)) {
-                            deleteSparePart(part.id);
-                          }
-                        }}
+                        onClick={() =>
+                          setItemToDelete({
+                            id: part.id,
+                            type: 'part',
+                            name: part.name,
+                            description: `la refacción "${part.name}" (Código: ${part.code})`
+                          })
+                        }
                         className="text-rose-600 hover:text-rose-800 p-1.5 rounded-lg hover:bg-rose-50 cursor-pointer"
-                        title="Eliminar refacción"
+                        title="Eliminar refacción de la base de datos"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -629,6 +640,25 @@ export const ClientsAndCatalog: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Reusable Confirm Delete Modal */}
+      <ConfirmDeleteModal
+        isOpen={!!itemToDelete}
+        onClose={() => setItemToDelete(null)}
+        onConfirm={() => {
+          if (itemToDelete) {
+            if (itemToDelete.type === 'client') {
+              deleteClient(itemToDelete.id);
+            } else if (itemToDelete.type === 'part') {
+              deleteSparePart(itemToDelete.id);
+            }
+            setItemToDelete(null);
+          }
+        }}
+        title={itemToDelete?.type === 'client' ? '¿Eliminar cliente permanentemente?' : '¿Eliminar refacción permanentemente?'}
+        itemDescription={itemToDelete?.description || 'este registro'}
+        itemType={itemToDelete?.type === 'client' ? 'cliente' : 'refacción'}
+      />
 
     </div>
   );

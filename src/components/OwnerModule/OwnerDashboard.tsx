@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SystemUser, OperatingExpense, normalizeRole, getRoleDisplayName, RoleType } from '../../types';
+import { ConfirmDeleteModal } from '../ConfirmDeleteModal';
 import {
   Crown,
   DollarSign,
@@ -63,6 +64,9 @@ export const OwnerDashboard: React.FC = () => {
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<SystemUser | null>(null);
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
+
+  // Delete modal state
+  const [itemToDelete, setItemToDelete] = useState<{ id: string; type: 'user' | 'expense'; name: string; description: string } | null>(null);
 
   // Supabase Sync & SQL Modal state
   const [isSqlModalOpen, setIsSqlModalOpen] = useState(false);
@@ -521,13 +525,16 @@ export const OwnerDashboard: React.FC = () => {
                       </td>
                       <td className="p-3 text-center">
                         <button
-                          onClick={() => {
-                            if (confirm(`¿Eliminar el registro de gasto "${exp.description}" por $${exp.amount.toLocaleString('es-MX')} MXN?`)) {
-                              deleteExpense(exp.id);
-                            }
-                          }}
+                          onClick={() =>
+                            setItemToDelete({
+                              id: exp.id,
+                              type: 'expense',
+                              name: exp.description,
+                              description: `el gasto "${exp.description}" por $${exp.amount.toLocaleString('es-MX')} MXN (${exp.category})`
+                            })
+                          }
                           className="text-rose-600 hover:text-rose-800 p-1.5 rounded-lg hover:bg-rose-50 cursor-pointer"
-                          title="Eliminar gasto"
+                          title="Eliminar gasto de la base de datos"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -717,11 +724,14 @@ export const OwnerDashboard: React.FC = () => {
                   </button>
 
                   <button
-                    onClick={() => {
-                      if (confirm(`¿Estás seguro de eliminar permanentemente al usuario ${usr.name}?`)) {
-                        deleteSystemUser(usr.id);
-                      }
-                    }}
+                    onClick={() =>
+                      setItemToDelete({
+                        id: usr.id,
+                        type: 'user',
+                        name: usr.name,
+                        description: `al usuario "${usr.name}" (${usr.email} - Rol: ${getRoleDisplayName(usr.role)})`
+                      })
+                    }
                     className="text-rose-600 hover:text-rose-800 font-bold flex items-center space-x-1 cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -1133,6 +1143,25 @@ DELETE FROM public.system_users WHERE email != '${currentUser?.email?.toLowerCas
           </div>
         </div>
       )}
+
+      {/* Reusable Confirm Delete Modal */}
+      <ConfirmDeleteModal
+        isOpen={!!itemToDelete}
+        onClose={() => setItemToDelete(null)}
+        onConfirm={() => {
+          if (itemToDelete) {
+            if (itemToDelete.type === 'expense') {
+              deleteExpense(itemToDelete.id);
+            } else if (itemToDelete.type === 'user') {
+              deleteSystemUser(itemToDelete.id);
+            }
+            setItemToDelete(null);
+          }
+        }}
+        title={itemToDelete?.type === 'user' ? '¿Eliminar usuario del sistema permanentemente?' : '¿Eliminar gasto operativo permanentemente?'}
+        itemDescription={itemToDelete?.description || 'este registro'}
+        itemType={itemToDelete?.type === 'user' ? 'usuario del sistema' : 'gasto operativo'}
+      />
 
     </div>
   );

@@ -68,27 +68,50 @@ export const HomeDashboard: React.FC = () => {
           className="w-28 h-28 sm:w-36 sm:h-36 mx-auto object-contain"
         />
         <div>
-          <p className="text-sm sm:text-base font-bold text-sij-blue">
-            Sistema de Mantenimiento y Servicios
-          </p>
-          <p className="text-xs text-sij-dark/70 font-medium mt-1">
-            Selecciona tu perfil de usuario para ingresar o registrarte
+          <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900">
+            Mantenimiento y Servicios SIJ
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
+            Plataforma Integral de Servicios Técnicos y Operaciones
           </p>
         </div>
 
-        {/* PWA Install button only if not installed */}
-        {!isInstalled && (
-          <div className="pt-2 flex justify-center">
+        {/* Global Access CTA Buttons */}
+        <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+          <button
+            onClick={() => {
+              setSelectedRole('client');
+              setAuthModalMode('register');
+              setIsAuthModalOpen(true);
+            }}
+            className="cursor-pointer inline-flex items-center space-x-2 bg-gradient-to-r from-sij-blue to-sij-navy hover:from-sij-navy hover:to-slate-900 text-white font-extrabold text-xs sm:text-sm px-5 py-2.5 rounded-2xl transition-all shadow-md hover:shadow-lg active:scale-95"
+          >
+            <span>Crear Cuenta / Registrarse</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setSelectedRole('client');
+              setAuthModalMode('login');
+              setIsAuthModalOpen(true);
+            }}
+            className="cursor-pointer inline-flex items-center space-x-2 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-bold text-xs sm:text-sm px-5 py-2.5 rounded-2xl transition-all shadow-xs hover:shadow-md active:scale-95"
+          >
+            <span>Iniciar Sesión</span>
+          </button>
+
+          {/* PWA Install button */}
+          {!isInstalled && (
             <button
               id="install-pwa-btn"
               onClick={handleInstallClick}
-              className="group cursor-pointer inline-flex items-center space-x-2 bg-sij-blue hover:bg-sij-navy text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-95"
+              className="group cursor-pointer inline-flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-3.5 py-2.5 rounded-2xl transition-all shadow-xs"
             >
-              <Smartphone className="w-4 h-4 text-sij-cyan group-hover:animate-bounce" />
-              <span>Instalar App Móvil</span>
+              <Smartphone className="w-4 h-4 text-sij-blue group-hover:animate-bounce" />
+              <span>Instalar App</span>
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* iOS Installation Instruction Modal */}

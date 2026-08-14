@@ -27,7 +27,8 @@ import {
   Database,
   Eye,
   EyeOff,
-  Sparkles
+  Sparkles,
+  X
 } from 'lucide-react';
 
 export const OwnerDashboard: React.FC = () => {
@@ -895,24 +896,39 @@ export const OwnerDashboard: React.FC = () => {
                   <Database className="w-5 h-5 text-emerald-600" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-slate-900 text-lg">Script SQL para Supabase</h3>
+                  <h3 className="font-extrabold text-slate-900 text-lg">Scripts SQL para Supabase</h3>
                   <p className="text-xs text-slate-500">
-                    Copia este código y ejecútalo en el <b>SQL Editor de tu dashboard de Supabase</b>.
+                    Copia y ejecuta en el <b>SQL Editor de tu dashboard de Supabase</b>.
                   </p>
                 </div>
               </div>
 
               <button
                 onClick={() => setIsSqlModalOpen(false)}
-                className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100"
+                className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 cursor-pointer"
               >
-                <Database className="w-5 h-5" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="bg-slate-900 rounded-2xl p-4 overflow-y-auto font-mono text-xs text-emerald-400 space-y-2 max-h-60 border border-slate-800">
-              <p className="text-slate-400 font-semibold mb-2">-- Estructura de la tabla system_users y permisos:</p>
-              <pre className="whitespace-pre-wrap select-all">
+            <div className="bg-slate-900 rounded-2xl p-4 overflow-y-auto font-mono text-xs text-emerald-400 space-y-3 max-h-72 border border-slate-800">
+              <div>
+                <p className="text-amber-400 font-bold mb-1">-- 1. SQL PARA VACIAR/BORRAR DATOS DE PRUEBA EN SUPABASE:</p>
+                <pre className="whitespace-pre-wrap select-all text-slate-200 bg-slate-950 p-2.5 rounded-lg border border-slate-800">
+{`-- Vaciar órdenes, clientes, refacciones y gastos de prueba
+DELETE FROM public.service_orders;
+DELETE FROM public.clients;
+DELETE FROM public.spare_parts;
+DELETE FROM public.operating_expenses;
+
+-- Borrar usuarios demo manteniendo a tu usuario admin (${currentUser?.email || 'tu_email@ejemplo.com'}):
+DELETE FROM public.system_users WHERE email != '${currentUser?.email?.toLowerCase() || 'haroldove90@gmail.com'}';`}
+                </pre>
+              </div>
+
+              <div className="pt-2 border-t border-slate-800">
+                <p className="text-emerald-400 font-bold mb-1">-- 2. SQL PARA CREACIÓN DE TABLAS Y PERMISOS:</p>
+                <pre className="whitespace-pre-wrap select-all text-slate-300 bg-slate-950 p-2.5 rounded-lg border border-slate-800">
 {`CREATE TABLE IF NOT EXISTS public.system_users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     auth_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
@@ -927,27 +943,22 @@ export const OwnerDashboard: React.FC = () => {
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Asegurar permisos y RLS
 ALTER TABLE public.system_users ENABLE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS "allow_full_access_system_users" ON public.system_users;
 CREATE POLICY "allow_full_access_system_users" ON public.system_users FOR ALL USING (true) WITH CHECK (true);
-
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO postgres, service_role, anon, authenticated;
-
--- Notificar recarga de caché a PostgREST
 NOTIFY pgrst, 'reload schema';`}
-              </pre>
+                </pre>
+              </div>
             </div>
 
             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 text-xs text-amber-900 space-y-1">
-              <p className="font-bold">Pasos para aplicar en Supabase (30 segundos):</p>
+              <p className="font-bold">¿Cómo ejecutar en Supabase?</p>
               <ol className="list-decimal list-inside space-y-1 text-slate-700 font-medium">
-                <li>Ve a tu consola de Supabase: <code className="bg-amber-100 px-1 py-0.5 rounded text-amber-900 font-mono">battwitnhrezwotkcvbc.supabase.co</code></li>
-                <li>Haz clic en <b>SQL Editor</b> en el menú lateral izquierdo.</li>
-                <li>Pega este código y presiona <b>Run</b> (Ejecutar).</li>
-                <li>Regresa aquí y presiona <b>"Sincronizar Usuarios a Supabase"</b>.</li>
+                <li>Abre tu consola de Supabase en la pestaña <b>SQL Editor</b> (la que tienes abierta en el navegador).</li>
+                <li>Pega el bloque SQL y presiona <b>Run</b> (Ejecutar).</li>
+                <li>¡Listo! Los registros de prueba quedarán eliminados en Supabase.</li>
               </ol>
             </div>
 
@@ -955,37 +966,20 @@ NOTIFY pgrst, 'reload schema';`}
               <button
                 type="button"
                 onClick={() => {
-                  const sql = `CREATE TABLE IF NOT EXISTS public.system_users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    auth_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-    name TEXT NOT NULL,
-    username TEXT UNIQUE,
-    email TEXT NOT NULL UNIQUE,
-    password TEXT,
-    phone TEXT,
-    role TEXT NOT NULL DEFAULT 'owner',
-    status TEXT NOT NULL DEFAULT 'Activo',
-    last_login TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-ALTER TABLE public.system_users ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "allow_full_access_system_users" ON public.system_users;
-CREATE POLICY "allow_full_access_system_users" ON public.system_users FOR ALL USING (true) WITH CHECK (true);
-
-GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
-GRANT ALL ON ALL TABLES IN SCHEMA public TO postgres, service_role, anon, authenticated;
-
-NOTIFY pgrst, 'reload schema';`;
+                  const sql = `-- Vaciar órdenes, clientes, refacciones y gastos de prueba
+DELETE FROM public.service_orders;
+DELETE FROM public.clients;
+DELETE FROM public.spare_parts;
+DELETE FROM public.operating_expenses;
+DELETE FROM public.system_users WHERE email != '${currentUser?.email?.toLowerCase() || 'haroldove90@gmail.com'}';`;
                   navigator.clipboard.writeText(sql);
                   setCopiedSql(true);
                   setTimeout(() => setCopiedSql(false), 2000);
                 }}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs flex items-center space-x-2 shadow-md cursor-pointer transition-all"
+                className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs flex items-center space-x-2 shadow-md cursor-pointer transition-all"
               >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>{copiedSql ? '¡Código SQL Copiado!' : 'Copiar Script SQL al Portapapeles'}</span>
+                <Trash2 className="w-4 h-4" />
+                <span>{copiedSql ? '¡SQL de Limpieza Copiado!' : 'Copiar SQL de Limpieza'}</span>
               </button>
 
               <button

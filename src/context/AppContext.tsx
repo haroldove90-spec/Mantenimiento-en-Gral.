@@ -220,43 +220,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const fetchSupabaseUsers = async () => {
       try {
         const { data, error } = await supabase.from('system_users').select('*');
-        if (!error && data && Array.isArray(data) && data.length > 0) {
-          const dbUsers: SystemUser[] = data
-            .filter((u: any) => u && typeof u === 'object')
-            .map((u: any) => {
-              const email = u.email || '';
-              const username = u.username || (email ? email.split('@')[0] : 'usuario');
-              return {
-                id: u.id || `usr-${Math.random()}`,
-                name: u.name || username || 'Usuario',
-                username,
-                email,
-                password: u.password || '',
-                phone: u.phone || '',
-                role: u.role || 'owner',
-                status: u.status || 'Activo',
-                lastLogin: u.last_login ? new Date(u.last_login).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Reciente'
-              };
-            });
+        if (!error && data && Array.isArray(data)) {
+          if (data.length > 0) {
+            const dbUsers: SystemUser[] = data
+              .filter((u: any) => u && typeof u === 'object')
+              .map((u: any) => {
+                const email = u.email || '';
+                const username = u.username || (email ? email.split('@')[0] : 'usuario');
+                return {
+                  id: u.id || `usr-${Math.random()}`,
+                  name: u.name || username || 'Usuario',
+                  username,
+                  email,
+                  password: u.password || '',
+                  phone: u.phone || '',
+                  role: u.role || 'owner',
+                  status: u.status || 'Activo',
+                  lastLogin: u.last_login ? new Date(u.last_login).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Reciente'
+                };
+              });
 
-          setSystemUsers(prev => {
-            // Merge with local users avoiding duplicates
-            const existingEmails = new Set(dbUsers.map(u => (u.email || '').toLowerCase()).filter(Boolean));
-            const localOnly = prev.filter(u => u && u.email && !existingEmails.has((u.email || '').toLowerCase()));
-            return [...dbUsers, ...localOnly];
-          });
-        } else if (!error && data && Array.isArray(data) && data.length === 0) {
-          // Table exists but is empty -> Auto-seed default initial users into Supabase system_users table
-          const seedPayloads = INITIAL_USERS.map(initU => ({
-            name: initU.name,
-            username: initU.username || initU.email.split('@')[0],
-            email: initU.email.toLowerCase(),
-            password: initU.password || '123456',
-            phone: initU.phone || '',
-            role: initU.role || 'owner',
-            status: initU.status || 'Activo'
-          }));
-          await supabase.from('system_users').upsert(seedPayloads, { onConflict: 'email' });
+            setSystemUsers(prev => {
+              // Merge with local users avoiding duplicates
+              const existingEmails = new Set(dbUsers.map(u => (u.email || '').toLowerCase()).filter(Boolean));
+              const localOnly = prev.filter(u => u && u.email && !existingEmails.has((u.email || '').toLowerCase()));
+              const combined = [...dbUsers, ...localOnly];
+              localStorage.setItem('app_system_users', JSON.stringify(combined));
+              return combined;
+            });
+          }
         }
       } catch (e) {
         console.warn('Supabase system_users sync skipped/offline', e);
@@ -1021,10 +1013,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteSystemUser = async (id: string) => {
     const userToDelete = systemUsers.find(u => u.id === id);
-    setSystemUsers(prev => prev.filter(u => u.id !== id));
-    if (userToDelete?.email) {
+    const updatedUsers = systemUsers.filter(u => u.id !== id);
+    setSystemUsers(updatedUsers);
+    localStorage.setItem('app_system_users', JSON.stringify(updatedUsers));
+
+    if (userToDelete) {
       try {
-        await supabase.from('system_users').delete().eq('email', userToDelete.email);
+        const userEmail = (userToDelete.email || '').trim().toLowerCase();
+        if (userEmail) {
+          await supabase.from('system_users').delete().ilike('email', userEmail);
+        }
+        // Also try delete by id or username if present
+        if (userToDelete.id && !userToDelete.id.startsWith('usr-')) {
+          await supabase.from('system_users').delete().eq('id', userToDelete.id);
+        }
       } catch (e) {
         console.warn('Error borrando usuario en Supabase:', e);
       }
@@ -1049,17 +1051,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
-  const clearSampleData = () => {
+  const clearSampleData = async () => {
     localStorage.setItem('app_service_orders', JSON.stringify([]));
     localStorage.setItem('app_clients', JSON.stringify([]));
     localStorage.setItem('app_spare_parts', JSON.stringify([]));
     localStorage.setItem('app_operating_expenses', JSON.stringify([]));
+
+    // Keep only current logged-in user or active admin, remove sample/demo accounts
+    const activeAdmin = currentUser || systemUsers.find(u => (u.email || '').toLowerCase().includes('haroldo')) || null;
+    const remainingUsers = activeAdmin ? [activeAdmin] : [];
+    localStorage.setItem('app_system_users', JSON.stringify(remainingUsers));
 
     setOrders([]);
     setClients([]);
     setSpareParts([]);
     setExpenses([]);
     setNotifications([]);
+    setSystemUsers(remainingUsers);
+
+    // Delete in Supabase if connected
+    try {
+      // Clean sample tables in Supabase
+      await supabase.from('service_orders').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('clients').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('spare_parts').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('operating_expenses').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+      if (activeAdmin?.email) {
+        // Delete all users except the active admin in Supabase
+        await supabase.from('system_users').delete().neq('email', activeAdmin.email.toLowerCase());
+      } else {
+        // Delete known sample demo accounts
+        const sampleEmails = [
+          'serviciosjesgui@outlook.com',
+          'jesus22@sij.com',
+          'tallerjesgui@gmail.com',
+          'facturasjesgui1@gmail.com',
+          'test@example.com',
+          'realtest@example.com'
+        ];
+        for (const em of sampleEmails) {
+          await supabase.from('system_users').delete().ilike('email', em);
+        }
+      }
+    } catch (e) {
+      console.warn('Error limpiando registros de muestra en Supabase:', e);
+    }
   };
 
   const resetToDemoData = () => {

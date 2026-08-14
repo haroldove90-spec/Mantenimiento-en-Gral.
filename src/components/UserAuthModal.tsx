@@ -71,10 +71,12 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
 
       const cleanEmail = email.trim().toLowerCase();
       const cleanUsername = username.trim().toLowerCase();
-      const assignedRole = (targetRole === 'home' ? 'owner' : targetRole) as 'owner' | 'office' | 'tech' | 'client';
+      // Every user registered through the registration form takes the role of 'client' by default.
+      // Roles (admin/owner/office/tech) can then be changed inside Supabase or in the system users dashboard.
+      const assignedRole: RoleType = 'client';
 
       setIsSubmitting(true);
-      setMessage({ type: 'warning', text: 'Registrando usuario en la base de datos de Supabase...' });
+      setMessage({ type: 'warning', text: 'Guardando usuario en la base de datos de Supabase...' });
 
       // Register new user (saves to Supabase first)
       const res = await addSystemUser({
@@ -114,13 +116,11 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
 
       setMessage({
         type: 'success',
-        text: `¡Usuario ${cleanUsername} registrado y guardado con éxito en Supabase!`
+        text: `¡Cuenta creada exitosamente en Supabase! Ingresando como Cliente... (Puedes cambiar el rol en Supabase)`
       });
 
       setTimeout(() => {
-        setActiveRole(assignedRole);
-        if (assignedRole === 'owner') setOwnerSubTab('analytics');
-        if (assignedRole === 'office') setOfficeSubTab('orders');
+        setActiveRole('client');
         onClose();
       }, 1000);
 
@@ -228,7 +228,9 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
             {mode === 'register' ? 'Registro de Usuario' : 'Ingreso al Sistema'}
           </h3>
           <p className="text-xs text-slate-500 font-medium">
-            Acceso para <span className="font-bold text-sij-blue">{getRoleLabel(targetRole as RoleType)}</span>
+            {mode === 'register' 
+              ? 'Crea tu cuenta. Los nuevos registros se asignan como Cliente por defecto y puedes ajustar el rol en Supabase.'
+              : 'Ingresa con tu usuario o correo electrónico y contraseña registrados.'}
           </p>
         </div>
 
@@ -370,7 +372,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
           {mode === 'register' && (
             <div className="bg-blue-50/80 border border-blue-200/80 rounded-xl p-2.5 text-[11px] text-sij-navy font-semibold flex items-center space-x-2">
               <ShieldCheck className="w-4 h-4 text-sij-blue shrink-0" />
-              <span>Los roles asignados se pueden sincronizar o modificar directamente en Supabase.</span>
+              <span>Rol asignado automáticamente: <b>Cliente</b>. El administrador puede cambiar tu rol en Supabase a Dueño, Oficina o Técnico.</span>
             </div>
           )}
 

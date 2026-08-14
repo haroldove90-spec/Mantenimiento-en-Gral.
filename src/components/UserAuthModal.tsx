@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { RoleType, SystemUser } from '../types';
+import { RoleType, SystemUser, normalizeRole } from '../types';
 import { supabase } from '../lib/supabase';
 import { Eye, EyeOff, Sparkles, UserPlus, LogIn, Check, ShieldAlert, X, ShieldCheck, Database, Copy, CheckCircle2, RotateCcw } from 'lucide-react';
 
@@ -154,7 +154,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
             email: dbU.email,
             password: dbU.password || '',
             phone: dbU.phone || '',
-            role: (dbU.role || 'client') as RoleType,
+            role: normalizeRole(dbU.role),
             status: dbU.status || 'Activo',
             lastLogin: 'Ahora mismo'
           };

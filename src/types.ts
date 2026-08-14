@@ -1,5 +1,31 @@
 export type RoleType = 'home' | 'owner' | 'office' | 'tech' | 'client';
 
+export const normalizeRole = (rawRole: any): 'owner' | 'office' | 'tech' | 'client' => {
+  if (!rawRole) return 'client';
+  const str = String(rawRole).trim().toLowerCase();
+  if (str === 'admin' || str === 'administrador' || str === 'dueño' || str === 'dueno' || str === 'owner') {
+    return 'owner';
+  }
+  if (str === 'oficina' || str === 'office' || str === 'recepcion' || str === 'recepción' || str === 'administrativo') {
+    return 'office';
+  }
+  if (str === 'tecnico' || str === 'técnico' || str === 'tech' || str === 'campo') {
+    return 'tech';
+  }
+  return 'client';
+};
+
+export const getRoleDisplayName = (role: string): string => {
+  const norm = normalizeRole(role);
+  switch (norm) {
+    case 'owner': return 'Admin / Dueño';
+    case 'office': return 'Oficina';
+    case 'tech': return 'Técnico';
+    case 'client': return 'Cliente';
+    default: return 'Cliente';
+  }
+};
+
 export type PriorityType = 'Alta' | 'Media' | 'Baja';
 
 export type PaymentMethod = 'Efectivo' | 'Tarjeta' | 'Transferencia' | 'Cheque';

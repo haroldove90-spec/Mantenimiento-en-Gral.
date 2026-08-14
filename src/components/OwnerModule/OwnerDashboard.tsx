@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { SystemUser, OperatingExpense } from '../../types';
+import { SystemUser, OperatingExpense, normalizeRole, getRoleDisplayName, RoleType } from '../../types';
 import {
   Crown,
   DollarSign,
@@ -631,12 +631,30 @@ export const OwnerDashboard: React.FC = () => {
                   </span>
                 </div>
 
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs space-y-1">
-                  <div className="flex justify-between">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs space-y-2">
+                  <div className="flex items-center justify-between">
                     <span className="text-slate-500 font-semibold">Rol Asignado:</span>
-                    <span className="font-bold text-slate-900 uppercase">
-                      {usr.role === 'owner' ? 'Dueño General' : usr.role === 'office' ? 'Oficina Admin' : 'Técnico Campo'}
-                    </span>
+                    <select
+                      value={usr.role}
+                      onChange={(e) => {
+                        const newRole = e.target.value as any;
+                        updateSystemUser(usr.id, { role: newRole });
+                      }}
+                      className={`text-xs font-extrabold px-2.5 py-1 rounded-lg border cursor-pointer transition-all ${
+                        usr.role === 'owner'
+                          ? 'bg-purple-50 text-purple-700 border-purple-200'
+                          : usr.role === 'office'
+                          ? 'bg-blue-50 text-blue-700 border-blue-200'
+                          : usr.role === 'tech'
+                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                          : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      }`}
+                    >
+                      <option value="owner">Admin (Dueño)</option>
+                      <option value="office">Oficina (Admin)</option>
+                      <option value="tech">Técnico</option>
+                      <option value="client">Cliente</option>
+                    </select>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500 font-semibold">Teléfono:</span>
@@ -794,8 +812,9 @@ export const OwnerDashboard: React.FC = () => {
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 font-bold focus:outline-hidden"
                 >
                   <option value="owner">Dueño / Admin General (Administrador)</option>
-                  <option value="office">Oficina / Logística (Administrador)</option>
+                  <option value="office">Oficina / Logística (Administración)</option>
                   <option value="tech">Técnico de Campo</option>
+                  <option value="client">Cliente</option>
                 </select>
               </div>
 
@@ -913,42 +932,30 @@ export const OwnerDashboard: React.FC = () => {
 
             <div className="bg-slate-900 rounded-2xl p-4 overflow-y-auto font-mono text-xs text-emerald-400 space-y-3 max-h-72 border border-slate-800">
               <div>
-                <p className="text-amber-400 font-bold mb-1">-- 1. SQL PARA VACIAR/BORRAR DATOS DE PRUEBA EN SUPABASE:</p>
+                <p className="text-emerald-400 font-bold mb-1">-- 1. SQL PARA PERMITIR ROLES EN SUPABASE (Admin, Oficina, Técnico, Cliente):</p>
                 <pre className="whitespace-pre-wrap select-all text-slate-200 bg-slate-950 p-2.5 rounded-lg border border-slate-800">
-{`-- Vaciar órdenes, clientes, refacciones y gastos de prueba
-DELETE FROM public.service_orders;
-DELETE FROM public.clients;
-DELETE FROM public.spare_parts;
-DELETE FROM public.operating_expenses;
+{`-- Convertir la columna role a TEXT para permitir editar roles directamente en Supabase sin errores de enum:
+ALTER TABLE public.system_users ALTER COLUMN role TYPE TEXT USING role::text;
+ALTER TABLE public.system_users ALTER COLUMN role SET DEFAULT 'client';
+DROP TYPE IF EXISTS public.user_role_type CASCADE;
 
--- Borrar usuarios demo manteniendo a tu usuario admin (${currentUser?.email || 'tu_email@ejemplo.com'}):
-DELETE FROM public.system_users WHERE email != '${currentUser?.email?.toLowerCase() || 'haroldove90@gmail.com'}';`}
-                </pre>
-              </div>
-
-              <div className="pt-2 border-t border-slate-800">
-                <p className="text-emerald-400 font-bold mb-1">-- 2. SQL PARA CREACIÓN DE TABLAS Y PERMISOS:</p>
-                <pre className="whitespace-pre-wrap select-all text-slate-300 bg-slate-950 p-2.5 rounded-lg border border-slate-800">
-{`CREATE TABLE IF NOT EXISTS public.system_users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    auth_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-    name TEXT NOT NULL,
-    username TEXT UNIQUE,
-    email TEXT NOT NULL UNIQUE,
-    password TEXT,
-    phone TEXT,
-    role TEXT NOT NULL DEFAULT 'owner',
-    status TEXT NOT NULL DEFAULT 'Activo',
-    last_login TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
+-- Permisos y políticas RLS
 ALTER TABLE public.system_users ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "allow_full_access_system_users" ON public.system_users;
 CREATE POLICY "allow_full_access_system_users" ON public.system_users FOR ALL USING (true) WITH CHECK (true);
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO postgres, service_role, anon, authenticated;
 NOTIFY pgrst, 'reload schema';`}
+                </pre>
+              </div>
+
+              <div className="pt-2 border-t border-slate-800">
+                <p className="text-amber-400 font-bold mb-1">-- 2. SQL PARA VACIAR REGISTROS DE PRUEBA (OPCIONAL):</p>
+                <pre className="whitespace-pre-wrap select-all text-slate-300 bg-slate-950 p-2.5 rounded-lg border border-slate-800">
+{`DELETE FROM public.service_orders;
+DELETE FROM public.clients;
+DELETE FROM public.spare_parts;
+DELETE FROM public.operating_expenses;`}
                 </pre>
               </div>
             </div>

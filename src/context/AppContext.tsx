@@ -12,7 +12,8 @@ import {
   RequestedPart,
   Budget,
   SystemUser,
-  OperatingExpense
+  OperatingExpense,
+  normalizeRole
 } from '../types';
 import {
   INITIAL_CLIENTS,
@@ -227,6 +228,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               .map((u: any) => {
                 const email = u.email || '';
                 const username = u.username || (email ? email.split('@')[0] : 'usuario');
+                const cleanRole = normalizeRole(u.role);
                 return {
                   id: u.id || `usr-${Math.random()}`,
                   name: u.name || username || 'Usuario',
@@ -234,7 +236,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   email,
                   password: u.password || '',
                   phone: u.phone || '',
-                  role: u.role || 'client',
+                  role: cleanRole,
                   status: u.status || 'Activo',
                   lastLogin: u.last_login ? new Date(u.last_login).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Reciente'
                 };
@@ -248,6 +250,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               localStorage.setItem('app_system_users', JSON.stringify(combined));
               return combined;
             });
+
+            // If current user is logged in, update their role if changed in Supabase
+            if (currentUser) {
+              const currentInDb = dbUsers.find(u => u.email.toLowerCase() === (currentUser.email || '').toLowerCase());
+              if (currentInDb && currentInDb.role !== currentUser.role) {
+                const updatedCurrent = { ...currentUser, role: currentInDb.role, name: currentInDb.name };
+                setCurrentUser(updatedCurrent);
+                setActiveRole(currentInDb.role);
+              }
+            }
           }
         }
       } catch (e) {

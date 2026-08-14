@@ -502,6 +502,7 @@ export const OwnerDashboard: React.FC = () => {
                     <th className="p-3">Fecha</th>
                     <th className="p-3">Registrado Por</th>
                     <th className="p-3 text-right">Monto</th>
+                    <th className="p-3 text-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
@@ -517,6 +518,19 @@ export const OwnerDashboard: React.FC = () => {
                       <td className="p-3 text-slate-600">{exp.registeredBy}</td>
                       <td className="p-3 text-right font-mono font-bold text-rose-600 text-sm">
                         -${exp.amount.toLocaleString('es-MX')} MXN
+                      </td>
+                      <td className="p-3 text-center">
+                        <button
+                          onClick={() => {
+                            if (confirm(`¿Eliminar el registro de gasto "${exp.description}" por $${exp.amount.toLocaleString('es-MX')} MXN?`)) {
+                              deleteExpense(exp.id);
+                            }
+                          }}
+                          className="text-rose-600 hover:text-rose-800 p-1.5 rounded-lg hover:bg-rose-50 cursor-pointer"
+                          title="Eliminar gasto"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -932,30 +946,149 @@ export const OwnerDashboard: React.FC = () => {
 
             <div className="bg-slate-900 rounded-2xl p-4 overflow-y-auto font-mono text-xs text-emerald-400 space-y-3 max-h-72 border border-slate-800">
               <div>
-                <p className="text-emerald-400 font-bold mb-1">-- 1. SQL PARA PERMITIR ROLES EN SUPABASE (Admin, Oficina, Técnico, Cliente):</p>
+                <p className="text-emerald-400 font-bold mb-1">-- 1. SQL COMPLETO PARA CREACIÓN, ROLES Y PERMISOS CRUD (Ver, Editar, Activar, Desactivar, Borrar):</p>
                 <pre className="whitespace-pre-wrap select-all text-slate-200 bg-slate-950 p-2.5 rounded-lg border border-slate-800">
-{`-- Convertir la columna role a TEXT para permitir editar roles directamente en Supabase sin errores de enum:
-ALTER TABLE public.system_users ALTER COLUMN role TYPE TEXT USING role::text;
-ALTER TABLE public.system_users ALTER COLUMN role SET DEFAULT 'client';
+{`-- 1.1 Asegurar que la columna role en system_users sea de tipo TEXT libre:
+ALTER TABLE IF EXISTS public.system_users ALTER COLUMN role TYPE TEXT USING role::text;
+ALTER TABLE IF EXISTS public.system_users ALTER COLUMN role SET DEFAULT 'client';
 DROP TYPE IF EXISTS public.user_role_type CASCADE;
 
--- Permisos y políticas RLS
+-- 1.2 Tabla de Usuarios del Sistema
+CREATE TABLE IF NOT EXISTS public.system_users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    auth_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    name TEXT NOT NULL,
+    username TEXT UNIQUE,
+    email TEXT NOT NULL UNIQUE,
+    password TEXT,
+    phone TEXT,
+    role TEXT NOT NULL DEFAULT 'client',
+    status TEXT NOT NULL DEFAULT 'Activo',
+    last_login TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 1.3 Tabla de Clientes
+CREATE TABLE IF NOT EXISTS public.clients (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    tax_id TEXT,
+    contact_email TEXT UNIQUE,
+    address TEXT,
+    phone TEXT,
+    whatsapp TEXT,
+    model TEXT,
+    fault TEXT,
+    status TEXT NOT NULL DEFAULT 'Activo',
+    fiscal_address TEXT,
+    delivery_address TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 1.4 Tabla de Órdenes de Servicio
+CREATE TABLE IF NOT EXISTS public.service_orders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    folio TEXT NOT NULL UNIQUE,
+    client_name TEXT NOT NULL,
+    client_email TEXT,
+    department_name TEXT,
+    equipment_type TEXT,
+    description TEXT,
+    priority TEXT DEFAULT 'Media',
+    status TEXT NOT NULL DEFAULT 'Recepción Inicial',
+    technician_id TEXT,
+    technician_name TEXT,
+    route_order INTEGER DEFAULT 1,
+    scheduled_date DATE,
+    budget JSONB,
+    requested_parts JSONB DEFAULT '[]'::jsonb,
+    timeline JSONB DEFAULT '[]'::jsonb,
+    is_warranty BOOLEAN DEFAULT false,
+    is_direct_delivery BOOLEAN DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 1.5 Tabla de Refacciones / Catálogo
+CREATE TABLE IF NOT EXISTS public.spare_parts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    code TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    category TEXT DEFAULT 'General',
+    unit_price NUMERIC(12,2) DEFAULT 0,
+    stock INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'Activo',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 1.6 Tabla de Técnicos
+CREATE TABLE IF NOT EXISTS public.technicians (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    phone TEXT,
+    email TEXT UNIQUE,
+    specialty TEXT,
+    active_orders_count INTEGER DEFAULT 0,
+    avg_response_time_hours NUMERIC(6,2) DEFAULT 2.5,
+    status TEXT DEFAULT 'Activo',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 1.7 Tabla de Gastos Operativos
+CREATE TABLE IF NOT EXISTS public.operating_expenses (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    category TEXT NOT NULL,
+    description TEXT NOT NULL,
+    amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+    date DATE DEFAULT CURRENT_DATE,
+    payment_method TEXT DEFAULT 'Transferencia',
+    registered_by TEXT,
+    invoice_folio TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 1.8 Habilitar RLS y Políticas de acceso total (SELECT, INSERT, UPDATE, DELETE)
 ALTER TABLE public.system_users ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "allow_full_access_system_users" ON public.system_users;
-CREATE POLICY "allow_full_access_system_users" ON public.system_users FOR ALL USING (true) WITH CHECK (true);
+ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.service_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.spare_parts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.technicians ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.operating_expenses ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "full_access_system_users" ON public.system_users;
+CREATE POLICY "full_access_system_users" ON public.system_users FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "full_access_clients" ON public.clients;
+CREATE POLICY "full_access_clients" ON public.clients FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "full_access_service_orders" ON public.service_orders;
+CREATE POLICY "full_access_service_orders" ON public.service_orders FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "full_access_spare_parts" ON public.spare_parts;
+CREATE POLICY "full_access_spare_parts" ON public.spare_parts FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "full_access_technicians" ON public.technicians;
+CREATE POLICY "full_access_technicians" ON public.technicians FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "full_access_operating_expenses" ON public.operating_expenses;
+CREATE POLICY "full_access_operating_expenses" ON public.operating_expenses FOR ALL USING (true) WITH CHECK (true);
+
+-- Permisos de esquema
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO postgres, service_role, anon, authenticated;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO postgres, service_role, anon, authenticated;
+
 NOTIFY pgrst, 'reload schema';`}
                 </pre>
               </div>
 
               <div className="pt-2 border-t border-slate-800">
-                <p className="text-amber-400 font-bold mb-1">-- 2. SQL PARA VACIAR REGISTROS DE PRUEBA (OPCIONAL):</p>
+                <p className="text-amber-400 font-bold mb-1">-- 2. SQL PARA VACIAR REGISTROS DE PRUEBA (MANTENIENDO TU ADMIN):</p>
                 <pre className="whitespace-pre-wrap select-all text-slate-300 bg-slate-950 p-2.5 rounded-lg border border-slate-800">
 {`DELETE FROM public.service_orders;
 DELETE FROM public.clients;
 DELETE FROM public.spare_parts;
-DELETE FROM public.operating_expenses;`}
+DELETE FROM public.operating_expenses;
+DELETE FROM public.system_users WHERE email != '${currentUser?.email?.toLowerCase() || 'haroldove90@gmail.com'}';`}
                 </pre>
               </div>
             </div>

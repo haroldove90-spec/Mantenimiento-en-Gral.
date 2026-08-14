@@ -73,6 +73,7 @@ export interface SparePart {
   category: string;
   unitPrice: number;
   stock: number;
+  status?: 'Activo' | 'Inactivo';
 }
 
 export interface RequestedPart {
@@ -179,6 +180,8 @@ export interface OperatingExpense {
   amount: number;
   date: string;
   registeredBy: string;
+  paymentMethod?: string;
+  invoiceFolio?: string;
 }
 
 export interface Notification {

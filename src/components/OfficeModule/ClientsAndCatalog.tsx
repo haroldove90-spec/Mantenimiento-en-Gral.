@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { Building2, Package, Plus, MapPin, Phone, Mail, Search, Tag, Database, Edit, Trash2, CheckCircle2, XCircle, UserX, UserCheck } from 'lucide-react';
 
 export const ClientsAndCatalog: React.FC = () => {
-  const { clients, spareParts, addClient, updateClient, deleteClient, toggleClientStatus, addSparePart, deleteSparePart } = useApp();
+  const { clients, spareParts, addClient, updateClient, deleteClient, toggleClientStatus, addSparePart, updateSparePart, toggleSparePartStatus, deleteSparePart } = useApp();
   const [activeTab, setActiveTab] = useState<'clients' | 'catalog'>('clients');
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -20,8 +20,9 @@ export const ClientsAndCatalog: React.FC = () => {
   const [newClientModel, setNewClientModel] = useState('');
   const [newClientFault, setNewClientFault] = useState('');
 
-  // New Spare Part Modal State
+  // Spare Part Modal State (Create or Edit)
   const [isPartModalOpen, setIsPartModalOpen] = useState(false);
+  const [editingPartId, setEditingPartId] = useState<string | null>(null);
   const [partCode, setPartCode] = useState('');
   const [partName, setPartName] = useState('');
   const [partCategory, setPartCategory] = useState('General');
@@ -89,17 +90,31 @@ export const ClientsAndCatalog: React.FC = () => {
     e.preventDefault();
     if (!partName.trim()) return;
 
-    addSparePart({
-      code: partCode || `REF-${Math.floor(Math.random() * 9000 + 1000)}`,
-      name: partName,
-      category: partCategory,
-      unitPrice: Number(partPrice),
-      stock: Number(partStock)
-    });
+    if (editingPartId) {
+      updateSparePart(editingPartId, {
+        code: partCode,
+        name: partName,
+        category: partCategory,
+        unitPrice: Number(partPrice),
+        stock: Number(partStock)
+      });
+      setEditingPartId(null);
+    } else {
+      addSparePart({
+        code: partCode || `REF-${Math.floor(Math.random() * 9000 + 1000)}`,
+        name: partName,
+        category: partCategory,
+        unitPrice: Number(partPrice),
+        stock: Number(partStock),
+        status: 'Activo'
+      });
+    }
 
     setIsPartModalOpen(false);
     setPartName('');
     setPartCode('');
+    setPartPrice(500);
+    setPartStock(10);
   };
 
   return (
@@ -333,17 +348,47 @@ export const ClientsAndCatalog: React.FC = () => {
                     ${part.unitPrice.toLocaleString('es-MX')} MXN
                   </td>
                   <td className="py-3 px-4 text-center">
-                    <button
-                      onClick={() => {
-                        if (confirm(`¿Eliminar refacción ${part.name}?`)) {
-                          deleteSparePart(part.id);
-                        }
-                      }}
-                      className="text-rose-600 hover:text-rose-800 p-1.5 rounded-lg hover:bg-rose-50 cursor-pointer"
-                      title="Eliminar refacción"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center justify-center space-x-1.5">
+                      <button
+                        onClick={() => {
+                          setEditingPartId(part.id);
+                          setPartCode(part.code);
+                          setPartName(part.name);
+                          setPartCategory(part.category);
+                          setPartPrice(part.unitPrice);
+                          setPartStock(part.stock);
+                          setIsPartModalOpen(true);
+                        }}
+                        className="text-blue-600 hover:text-blue-800 p-1.5 rounded-lg hover:bg-blue-50 cursor-pointer"
+                        title="Editar refacción"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        onClick={() => toggleSparePartStatus(part.id)}
+                        className={`p-1.5 rounded-lg cursor-pointer ${
+                          part.status === 'Inactivo'
+                            ? 'text-emerald-600 hover:bg-emerald-50'
+                            : 'text-amber-600 hover:bg-amber-50'
+                        }`}
+                        title={part.status === 'Inactivo' ? 'Activar refacción' : 'Desactivar refacción'}
+                      >
+                        {part.status === 'Inactivo' ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          if (confirm(`¿Eliminar refacción ${part.name}?`)) {
+                            deleteSparePart(part.id);
+                          }
+                        }}
+                        className="text-rose-600 hover:text-rose-800 p-1.5 rounded-lg hover:bg-rose-50 cursor-pointer"
+                        title="Eliminar refacción"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -492,9 +537,14 @@ export const ClientsAndCatalog: React.FC = () => {
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50">
           <div className="bg-white rounded-2xl max-w-md w-full max-h-[92vh] sm:max-h-[90vh] flex flex-col shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <div className="p-4 sm:p-5 border-b border-slate-100 shrink-0 bg-white flex items-center justify-between">
-              <h3 className="text-base sm:text-lg font-bold text-slate-900">Agregar Refacción al Catálogo</h3>
+              <h3 className="text-base sm:text-lg font-bold text-slate-900">
+                {editingPartId ? 'Editar Refacción del Catálogo' : 'Agregar Refacción al Catálogo'}
+              </h3>
               <button
-                onClick={() => setIsPartModalOpen(false)}
+                onClick={() => {
+                  setIsPartModalOpen(false);
+                  setEditingPartId(null);
+                }}
                 className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg bg-slate-50"
               >
                 ✕

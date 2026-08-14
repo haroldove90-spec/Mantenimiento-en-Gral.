@@ -79,13 +79,19 @@ interface AppContextType {
   // Office & Catalog actions
   saveBudget: (orderId: string, budgetData: { laborCost: number; parts: RequestedPart[]; taxRate: number; notes?: string }) => void;
   sendBudgetToClient: (orderId: string) => void;
+  updateOrder: (id: string, orderData: Partial<ServiceOrder>) => void;
+  deleteOrder: (id: string) => void;
   addClient: (client: Omit<Client, 'id'>) => void;
   updateClient: (id: string, clientData: Partial<Client>) => void;
   deleteClient: (id: string) => void;
   toggleClientStatus: (id: string) => void;
   addSparePart: (part: Omit<SparePart, 'id'>) => void;
+  updateSparePart: (id: string, partData: Partial<SparePart>) => void;
+  toggleSparePartStatus: (id: string) => void;
   deleteSparePart: (id: string) => void;
-  deleteOrder: (id: string) => void;
+  updateTechnician: (id: string, techData: Partial<Technician>) => void;
+  toggleTechStatus: (id: string) => void;
+  deleteTechnician: (id: string) => void;
 
   // Client actions
   approveBudget: (orderId: string, clientComment?: string) => void;
@@ -98,6 +104,7 @@ interface AppContextType {
   toggleUserStatus: (id: string) => void;
   deleteSystemUser: (id: string) => void;
   addExpense: (expense: Omit<OperatingExpense, 'id'>) => void;
+  updateExpense: (id: string, expenseData: Partial<OperatingExpense>) => void;
   deleteExpense: (id: string) => void;
 
   // Notifications
@@ -856,20 +863,157 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     updateClient(id, { status: newStatus });
   };
 
-  const addSparePart = (partData: Omit<SparePart, 'id'>) => {
+  const updateOrder = async (id: string, orderData: Partial<ServiceOrder>) => {
+    setOrders(prev =>
+      prev.map(ord => (ord.id === id ? { ...ord, ...orderData } : ord))
+    );
+    try {
+      const order = orders.find(o => o.id === id);
+      if (order) {
+        await supabase
+          .from('service_orders')
+          .update({
+            equipment_type: orderData.equipmentType ?? order.equipmentType,
+            description: orderData.description ?? order.description,
+            priority: orderData.priority ?? order.priority,
+            status: orderData.status ?? order.status,
+            technician_id: orderData.technicianId ?? order.technicianId,
+            technician_name: orderData.technicianName ?? order.technicianName,
+            scheduled_date: orderData.scheduledDate ?? order.scheduledDate,
+            route_order: orderData.routeOrder ?? order.routeOrder
+          })
+          .or(`id.eq.${id},folio.eq.${order.folio}`);
+      }
+    } catch (e) {
+      console.warn('Error actualizando orden en Supabase:', e);
+    }
+  };
+
+  const deleteOrder = async (id: string) => {
+    const orderToDelete = orders.find(o => o.id === id);
+    setOrders(prev => prev.filter(o => o.id !== id));
+    if (orderToDelete) {
+      try {
+        await supabase
+          .from('service_orders')
+          .delete()
+          .or(`id.eq.${id},folio.eq.${orderToDelete.folio}`);
+      } catch (e) {
+        console.warn('Error eliminando orden de Supabase:', e);
+      }
+    }
+  };
+
+  const addSparePart = async (partData: Omit<SparePart, 'id'>) => {
     const newPart: SparePart = {
       ...partData,
-      id: `sp-${Date.now()}`
+      id: `sp-${Date.now()}`,
+      status: partData.status || 'Activo'
     };
     setSpareParts(prev => [...prev, newPart]);
+    try {
+      await supabase.from('spare_parts').insert([{
+        code: newPart.code,
+        name: newPart.name,
+        category: newPart.category,
+        unit_price: newPart.unitPrice,
+        stock: newPart.stock,
+        status: newPart.status
+      }]);
+    } catch (e) {
+      console.warn('Error insertando refacción en Supabase:', e);
+    }
   };
 
-  const deleteSparePart = (id: string) => {
+  const updateSparePart = async (id: string, partData: Partial<SparePart>) => {
+    setSpareParts(prev =>
+      prev.map(p => (p.id === id ? { ...p, ...partData } : p))
+    );
+    try {
+      const part = spareParts.find(p => p.id === id);
+      if (part) {
+        await supabase
+          .from('spare_parts')
+          .update({
+            name: partData.name ?? part.name,
+            code: partData.code ?? part.code,
+            category: partData.category ?? part.category,
+            unit_price: partData.unitPrice ?? part.unitPrice,
+            stock: partData.stock ?? part.stock,
+            status: partData.status ?? part.status
+          })
+          .or(`id.eq.${id},code.eq.${part.code}`);
+      }
+    } catch (e) {
+      console.warn('Error actualizando refacción en Supabase:', e);
+    }
+  };
+
+  const toggleSparePartStatus = async (id: string) => {
+    const part = spareParts.find(p => p.id === id);
+    if (!part) return;
+    const newStatus = part.status === 'Inactivo' ? 'Activo' : 'Inactivo';
+    updateSparePart(id, { status: newStatus });
+  };
+
+  const deleteSparePart = async (id: string) => {
+    const partToDelete = spareParts.find(p => p.id === id);
     setSpareParts(prev => prev.filter(p => p.id !== id));
+    if (partToDelete) {
+      try {
+        await supabase
+          .from('spare_parts')
+          .delete()
+          .or(`id.eq.${id},code.eq.${partToDelete.code}`);
+      } catch (e) {
+        console.warn('Error borrando refacción en Supabase:', e);
+      }
+    }
   };
 
-  const deleteOrder = (id: string) => {
-    setOrders(prev => prev.filter(o => o.id !== id));
+  const updateTechnician = async (id: string, techData: Partial<Technician>) => {
+    setTechnicians(prev =>
+      prev.map(t => (t.id === id ? { ...t, ...techData } : t))
+    );
+    try {
+      const tech = technicians.find(t => t.id === id);
+      if (tech) {
+        await supabase
+          .from('technicians')
+          .update({
+            name: techData.name ?? tech.name,
+            phone: techData.phone ?? tech.phone,
+            email: techData.email ?? tech.email,
+            specialty: techData.specialty ?? tech.specialty,
+            status: techData.status ?? tech.status
+          })
+          .or(`id.eq.${id},email.eq.${tech.email}`);
+      }
+    } catch (e) {
+      console.warn('Error actualizando técnico en Supabase:', e);
+    }
+  };
+
+  const toggleTechStatus = async (id: string) => {
+    const tech = technicians.find(t => t.id === id);
+    if (!tech) return;
+    const newStatus = tech.status === 'Inactivo' ? 'Activo' : 'Inactivo';
+    updateTechnician(id, { status: newStatus });
+  };
+
+  const deleteTechnician = async (id: string) => {
+    const techToDelete = technicians.find(t => t.id === id);
+    setTechnicians(prev => prev.filter(t => t.id !== id));
+    if (techToDelete) {
+      try {
+        await supabase
+          .from('technicians')
+          .delete()
+          .or(`id.eq.${id},email.eq.${techToDelete.email}`);
+      } catch (e) {
+        console.warn('Error borrando técnico en Supabase:', e);
+      }
+    }
   };
 
   // Owner System Users & Expenses
@@ -1045,16 +1189,65 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const addExpense = (expenseData: Omit<OperatingExpense, 'id'>) => {
+  const addExpense = async (expenseData: Omit<OperatingExpense, 'id'>) => {
     const newExp: OperatingExpense = {
       ...expenseData,
       id: `exp-${Date.now()}`
     };
     setExpenses(prev => [newExp, ...prev]);
+    try {
+      await supabase.from('operating_expenses').insert([{
+        category: newExp.category,
+        description: newExp.description,
+        amount: newExp.amount,
+        date: newExp.date,
+        payment_method: newExp.paymentMethod,
+        registered_by: newExp.registeredBy,
+        invoice_folio: newExp.invoiceFolio
+      }]);
+    } catch (e) {
+      console.warn('Error insertando gasto en Supabase:', e);
+    }
   };
 
-  const deleteExpense = (id: string) => {
+  const updateExpense = async (id: string, expenseData: Partial<OperatingExpense>) => {
+    setExpenses(prev =>
+      prev.map(e => (e.id === id ? { ...e, ...expenseData } : e))
+    );
+    try {
+      const exp = expenses.find(e => e.id === id);
+      if (exp) {
+        await supabase
+          .from('operating_expenses')
+          .update({
+            category: expenseData.category ?? exp.category,
+            description: expenseData.description ?? exp.description,
+            amount: expenseData.amount ?? exp.amount,
+            date: expenseData.date ?? exp.date,
+            payment_method: expenseData.paymentMethod ?? exp.paymentMethod,
+            registered_by: expenseData.registeredBy ?? exp.registeredBy,
+            invoice_folio: expenseData.invoiceFolio ?? exp.invoiceFolio
+          })
+          .or(`id.eq.${id},description.eq.${exp.description}`);
+      }
+    } catch (e) {
+      console.warn('Error actualizando gasto en Supabase:', e);
+    }
+  };
+
+  const deleteExpense = async (id: string) => {
+    const expToDelete = expenses.find(e => e.id === id);
     setExpenses(prev => prev.filter(e => e.id !== id));
+    if (expToDelete) {
+      try {
+        await supabase
+          .from('operating_expenses')
+          .delete()
+          .or(`id.eq.${id},description.eq.${expToDelete.description}`);
+      } catch (e) {
+        console.warn('Error borrando gasto en Supabase:', e);
+      }
+    }
   };
 
   const markNotificationRead = (id: string) => {
@@ -1155,13 +1348,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         submitTechResolution,
         saveBudget,
         sendBudgetToClient,
+        updateOrder,
+        deleteOrder,
         addClient,
         updateClient,
         deleteClient,
         toggleClientStatus,
         addSparePart,
+        updateSparePart,
+        toggleSparePartStatus,
         deleteSparePart,
-        deleteOrder,
+        updateTechnician,
+        toggleTechStatus,
+        deleteTechnician,
         approveBudget,
         rejectBudget,
         addSystemUser,
@@ -1170,6 +1369,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toggleUserStatus,
         deleteSystemUser,
         addExpense,
+        updateExpense,
         deleteExpense,
         markNotificationRead,
         clearSampleData,

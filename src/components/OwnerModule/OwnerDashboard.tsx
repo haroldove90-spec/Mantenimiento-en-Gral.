@@ -26,6 +26,7 @@ import {
   Trash2,
   RotateCcw,
   Database,
+  RefreshCw,
   Eye,
   EyeOff,
   Sparkles,
@@ -41,6 +42,7 @@ export const OwnerDashboard: React.FC = () => {
     expenses,
     addSystemUser,
     syncUsersToSupabase,
+    syncAllDataToSupabase,
     updateSystemUser,
     toggleUserStatus,
     deleteSystemUser,
@@ -77,17 +79,25 @@ export const OwnerDashboard: React.FC = () => {
   const handleSyncSupabase = async () => {
     setIsSyncing(true);
     setSyncResult(null);
-    const res = await syncUsersToSupabase();
-    setIsSyncing(false);
-    if (res.success && res.count > 0) {
-      setSyncResult({
-        type: 'success',
-        text: `¡Se sincronizaron ${res.count} usuarios exitosamente en la base de datos de Supabase!`
-      });
-    } else {
+    try {
+      const res = await syncAllDataToSupabase();
+      setIsSyncing(false);
+      if (res.success) {
+        setSyncResult({
+          type: 'success',
+          text: `¡${res.message}`
+        });
+      } else {
+        setSyncResult({
+          type: 'error',
+          text: `Error al sincronizar: ${res.message}`
+        });
+      }
+    } catch (e: any) {
+      setIsSyncing(false);
       setSyncResult({
         type: 'error',
-        text: `Error al sincronizar: ${res.error || 'Asegúrate de haber creado la tabla system_users ejecutando el script SQL.'}`
+        text: `Error de red: ${e.message || 'No se pudo conectar a Supabase'}`
       });
     }
   };
@@ -242,6 +252,25 @@ export const OwnerDashboard: React.FC = () => {
         {/* Action buttons */}
         <div className="flex flex-wrap items-center gap-2">
           <button
+            onClick={handleSyncSupabase}
+            disabled={isSyncing}
+            className="bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md flex items-center space-x-1.5 shrink-0 cursor-pointer"
+            title="Sincronizar todos los datos locales con Supabase"
+          >
+            <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+            <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar con Supabase'}</span>
+          </button>
+
+          <button
+            onClick={() => setIsSqlModalOpen(true)}
+            className="bg-indigo-700 hover:bg-indigo-600 text-white px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md flex items-center space-x-1.5 shrink-0 cursor-pointer"
+            title="Ver Script SQL y Migración para Supabase"
+          >
+            <Database className="w-4 h-4" />
+            <span>Script SQL Supabase</span>
+          </button>
+
+          <button
             onClick={() => {
               if (window.confirm('⚠️ ¿Estás seguro de que deseas eliminar TODOS los datos de muestra del sistema? Esta acción limpiará órdenes, clientes, refacciones y gastos de prueba.')) {
                 clearSampleData();
@@ -276,6 +305,13 @@ export const OwnerDashboard: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {syncResult && (
+        <div className={`p-4 rounded-2xl border flex items-center justify-between text-xs font-bold ${syncResult.type === 'success' ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : 'bg-rose-50 border-rose-300 text-rose-900'}`}>
+          <span>{syncResult.text}</span>
+          <button onClick={() => setSyncResult(null)} className="text-slate-500 hover:text-slate-800 ml-4 font-black">✕</button>
+        </div>
+      )}
 
       {/* ------------------- TAB 1: ANALÍTICA & COBRANZA ------------------- */}
       {activeTab === 'analytics' && (
@@ -958,12 +994,47 @@ export const OwnerDashboard: React.FC = () => {
               <div>
                 <p className="text-emerald-400 font-bold mb-1">-- 1. SQL COMPLETO PARA CREACIÓN, ROLES Y PERMISOS CRUD (Ver, Editar, Activar, Desactivar, Borrar):</p>
                 <pre className="whitespace-pre-wrap select-all text-slate-200 bg-slate-950 p-2.5 rounded-lg border border-slate-800">
-{`-- 1.1 Asegurar que la columna role en system_users sea de tipo TEXT libre:
+{`-- 1.1 ASEGURAR COLUMNAS Y TIPOS EN TODAS LAS TABLAS EXISTENTES:
 ALTER TABLE IF EXISTS public.system_users ALTER COLUMN role TYPE TEXT USING role::text;
 ALTER TABLE IF EXISTS public.system_users ALTER COLUMN role SET DEFAULT 'client';
 DROP TYPE IF EXISTS public.user_role_type CASCADE;
 
--- 1.2 Tabla de Usuarios del Sistema
+ALTER TABLE IF EXISTS public.technicians ALTER COLUMN status TYPE TEXT USING status::text;
+ALTER TABLE IF EXISTS public.technicians DROP CONSTRAINT IF EXISTS technicians_status_check;
+ALTER TABLE IF EXISTS public.technicians ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE IF EXISTS public.technicians ADD COLUMN IF NOT EXISTS active_orders_count INTEGER DEFAULT 0;
+ALTER TABLE IF EXISTS public.technicians ADD COLUMN IF NOT EXISTS avg_response_time_hours NUMERIC(6,2) DEFAULT 2.5;
+
+ALTER TABLE IF EXISTS public.operating_expenses ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'Transferencia';
+ALTER TABLE IF EXISTS public.operating_expenses ADD COLUMN IF NOT EXISTS invoice_folio TEXT;
+ALTER TABLE IF EXISTS public.operating_expenses ADD COLUMN IF NOT EXISTS registered_by TEXT;
+
+ALTER TABLE IF EXISTS public.spare_parts ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Activo';
+
+ALTER TABLE IF EXISTS public.clients ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE IF EXISTS public.clients ADD COLUMN IF NOT EXISTS whatsapp TEXT;
+ALTER TABLE IF EXISTS public.clients ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE IF EXISTS public.clients ADD COLUMN IF NOT EXISTS model TEXT;
+ALTER TABLE IF EXISTS public.clients ADD COLUMN IF NOT EXISTS fault TEXT;
+ALTER TABLE IF EXISTS public.clients ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Activo';
+ALTER TABLE IF EXISTS public.clients ALTER COLUMN contact_name DROP NOT NULL;
+ALTER TABLE IF EXISTS public.clients ALTER COLUMN contact_phone DROP NOT NULL;
+
+ALTER TABLE IF EXISTS public.service_orders ALTER COLUMN status TYPE TEXT USING status::text;
+ALTER TABLE IF EXISTS public.service_orders DROP CONSTRAINT IF EXISTS service_orders_status_check;
+DROP TYPE IF EXISTS public.order_stage CASCADE;
+ALTER TABLE IF EXISTS public.service_orders ADD COLUMN IF NOT EXISTS client_name TEXT;
+ALTER TABLE IF EXISTS public.service_orders ADD COLUMN IF NOT EXISTS client_email TEXT;
+ALTER TABLE IF EXISTS public.service_orders ADD COLUMN IF NOT EXISTS department_name TEXT;
+ALTER TABLE IF EXISTS public.service_orders ADD COLUMN IF NOT EXISTS technician_name TEXT;
+ALTER TABLE IF EXISTS public.service_orders ADD COLUMN IF NOT EXISTS budget JSONB;
+ALTER TABLE IF EXISTS public.service_orders ADD COLUMN IF NOT EXISTS requested_parts JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE IF EXISTS public.service_orders ADD COLUMN IF NOT EXISTS timeline JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE IF EXISTS public.service_orders ADD COLUMN IF NOT EXISTS is_warranty BOOLEAN DEFAULT false;
+ALTER TABLE IF EXISTS public.service_orders ADD COLUMN IF NOT EXISTS is_direct_delivery BOOLEAN DEFAULT false;
+ALTER TABLE IF EXISTS public.service_orders ALTER COLUMN client_id DROP NOT NULL;
+
+-- 1.2 CREAR TABLAS SI NO EXISTEN
 CREATE TABLE IF NOT EXISTS public.system_users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     auth_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
@@ -978,7 +1049,6 @@ CREATE TABLE IF NOT EXISTS public.system_users (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 1.3 Tabla de Clientes
 CREATE TABLE IF NOT EXISTS public.clients (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
@@ -992,14 +1062,16 @@ CREATE TABLE IF NOT EXISTS public.clients (
     status TEXT NOT NULL DEFAULT 'Activo',
     fiscal_address TEXT,
     delivery_address TEXT,
+    contact_name TEXT,
+    contact_phone TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 1.4 Tabla de Órdenes de Servicio
 CREATE TABLE IF NOT EXISTS public.service_orders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     folio TEXT NOT NULL UNIQUE,
-    client_name TEXT NOT NULL,
+    client_id UUID,
+    client_name TEXT,
     client_email TEXT,
     department_name TEXT,
     equipment_type TEXT,
@@ -1018,7 +1090,6 @@ CREATE TABLE IF NOT EXISTS public.service_orders (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 1.5 Tabla de Refacciones / Catálogo
 CREATE TABLE IF NOT EXISTS public.spare_parts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     code TEXT NOT NULL UNIQUE,
@@ -1030,20 +1101,18 @@ CREATE TABLE IF NOT EXISTS public.spare_parts (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 1.6 Tabla de Técnicos
 CREATE TABLE IF NOT EXISTS public.technicians (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     phone TEXT,
-    email TEXT UNIQUE,
+    email TEXT,
     specialty TEXT,
     active_orders_count INTEGER DEFAULT 0,
     avg_response_time_hours NUMERIC(6,2) DEFAULT 2.5,
-    status TEXT DEFAULT 'Activo',
+    status TEXT DEFAULT 'Disponible',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 1.7 Tabla de Gastos Operativos
 CREATE TABLE IF NOT EXISTS public.operating_expenses (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     category TEXT NOT NULL,
@@ -1056,7 +1125,7 @@ CREATE TABLE IF NOT EXISTS public.operating_expenses (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 1.8 Habilitar RLS y Políticas de acceso total (SELECT, INSERT, UPDATE, DELETE)
+-- 1.3 Habilitar RLS y Políticas de acceso total
 ALTER TABLE public.system_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.service_orders ENABLE ROW LEVEL SECURITY;
@@ -1082,7 +1151,7 @@ CREATE POLICY "full_access_technicians" ON public.technicians FOR ALL USING (tru
 DROP POLICY IF EXISTS "full_access_operating_expenses" ON public.operating_expenses;
 CREATE POLICY "full_access_operating_expenses" ON public.operating_expenses FOR ALL USING (true) WITH CHECK (true);
 
--- Permisos de esquema
+-- 1.4 Permisos de esquema
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO postgres, service_role, anon, authenticated;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO postgres, service_role, anon, authenticated;

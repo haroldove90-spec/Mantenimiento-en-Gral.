@@ -100,6 +100,7 @@ interface AppContextType {
   // Owner / System Users & Expenses actions
   addSystemUser: (user: Omit<SystemUser, 'id'>) => Promise<{ success: boolean; savedInDb: boolean; error?: string }>;
   syncUsersToSupabase: () => Promise<{ success: boolean; count: number; error?: string }>;
+  syncAllDataToSupabase: () => Promise<{ success: boolean; message: string }>;
   updateSystemUser: (id: string, userData: Partial<SystemUser>) => void;
   toggleUserStatus: (id: string) => void;
   deleteSystemUser: (id: string) => void;
@@ -907,21 +908,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setClients(prev => [...prev, newClient]);
 
-    // Sync to Supabase clients table
+    // Sync to Supabase clients table adaptively
     try {
-      await supabase.from('clients').upsert([{
+      const payload: any = {
         name: clientData.name,
-        tax_id: clientData.taxId,
-        contact_email: clientData.email,
-        contact_phone: clientData.phone || '',
+        tax_id: clientData.taxId || 'XAXX010101000',
+        contact_name: clientData.name || 'Contacto Principal',
+        contact_phone: clientData.phone || 'S/N',
+        contact_email: clientData.email || '',
+        fiscal_address: clientData.address || '',
+        delivery_address: clientData.address || '',
         address: clientData.address || '',
         phone: clientData.phone || '',
         whatsapp: clientData.whatsapp || '',
         model: clientData.model || '',
         fault: clientData.fault || '',
-        status: clientData.status || 'Activo',
-        contact_name: clientData.name
-      }]);
+        status: clientData.status || 'Activo'
+      };
+
+      const { data, error } = await supabase.from('clients').upsert([payload]).select();
+      if (error) {
+        // Retry with minimal required columns
+        console.warn('Clients upsert warning, retrying with core columns:', error.message);
+        await supabase.from('clients').insert([{
+          name: clientData.name,
+          contact_name: clientData.name,
+          contact_phone: clientData.phone || 'S/N',
+          contact_email: clientData.email || '',
+          tax_id: clientData.taxId || ''
+        }]);
+      } else if (data && data[0]?.id) {
+        // Update local id to Supabase UUID
+        setClients(prev => prev.map(c => c.id === newClient.id ? { ...c, id: data[0].id } : c));
+      }
     } catch (err) {
       console.warn('Error sincronizando cliente en Supabase:', err);
     }
@@ -935,20 +954,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const client = clients.find(c => c.id === id);
       if (client) {
-        await supabase
+        const updatePayload: any = {
+          name: clientData.name ?? client.name,
+          tax_id: clientData.taxId ?? client.taxId,
+          contact_name: clientData.name ?? client.name,
+          contact_email: clientData.email ?? client.email,
+          contact_phone: clientData.phone ?? client.phone ?? 'S/N',
+          address: clientData.address ?? client.address,
+          phone: clientData.phone ?? client.phone,
+          whatsapp: clientData.whatsapp ?? client.whatsapp,
+          model: clientData.model ?? client.model,
+          fault: clientData.fault ?? client.fault,
+          status: clientData.status ?? client.status
+        };
+
+        const { error } = await supabase
           .from('clients')
-          .update({
-            name: clientData.name ?? client.name,
-            tax_id: clientData.taxId ?? client.taxId,
-            contact_email: clientData.email ?? client.email,
-            address: clientData.address ?? client.address,
-            phone: clientData.phone ?? client.phone,
-            whatsapp: clientData.whatsapp ?? client.whatsapp,
-            model: clientData.model ?? client.model,
-            fault: clientData.fault ?? client.fault,
-            status: clientData.status ?? client.status
-          })
-          .eq('contact_email', client.email);
+          .update(updatePayload)
+          .or(`id.eq.${id},contact_email.eq.${client.email}`);
+
+        if (error) {
+          // Fallback update
+          await supabase
+            .from('clients')
+            .update({ name: updatePayload.name, contact_name: updatePayload.name })
+            .or(`id.eq.${id},contact_email.eq.${client.email}`);
+        }
       }
     } catch (err) {
       console.warn('Error actualizando cliente en Supabase:', err);
@@ -958,9 +989,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteClient = async (id: string) => {
     const clientToDelete = clients.find(c => c.id === id);
     setClients(prev => prev.filter(c => c.id !== id));
-    if (clientToDelete?.email) {
+    if (clientToDelete) {
       try {
-        await supabase.from('clients').delete().eq('contact_email', clientToDelete.email);
+        await supabase
+          .from('clients')
+          .delete()
+          .or(`id.eq.${id},contact_email.eq.${clientToDelete.email || 'none'}`);
       } catch (e) {
         console.warn('Error borrando cliente en Supabase:', e);
       }
@@ -987,7 +1021,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             equipment_type: orderData.equipmentType ?? order.equipmentType,
             description: orderData.description ?? order.description,
             priority: orderData.priority ?? order.priority,
-            status: orderData.status ?? order.status,
             technician_id: orderData.technicianId ?? order.technicianId,
             technician_name: orderData.technicianName ?? order.technicianName,
             scheduled_date: orderData.scheduledDate ?? order.scheduledDate,
@@ -1023,14 +1056,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setSpareParts(prev => [...prev, newPart]);
     try {
-      await supabase.from('spare_parts').insert([{
+      const fullPayload = {
         code: newPart.code,
         name: newPart.name,
-        category: newPart.category,
-        unit_price: newPart.unitPrice,
-        stock: newPart.stock,
+        category: newPart.category || 'General',
+        unit_price: Number(newPart.unitPrice || 0),
+        stock: Number(newPart.stock || 0),
         status: newPart.status
-      }]);
+      };
+
+      const { data, error } = await supabase.from('spare_parts').insert([fullPayload]).select();
+      if (error) {
+        // Retry without status if status column does not exist yet
+        const { data: retryData } = await supabase.from('spare_parts').insert([{
+          code: newPart.code,
+          name: newPart.name,
+          category: newPart.category || 'General',
+          unit_price: Number(newPart.unitPrice || 0),
+          stock: Number(newPart.stock || 0)
+        }]).select();
+        if (retryData && retryData[0]?.id) {
+          setSpareParts(prev => prev.map(p => p.id === newPart.id ? { ...p, id: retryData[0].id } : p));
+        }
+      } else if (data && data[0]?.id) {
+        setSpareParts(prev => prev.map(p => p.id === newPart.id ? { ...p, id: data[0].id } : p));
+      }
     } catch (e) {
       console.warn('Error insertando refacción en Supabase:', e);
     }
@@ -1043,17 +1093,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const part = spareParts.find(p => p.id === id);
       if (part) {
-        await supabase
+        const updatePayload: any = {
+          name: partData.name ?? part.name,
+          code: partData.code ?? part.code,
+          category: partData.category ?? part.category,
+          unit_price: partData.unitPrice ?? part.unitPrice,
+          stock: partData.stock ?? part.stock
+        };
+        if (partData.status !== undefined) {
+          updatePayload.status = partData.status;
+        }
+
+        const { error } = await supabase
           .from('spare_parts')
-          .update({
-            name: partData.name ?? part.name,
-            code: partData.code ?? part.code,
-            category: partData.category ?? part.category,
-            unit_price: partData.unitPrice ?? part.unitPrice,
-            stock: partData.stock ?? part.stock,
-            status: partData.status ?? part.status
-          })
+          .update(updatePayload)
           .or(`id.eq.${id},code.eq.${part.code}`);
+
+        if (error && error.message.includes('status')) {
+          delete updatePayload.status;
+          await supabase
+            .from('spare_parts')
+            .update(updatePayload)
+            .or(`id.eq.${id},code.eq.${part.code}`);
+        }
       }
     } catch (e) {
       console.warn('Error actualizando refacción en Supabase:', e);
@@ -1089,16 +1151,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const tech = technicians.find(t => t.id === id);
       if (tech) {
+        const updatePayload: any = {
+          name: techData.name ?? tech.name,
+          phone: techData.phone ?? tech.phone,
+          specialty: techData.specialty ?? tech.specialty
+        };
+        if (techData.status) {
+          updatePayload.status = techData.status === 'Activo' ? 'Disponible' : techData.status;
+        }
+
         await supabase
           .from('technicians')
-          .update({
-            name: techData.name ?? tech.name,
-            phone: techData.phone ?? tech.phone,
-            email: techData.email ?? tech.email,
-            specialty: techData.specialty ?? tech.specialty,
-            status: techData.status ?? tech.status
-          })
-          .or(`id.eq.${id},email.eq.${tech.email}`);
+          .update(updatePayload)
+          .or(`id.eq.${id},name.eq.${tech.name}`);
       }
     } catch (e) {
       console.warn('Error actualizando técnico en Supabase:', e);
@@ -1120,7 +1185,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await supabase
           .from('technicians')
           .delete()
-          .or(`id.eq.${id},email.eq.${techToDelete.email}`);
+          .or(`id.eq.${id},name.eq.${techToDelete.name}`);
       } catch (e) {
         console.warn('Error borrando técnico en Supabase:', e);
       }
@@ -1235,6 +1300,74 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const syncAllDataToSupabase = async (): Promise<{ success: boolean; message: string }> => {
+    let counts = { users: 0, expenses: 0, clients: 0, parts: 0 };
+    try {
+      // 1. Sync system_users
+      for (const u of systemUsers) {
+        const { error } = await supabase.from('system_users').upsert([{
+          name: u.name,
+          username: u.username || u.email.split('@')[0],
+          email: u.email,
+          password: u.password || '',
+          phone: u.phone || '',
+          role: u.role || 'owner',
+          status: u.status || 'Activo'
+        }], { onConflict: 'email' });
+        if (!error) counts.users++;
+      }
+
+      // 2. Sync expenses
+      for (const exp of expenses) {
+        const payload: any = {
+          category: exp.category,
+          description: exp.description,
+          amount: Number(exp.amount),
+          date: exp.date || new Date().toISOString().split('T')[0],
+          registered_by: exp.registeredBy || 'Dueño General'
+        };
+        const { error } = await supabase.from('operating_expenses').insert([payload]);
+        if (!error) counts.expenses++;
+      }
+
+      // 3. Sync clients
+      for (const c of clients) {
+        const payload: any = {
+          name: c.name,
+          contact_name: c.name,
+          contact_phone: c.phone || 'S/N',
+          contact_email: c.email || '',
+          tax_id: c.taxId || 'XAXX010101000',
+          address: c.address || '',
+          phone: c.phone || '',
+          whatsapp: c.whatsapp || '',
+          status: c.status || 'Activo'
+        };
+        const { error } = await supabase.from('clients').upsert([payload]);
+        if (!error) counts.clients++;
+      }
+
+      // 4. Sync spare parts
+      for (const sp of spareParts) {
+        const { error } = await supabase.from('spare_parts').upsert([{
+          code: sp.code,
+          name: sp.name,
+          category: sp.category,
+          unit_price: Number(sp.unitPrice),
+          stock: Number(sp.stock)
+        }], { onConflict: 'code' });
+        if (!error) counts.parts++;
+      }
+
+      return {
+        success: true,
+        message: `Sincronización completada: ${counts.expenses} gastos, ${counts.clients} clientes, ${counts.parts} refacciones, ${counts.users} usuarios guardados en Supabase.`
+      };
+    } catch (e: any) {
+      return { success: false, message: e.message || 'Error durante la sincronización general con Supabase.' };
+    }
+  };
+
   const updateSystemUser = async (id: string, userData: Partial<SystemUser>) => {
     setSystemUsers(prev =>
       prev.map(u => (u.id === id ? { ...u, ...userData } : u))
@@ -1306,16 +1439,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `exp-${Date.now()}`
     };
     setExpenses(prev => [newExp, ...prev]);
+
+    // Adaptive insert to Supabase
     try {
-      await supabase.from('operating_expenses').insert([{
+      const fullPayload = {
         category: newExp.category,
         description: newExp.description,
-        amount: newExp.amount,
-        date: newExp.date,
-        payment_method: newExp.paymentMethod,
-        registered_by: newExp.registeredBy,
-        invoice_folio: newExp.invoiceFolio
-      }]);
+        amount: Number(newExp.amount),
+        date: newExp.date || new Date().toISOString().split('T')[0],
+        payment_method: newExp.paymentMethod || 'Transferencia',
+        registered_by: newExp.registeredBy || 'Dueño General',
+        invoice_folio: newExp.invoiceFolio || ''
+      };
+
+      const { data, error } = await supabase.from('operating_expenses').insert([fullPayload]).select();
+      
+      if (error) {
+        console.warn('Full expense insert failed, retrying with core columns:', error.message);
+        // Fallback with base columns supported by standard schema
+        const corePayload = {
+          category: newExp.category,
+          description: newExp.description,
+          amount: Number(newExp.amount),
+          date: newExp.date || new Date().toISOString().split('T')[0],
+          registered_by: newExp.registeredBy || 'Dueño General'
+        };
+        const { data: retryData, error: retryError } = await supabase
+          .from('operating_expenses')
+          .insert([corePayload])
+          .select();
+
+        if (retryError) {
+          console.error('Core expense insert error in Supabase:', retryError);
+        } else if (retryData && retryData[0]?.id) {
+          // Update local expense id to Supabase UUID
+          const dbId = retryData[0].id;
+          setExpenses(prev => prev.map(e => e.id === newExp.id ? { ...e, id: dbId } : e));
+        }
+      } else if (data && data[0]?.id) {
+        const dbId = data[0].id;
+        setExpenses(prev => prev.map(e => e.id === newExp.id ? { ...e, id: dbId } : e));
+      }
     } catch (e) {
       console.warn('Error insertando gasto en Supabase:', e);
     }
@@ -1328,18 +1492,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const exp = expenses.find(e => e.id === id);
       if (exp) {
-        await supabase
+        const updatePayload: any = {
+          category: expenseData.category ?? exp.category,
+          description: expenseData.description ?? exp.description,
+          amount: Number(expenseData.amount ?? exp.amount),
+          date: expenseData.date ?? exp.date,
+          registered_by: expenseData.registeredBy ?? exp.registeredBy
+        };
+
+        const { error } = await supabase
           .from('operating_expenses')
-          .update({
-            category: expenseData.category ?? exp.category,
-            description: expenseData.description ?? exp.description,
-            amount: expenseData.amount ?? exp.amount,
-            date: expenseData.date ?? exp.date,
-            payment_method: expenseData.paymentMethod ?? exp.paymentMethod,
-            registered_by: expenseData.registeredBy ?? exp.registeredBy,
-            invoice_folio: expenseData.invoiceFolio ?? exp.invoiceFolio
-          })
+          .update(updatePayload)
           .or(`id.eq.${id},description.eq.${exp.description}`);
+
+        if (error) {
+          console.warn('Error actualizando gasto en Supabase:', error);
+        }
       }
     } catch (e) {
       console.warn('Error actualizando gasto en Supabase:', e);
@@ -1476,6 +1644,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         rejectBudget,
         addSystemUser,
         syncUsersToSupabase,
+        syncAllDataToSupabase,
         updateSystemUser,
         toggleUserStatus,
         deleteSystemUser,

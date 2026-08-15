@@ -5,7 +5,7 @@ import { Building2, Wrench, UserCheck, ArrowRight, Crown, Smartphone, Info, Tras
 import { UserAuthModal } from './UserAuthModal';
 
 export const HomeDashboard: React.FC = () => {
-  const { setActiveRole, clearSampleData, resetToDemoData, currentUser } = useApp();
+  const { setActiveRole, setOwnerSubTab, setOfficeSubTab, clearSampleData, resetToDemoData, currentUser, setCurrentUser } = useApp();
 
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState(false);
@@ -52,14 +52,88 @@ export const HomeDashboard: React.FC = () => {
   };
 
   const handleRoleCardClick = (role: RoleType) => {
+    if (currentUser) {
+      // If user is already logged in, check permissions
+      const uRole = currentUser.role;
+      const canAccess =
+        uRole === 'owner' ||
+        (uRole === 'office' && role !== 'owner') ||
+        (uRole === 'tech' && (role === 'tech' || role === 'client')) ||
+        (uRole === 'client' && role === 'client');
+
+      if (canAccess) {
+        setActiveRole(role);
+        if (role === 'owner') setOwnerSubTab('analytics');
+        if (role === 'office') setOfficeSubTab('orders');
+        return;
+      }
+    }
+
     setSelectedRole(role);
     setAuthModalMode('login'); // Default to login mode when clicking a role card
     setIsAuthModalOpen(true);
   };
 
+  const handleGoToMyDashboard = () => {
+    if (!currentUser) return;
+    const target = currentUser.role || 'client';
+    setActiveRole(target);
+    if (target === 'owner') setOwnerSubTab('analytics');
+    if (target === 'office') setOfficeSubTab('orders');
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setActiveRole('home');
+    localStorage.removeItem('app_current_user');
+  };
+
   return (
     <div id="home-dashboard" className="max-w-4xl mx-auto px-4 py-6 sm:py-10 flex flex-col items-center justify-center min-h-[80vh] space-y-6 sm:space-y-8">
       
+      {/* Active User Session Banner (if logged in) */}
+      {currentUser && (
+        <div className="w-full bg-gradient-to-r from-slate-900 to-indigo-950 border border-indigo-800/60 rounded-3xl p-4 sm:p-5 text-white shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="flex items-center space-x-3.5 text-left">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-500/40 text-sij-cyan flex items-center justify-center font-bold text-lg shrink-0">
+              {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-[11px] font-bold text-emerald-300 uppercase tracking-wider">
+                  Sesión Activa ({currentUser.role === 'owner' ? 'Admin / Dueño' : currentUser.role === 'office' ? 'Oficina' : currentUser.role === 'tech' ? 'Técnico' : 'Cliente'})
+                </span>
+              </div>
+              <h3 className="font-extrabold text-sm sm:text-base text-white">
+                {currentUser.name}
+              </h3>
+              <p className="text-xs text-slate-400 font-mono">
+                {currentUser.email}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2.5 w-full sm:w-auto">
+            <button
+              onClick={handleGoToMyDashboard}
+              className="flex-1 sm:flex-none cursor-pointer bg-gradient-to-r from-sij-blue to-sij-cyan hover:from-sij-navy hover:to-sij-blue text-white font-extrabold text-xs px-5 py-2.5 rounded-2xl transition-all shadow-md flex items-center justify-center space-x-2 active:scale-95"
+            >
+              <span>Ir a mi Panel</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={handleLogout}
+              className="cursor-pointer bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white font-bold text-xs px-3.5 py-2.5 rounded-2xl transition-all border border-white/10"
+              title="Cerrar sesión activa"
+            >
+              Cerrar Sesión
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Brand Logo & Header above role accesses */}
       <div className="text-center space-y-3 max-w-lg mx-auto">
         <img
@@ -78,27 +152,39 @@ export const HomeDashboard: React.FC = () => {
 
         {/* Global Access CTA Buttons */}
         <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
-          <button
-            onClick={() => {
-              setSelectedRole('client');
-              setAuthModalMode('register');
-              setIsAuthModalOpen(true);
-            }}
-            className="cursor-pointer inline-flex items-center space-x-2 bg-gradient-to-r from-sij-blue to-sij-navy hover:from-sij-navy hover:to-slate-900 text-white font-extrabold text-xs sm:text-sm px-5 py-2.5 rounded-2xl transition-all shadow-md hover:shadow-lg active:scale-95"
-          >
-            <span>Crear Cuenta / Registrarse</span>
-          </button>
+          {!currentUser ? (
+            <>
+              <button
+                onClick={() => {
+                  setSelectedRole('client');
+                  setAuthModalMode('register');
+                  setIsAuthModalOpen(true);
+                }}
+                className="cursor-pointer inline-flex items-center space-x-2 bg-gradient-to-r from-sij-blue to-sij-navy hover:from-sij-navy hover:to-slate-900 text-white font-extrabold text-xs sm:text-sm px-5 py-2.5 rounded-2xl transition-all shadow-md hover:shadow-lg active:scale-95"
+              >
+                <span>Crear Cuenta / Registrarse</span>
+              </button>
 
-          <button
-            onClick={() => {
-              setSelectedRole('client');
-              setAuthModalMode('login');
-              setIsAuthModalOpen(true);
-            }}
-            className="cursor-pointer inline-flex items-center space-x-2 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-bold text-xs sm:text-sm px-5 py-2.5 rounded-2xl transition-all shadow-xs hover:shadow-md active:scale-95"
-          >
-            <span>Iniciar Sesión</span>
-          </button>
+              <button
+                onClick={() => {
+                  setSelectedRole('client');
+                  setAuthModalMode('login');
+                  setIsAuthModalOpen(true);
+                }}
+                className="cursor-pointer inline-flex items-center space-x-2 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-bold text-xs sm:text-sm px-5 py-2.5 rounded-2xl transition-all shadow-xs hover:shadow-md active:scale-95"
+              >
+                <span>Iniciar Sesión</span>
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={handleGoToMyDashboard}
+              className="cursor-pointer inline-flex items-center space-x-2 bg-gradient-to-r from-sij-blue to-sij-navy hover:from-sij-navy hover:to-slate-900 text-white font-extrabold text-xs sm:text-sm px-5 py-2.5 rounded-2xl transition-all shadow-md hover:shadow-lg active:scale-95"
+            >
+              <span>Acceder a la Plataforma</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          )}
 
           {/* PWA Install button */}
           {!isInstalled && (

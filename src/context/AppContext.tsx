@@ -223,57 +223,168 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [currentUser]);
 
-  // Sync users from Supabase on load
+  // Sync data from Supabase on load
   useEffect(() => {
-    const fetchSupabaseUsers = async () => {
+    const fetchSupabaseData = async () => {
+      // 1. Fetch system_users
       try {
         const { data, error } = await supabase.from('system_users').select('*');
-        if (!error && data && Array.isArray(data)) {
-          if (data.length > 0) {
-            const dbUsers: SystemUser[] = data
-              .filter((u: any) => u && typeof u === 'object')
-              .map((u: any) => {
-                const email = u.email || '';
-                const username = u.username || (email ? email.split('@')[0] : 'usuario');
-                const cleanRole = normalizeRole(u.role);
-                return {
-                  id: u.id || `usr-${Math.random()}`,
-                  name: u.name || username || 'Usuario',
-                  username,
-                  email,
-                  password: u.password || '',
-                  phone: u.phone || '',
-                  role: cleanRole,
-                  status: u.status || 'Activo',
-                  lastLogin: u.last_login ? new Date(u.last_login).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Reciente'
-                };
-              });
-
-            setSystemUsers(prev => {
-              // Merge with local users avoiding duplicates
-              const existingEmails = new Set(dbUsers.map(u => (u.email || '').toLowerCase()).filter(Boolean));
-              const localOnly = prev.filter(u => u && u.email && !existingEmails.has((u.email || '').toLowerCase()));
-              const combined = [...dbUsers, ...localOnly];
-              localStorage.setItem('app_system_users', JSON.stringify(combined));
-              return combined;
+        if (!error && data && Array.isArray(data) && data.length > 0) {
+          const dbUsers: SystemUser[] = data
+            .filter((u: any) => u && typeof u === 'object')
+            .map((u: any) => {
+              const email = u.email || '';
+              const username = u.username || (email ? email.split('@')[0] : 'usuario');
+              const cleanRole = normalizeRole(u.role);
+              return {
+                id: u.id || `usr-${Math.random()}`,
+                name: u.name || username || 'Usuario',
+                username,
+                email,
+                password: u.password || '',
+                phone: u.phone || '',
+                role: cleanRole,
+                status: u.status || 'Activo',
+                lastLogin: u.last_login ? new Date(u.last_login).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Reciente'
+              };
             });
 
-            // If current user is logged in, update their role if changed in Supabase
-            if (currentUser) {
-              const currentInDb = dbUsers.find(u => u.email.toLowerCase() === (currentUser.email || '').toLowerCase());
-              if (currentInDb && currentInDb.role !== currentUser.role) {
-                const updatedCurrent = { ...currentUser, role: currentInDb.role, name: currentInDb.name };
-                setCurrentUser(updatedCurrent);
-                setActiveRole(currentInDb.role);
-              }
+          setSystemUsers(prev => {
+            const existingEmails = new Set(dbUsers.map(u => (u.email || '').toLowerCase()).filter(Boolean));
+            const localOnly = prev.filter(u => u && u.email && !existingEmails.has((u.email || '').toLowerCase()));
+            const combined = [...dbUsers, ...localOnly];
+            localStorage.setItem('app_system_users', JSON.stringify(combined));
+            return combined;
+          });
+
+          // If current user is logged in, update their role if changed in Supabase
+          if (currentUser) {
+            const currentInDb = dbUsers.find(u => (u.email || '').toLowerCase() === (currentUser.email || '').toLowerCase());
+            if (currentInDb && (currentInDb.role !== currentUser.role || currentInDb.name !== currentUser.name)) {
+              const updatedCurrent = { ...currentUser, role: currentInDb.role, name: currentInDb.name };
+              setCurrentUser(updatedCurrent);
+              setActiveRole(currentInDb.role);
             }
           }
         }
       } catch (e) {
         console.warn('Supabase system_users sync skipped/offline', e);
       }
+
+      // 2. Fetch clients
+      try {
+        const { data: cData, error: cErr } = await supabase.from('clients').select('*');
+        if (!cErr && cData && Array.isArray(cData) && cData.length > 0) {
+          const mappedClients: Client[] = cData.map((c: any) => ({
+            id: c.id,
+            name: c.name || 'Cliente',
+            taxId: c.tax_id || c.taxId || 'RFC-GEN',
+            email: c.contact_email || c.email || '',
+            phone: c.phone || '',
+            whatsapp: c.whatsapp || '',
+            address: c.address || c.delivery_address || c.fiscal_address || '',
+            model: c.model || '',
+            fault: c.fault || '',
+            status: c.status || 'Activo',
+            departments: Array.isArray(c.departments) ? c.departments : [
+              {
+                id: `dept-${c.id}-1`,
+                name: 'Matriz Principal',
+                contactName: c.name,
+                phone: c.phone || '',
+                address: c.address || ''
+              }
+            ]
+          }));
+          setClients(prev => {
+            const existingIds = new Set(mappedClients.map(c => c.id));
+            const localOnly = prev.filter(c => !existingIds.has(c.id));
+            const combined = [...mappedClients, ...localOnly];
+            localStorage.setItem('app_clients', JSON.stringify(combined));
+            return combined;
+          });
+        }
+      } catch (e) {
+        console.warn('Supabase clients sync skipped/offline', e);
+      }
+
+      // 3. Fetch spare_parts
+      try {
+        const { data: pData, error: pErr } = await supabase.from('spare_parts').select('*');
+        if (!pErr && pData && Array.isArray(pData) && pData.length > 0) {
+          const mappedParts: SparePart[] = pData.map((p: any) => ({
+            id: p.id,
+            code: p.code || 'REF-GEN',
+            name: p.name || 'Refacción',
+            category: p.category || 'General',
+            unitPrice: Number(p.unit_price ?? p.unitPrice ?? 0),
+            stock: Number(p.stock ?? 0),
+            status: p.status || 'Activo'
+          }));
+          setSpareParts(prev => {
+            const existingIds = new Set(mappedParts.map(p => p.id));
+            const localOnly = prev.filter(p => !existingIds.has(p.id));
+            const combined = [...mappedParts, ...localOnly];
+            localStorage.setItem('app_spare_parts', JSON.stringify(combined));
+            return combined;
+          });
+        }
+      } catch (e) {
+        console.warn('Supabase spare_parts sync skipped/offline', e);
+      }
+
+      // 4. Fetch technicians
+      try {
+        const { data: tData, error: tErr } = await supabase.from('technicians').select('*');
+        if (!tErr && tData && Array.isArray(tData) && tData.length > 0) {
+          const mappedTechs: Technician[] = tData.map((t: any) => ({
+            id: t.id,
+            name: t.name || 'Técnico',
+            phone: t.phone || '',
+            email: t.email || '',
+            specialty: t.specialty || 'General',
+            activeOrdersCount: Number(t.active_orders_count ?? t.activeOrdersCount ?? 0),
+            avgResponseTimeHours: Number(t.avg_response_time_hours ?? t.avgResponseTimeHours ?? 2.5),
+            status: t.status || 'Activo'
+          }));
+          setTechnicians(prev => {
+            const existingIds = new Set(mappedTechs.map(t => t.id));
+            const localOnly = prev.filter(t => !existingIds.has(t.id));
+            return [...mappedTechs, ...localOnly];
+          });
+        }
+      } catch (e) {
+        console.warn('Supabase technicians sync skipped/offline', e);
+      }
+
+      // 5. Fetch operating_expenses
+      try {
+        const { data: eData, error: eErr } = await supabase.from('operating_expenses').select('*');
+        if (!eErr && eData && Array.isArray(eData) && eData.length > 0) {
+          const mappedExpenses: OperatingExpense[] = eData.map((e: any) => ({
+            id: e.id,
+            category: e.category || 'Otros',
+            description: e.description || 'Gasto Operativo',
+            amount: Number(e.amount ?? 0),
+            date: e.date || new Date().toISOString().split('T')[0],
+            paymentMethod: e.payment_method || e.paymentMethod || 'Transferencia',
+            registeredBy: e.registered_by || e.registeredBy || 'Administración',
+            invoiceFolio: e.invoice_folio || e.invoiceFolio || ''
+          }));
+          setExpenses(prev => {
+            const existingIds = new Set(mappedExpenses.map(e => e.id));
+            const localOnly = prev.filter(e => !existingIds.has(e.id));
+            const combined = [...mappedExpenses, ...localOnly];
+            localStorage.setItem('app_operating_expenses', JSON.stringify(combined));
+            return combined;
+          });
+        }
+      } catch (e) {
+        console.warn('Supabase operating_expenses sync skipped/offline', e);
+      }
     };
-    fetchSupabaseUsers();
+
+    fetchSupabaseData();
   }, []);
 
   useEffect(() => {

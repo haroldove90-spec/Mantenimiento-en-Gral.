@@ -132,24 +132,40 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
       }
 
       setIsSubmitting(true);
-      setMessage({ type: 'warning', text: 'Consultando usuario en Supabase...' });
+      setMessage({ type: 'warning', text: 'Verificando credenciales con Supabase...' });
       const input = email.trim().toLowerCase();
+      const inputPass = password.trim();
 
       let foundUser: SystemUser | null = null;
+      let authUserSuccess = false;
 
-      // 1. Check Supabase database FIRST
+      // 1. Try Supabase Auth first (if user was created via Supabase Auth)
       try {
-        const { data, error } = await supabase
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+          email: input,
+          password: inputPass
+        });
+        if (!authError && authData?.user) {
+          authUserSuccess = true;
+        }
+      } catch (authErr) {
+        console.warn('Supabase Auth check skipped:', authErr);
+      }
+
+      // 2. Query Supabase system_users table directly
+      try {
+        // Query by email
+        const { data: emailData, error: emailErr } = await supabase
           .from('system_users')
           .select('*')
-          .or(`email.eq.${input},username.eq.${input},email.ilike.${input},username.ilike.${input}`)
+          .ilike('email', input)
           .limit(1);
 
-        if (!error && data && data.length > 0) {
-          const dbU = data[0];
+        if (!emailErr && emailData && emailData.length > 0) {
+          const dbU = emailData[0];
           foundUser = {
             id: dbU.id,
-            name: dbU.name,
+            name: dbU.name || dbU.email.split('@')[0],
             username: dbU.username || dbU.email.split('@')[0],
             email: dbU.email,
             password: dbU.password || '',
@@ -158,31 +174,110 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
             status: dbU.status || 'Activo',
             lastLogin: 'Ahora mismo'
           };
+        } else {
+          // Query by username
+          const { data: usernameData } = await supabase
+            .from('system_users')
+            .select('*')
+            .ilike('username', input)
+            .limit(1);
+
+          if (usernameData && usernameData.length > 0) {
+            const dbU = usernameData[0];
+            foundUser = {
+              id: dbU.id,
+              name: dbU.name || dbU.username,
+              username: dbU.username,
+              email: dbU.email,
+              password: dbU.password || '',
+              phone: dbU.phone || '',
+              role: normalizeRole(dbU.role),
+              status: dbU.status || 'Activo',
+              lastLogin: 'Ahora mismo'
+            };
+          }
         }
       } catch (err) {
-        console.error('Error buscando usuario en Supabase:', err);
+        console.error('Error buscando usuario en Supabase system_users:', err);
       }
 
-      // 2. If not found directly, check local systemUsers state
+      // 3. Fallback: check local systemUsers state
       if (!foundUser) {
         foundUser = systemUsers.find(
           u =>
             (u.email && u.email.trim().toLowerCase() === input) ||
-            (u.username && u.username.trim().toLowerCase() === input)
+            (u.username && u.username.trim().toLowerCase() === input) ||
+            (u.name && u.name.trim().toLowerCase() === input)
         ) || null;
       }
 
       setIsSubmitting(false);
 
+      // If user is completely not found in database or state
       if (!foundUser) {
+        if (authUserSuccess) {
+          // User exists in Supabase Auth, let's create their system user record
+          const newUser: SystemUser = {
+            id: `usr-${Date.now()}`,
+            name: input.split('@')[0],
+            username: input.split('@')[0],
+            email: input,
+            password: inputPass,
+            phone: '',
+            role: normalizeRole(targetRole),
+            status: 'Activo',
+            lastLogin: 'Ahora mismo'
+          };
+          setCurrentUser(newUser);
+          setActiveRole(newUser.role);
+          setMessage({
+            type: 'success',
+            text: `¡Bienvenido al sistema!`
+          });
+          setTimeout(() => {
+            onClose();
+          }, 600);
+          return;
+        }
+
         setMessage({
           type: 'error',
-          text: '❌ Usuario no encontrado en la base de datos de Supabase. Debes registrarte primero antes de ingresar.'
+          text: '❌ Usuario no encontrado en la base de datos de Supabase. Regístrate o verifica tu correo / usuario.'
         });
         return;
       }
 
-      if (foundUser.password && foundUser.password !== password.trim()) {
+      // Check account status
+      if (foundUser.status === 'Inactivo') {
+        setMessage({
+          type: 'error',
+          text: '⚠️ Esta cuenta se encuentra inactiva. Comunícate con el administrador para reactivar tu acceso.'
+        });
+        return;
+      }
+
+      // Check password validation
+      let isPasswordValid = false;
+
+      if (authUserSuccess) {
+        isPasswordValid = true;
+      } else if (!foundUser.password || foundUser.password.trim() === '') {
+        // User was created in Supabase Table Editor without a plain-text password set:
+        // Set this as their password automatically so future logins match seamlessly!
+        isPasswordValid = true;
+        try {
+          await supabase
+            .from('system_users')
+            .update({ password: inputPass })
+            .eq('id', foundUser.id);
+        } catch (e) {
+          console.warn('Could not auto-update password in Supabase:', e);
+        }
+      } else if (foundUser.password.trim() === inputPass) {
+        isPasswordValid = true;
+      }
+
+      if (!isPasswordValid) {
         setMessage({
           type: 'error',
           text: '❌ Contraseña incorrecta. Verifica tus credenciales de ingreso.'
@@ -194,7 +289,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
       setCurrentUser(foundUser);
       setMessage({
         type: 'success',
-        text: `¡Bienvenido de nuevo, ${foundUser.name}! Accediendo al sistema...`
+        text: `¡Bienvenido, ${foundUser.name}! Accediendo al sistema...`
       });
 
       setTimeout(() => {
@@ -203,7 +298,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
         if (userRole === 'owner') setOwnerSubTab('analytics');
         if (userRole === 'office') setOfficeSubTab('orders');
         onClose();
-      }, 800);
+      }, 700);
     }
   };
 

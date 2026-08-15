@@ -672,7 +672,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const startInspection = (orderId: string) => {
+  const startInspection = async (orderId: string) => {
     const nowStr = new Date().toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
     setOrders(prev =>
       prev.map(ord => {
@@ -694,9 +694,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
       })
     );
+
+    try {
+      const ord = orders.find(o => o.id === orderId);
+      if (ord) {
+        await supabase
+          .from('service_orders')
+          .update({
+            status: 'En Diagnóstico',
+            started_at: nowStr
+          })
+          .or(`id.eq.${orderId},folio.eq.${ord.folio}`);
+      }
+    } catch (e) {
+      console.warn('Error al sincronizar inicio de inspección en Supabase:', e);
+    }
   };
 
-  const submitTechDiagnostic = ({
+  const submitTechDiagnostic = async ({
     orderId,
     notes,
     photos,
@@ -709,37 +724,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }) => {
     const nowStr = new Date().toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
 
+    let updatedOrderObj: ServiceOrder | null = null;
+
     setOrders(prev =>
       prev.map(ord => {
         if (ord.id !== orderId) return ord;
-        return {
+        const updated = {
           ...ord,
           diagnosticNotes: notes,
-          diagnosticPhotos: [...ord.diagnosticPhotos, ...photos],
+          diagnosticPhotos: photos,
           requestedParts,
-          status: 'Presupuesto Pendiente',
+          status: 'Presupuesto Pendiente' as OrderStatus,
           timeline: [
             ...ord.timeline,
             {
               id: `tl-${Date.now()}`,
               timestamp: nowStr,
-              title: 'Diagnóstico y Lista de Refacciones Generada',
+              title: 'Diagnóstico y Evidencias Registradas',
               author: ord.technicianName || 'Técnico',
-              note: `Refacciones solicitadas: ${requestedParts.length}. Evidencias enviadas a Oficina.`
+              note: `Fotos capturadas: ${photos.length}. Refacciones solicitadas: ${requestedParts.length}.`
             }
           ]
         };
+        updatedOrderObj = updated;
+        return updated;
       })
     );
 
-    const ord = orders.find(o => o.id === orderId);
+    const ord = orders.find(o => o.id === orderId) || updatedOrderObj;
     if (ord) {
       addNotification({
         targetRole: 'office',
         orderFolio: ord.folio,
-        title: 'Refacciones Recibidas de Campo',
-        message: `Téc. ${ord.technicianName || 'Técnico'} envió diagnóstico de ${ord.folio} con ${requestedParts.length} refacciones.`
+        title: 'Diagnóstico Recibido de Campo',
+        message: `Téc. ${ord.technicianName || 'Técnico'} envió diagnóstico de ${ord.folio} con ${photos.length} fotos y ${requestedParts.length} piezas solicitadas.`
       });
+
+      // Synchronize directly with Supabase service_orders
+      try {
+        await supabase
+          .from('service_orders')
+          .update({
+            diagnostic_notes: notes,
+            diagnostic_photos: photos,
+            requested_parts: requestedParts,
+            status: 'Presupuesto Pendiente'
+          })
+          .or(`id.eq.${orderId},folio.eq.${ord.folio}`);
+      } catch (err) {
+        console.warn('Error al sincronizar diagnóstico con Supabase:', err);
+      }
     }
   };
 
@@ -897,7 +931,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const submitTechResolution = ({
+  const submitTechResolution = async ({
     orderId,
     solutionNotes,
     solutionPhotos,
@@ -962,6 +996,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         title: 'Cobro Registrado',
         message: `Se registró cobro de folio ${ord.folio} por el técnico ${ord.technicianName}.`
       });
+
+      // Synchronize with Supabase
+      try {
+        let total = 0;
+        if (ord.budget) {
+          const partsSubtotal = ord.budget.parts.reduce((sum, p) => sum + p.quantity * p.estimatedUnitPrice, 0);
+          const subtotal = ord.budget.laborCost + partsSubtotal;
+          total = Math.round(subtotal * (1 + ord.budget.taxRate));
+        }
+
+        await supabase
+          .from('service_orders')
+          .update({
+            status: 'Cobrado/Cerrado',
+            completed_at: nowStr,
+            solution_notes: solutionNotes,
+            solution_photos: [...ord.solutionPhotos, ...solutionPhotos],
+            client_signature: signature || ord.clientSignature,
+            payment_method: paymentMethod,
+            collected_amount: total
+          })
+          .or(`id.eq.${orderId},folio.eq.${ord.folio}`);
+      } catch (err) {
+        console.warn('Error al sincronizar cierre de orden con Supabase:', err);
+      }
     }
   };
 

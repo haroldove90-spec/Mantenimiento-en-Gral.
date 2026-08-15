@@ -1,7 +1,55 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { ServiceOrder, RequestedPart } from '../../types';
-import { X, Camera, Plus, Trash2, Send, Wrench, AlertCircle, PlayCircle } from 'lucide-react';
+import {
+  X,
+  Camera,
+  Upload,
+  Plus,
+  Trash2,
+  Send,
+  Wrench,
+  PlayCircle,
+  CheckCircle2,
+  AlertCircle,
+  Eye,
+  RefreshCw,
+  Video,
+  Smartphone,
+  Laptop
+} from 'lucide-react';
+
+// Helper to compress image and convert to Base64
+const compressImageFile = (file: File, maxWidth = 1280, maxHeight = 1280, quality = 0.82): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(e.target?.result as string);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => resolve(e.target?.result as string);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+};
 
 export const InspectionDiagnosticsModal: React.FC<{
   order: ServiceOrder;
@@ -13,26 +61,134 @@ export const InspectionDiagnosticsModal: React.FC<{
   const [notes, setNotes] = useState(order.diagnosticNotes || '');
   const [photos, setPhotos] = useState<string[]>(order.diagnosticPhotos || []);
   const [requestedParts, setRequestedParts] = useState<RequestedPart[]>(order.requestedParts || []);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
+
+  // Hidden Inputs for PC and Mobile Camera
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Live in-app camera stream state
+  const [isLiveCameraOpen, setIsLiveCameraOpen] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setNotes(order.diagnosticNotes || '');
+      setPhotos(order.diagnosticPhotos || []);
+      setRequestedParts(order.requestedParts || []);
+    }
+  }, [isOpen, order]);
+
+  // Clean up live stream on unmount or close
+  useEffect(() => {
+    return () => {
+      stopLiveCamera();
+    };
+  }, []);
 
   if (!isOpen) return null;
 
-  // Add dummy diagnostic photo
-  const handleAddSamplePhoto = () => {
-    const samplePhotos = [
-      'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80',
-      'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=600&q=80',
-      'https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?auto=format&fit=crop&w=600&q=80'
-    ];
-    const randomPic = samplePhotos[Math.floor(Math.random() * samplePhotos.length)];
-    setPhotos([...photos, randomPic]);
+  // 1. Handle File Upload from Computer / Device Storage
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const newPhotos: string[] = [];
+    for (let i = 0; i < files.length; i++) {
+      try {
+        const compressedBase64 = await compressImageFile(files[i]);
+        newPhotos.push(compressedBase64);
+      } catch (err) {
+        console.error('Error al procesar imagen:', err);
+      }
+    }
+
+    if (newPhotos.length > 0) {
+      setPhotos(prev => [...prev, ...newPhotos]);
+    }
+    // reset input
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  // 2. Handle Native Mobile Camera Capture
+  const handleMobileCameraCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    try {
+      const compressedBase64 = await compressImageFile(files[0]);
+      setPhotos(prev => [...prev, compressedBase64]);
+    } catch (err) {
+      console.error('Error al procesar foto de cámara:', err);
+    }
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
+  };
+
+  // 3. Live In-App Camera functions
+  const startLiveCamera = async () => {
+    setCameraError(null);
+    setIsLiveCameraOpen(true);
+
+    try {
+      // Request camera permissions with back camera preferred for mobile
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      });
+
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+    } catch (err: any) {
+      console.warn('No se pudo acceder a la cámara en vivo:', err);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setCameraError('Permiso de cámara denegado. Concede acceso a la cámara en tu navegador o usa el botón de captura directa.');
+      } else {
+        setCameraError('No se detectó cámara disponible o el dispositivo no admite transmisión en vivo. Usa el botón de captura nativo.');
+      }
+    }
+  };
+
+  const stopLiveCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setIsLiveCameraOpen(false);
+    setCameraError(null);
+  };
+
+  const capturePhotoFromLiveStream = () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      setPhotos(prev => [...prev, dataUrl]);
+    }
+    stopLiveCamera();
+  };
+
+  // Add Part
   const handleAddPart = () => {
     const defaultPart = spareParts[0];
     const newP: RequestedPart = {
       id: `rp-${Date.now()}`,
       partId: defaultPart?.id,
-      name: defaultPart?.name || 'Pieza requerida',
+      name: defaultPart?.name || 'Pieza / Refacción requerida',
       quantity: 1,
       estimatedUnitPrice: defaultPart?.unitPrice || 450,
       notes: ''
@@ -40,184 +196,432 @@ export const InspectionDiagnosticsModal: React.FC<{
     setRequestedParts([...requestedParts, newP]);
   };
 
-  const handleStartInspectionClick = () => {
-    startInspection(order.id);
+  const handleStartInspectionClick = async () => {
+    await startInspection(order.id);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    submitTechDiagnostic({
-      orderId: order.id,
-      notes,
-      photos,
-      requestedParts
-    });
-    onClose();
+    if (!notes.trim()) return;
+
+    setIsSubmitting(true);
+    try {
+      await submitTechDiagnostic({
+        orderId: order.id,
+        notes: notes.trim(),
+        photos,
+        requestedParts
+      });
+      onClose();
+    } catch (err) {
+      console.error('Error enviando diagnóstico:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50">
-      <div className="bg-white rounded-2xl max-w-lg w-full max-h-[92vh] sm:max-h-[90vh] flex flex-col shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 bg-slate-900/75 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
+      <div className="bg-white rounded-3xl max-w-xl w-full max-h-[92vh] flex flex-col shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-auto">
         
-        {/* Header - Fixed */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-100 shrink-0 bg-white">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shrink-0">
+        {/* Hidden inputs */}
+        <input
+          type="file"
+          accept="image/*"
+          multiple
+          ref={fileInputRef}
+          onChange={handleFileUpload}
+          className="hidden"
+        />
+        <input
+          type="file"
+          accept="image/*"
+          capture="environment"
+          ref={cameraInputRef}
+          onChange={handleMobileCameraCapture}
+          className="hidden"
+        />
+
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-100 shrink-0 bg-gradient-to-r from-slate-50 to-white">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold shrink-0 shadow-2xs">
               <Wrench className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-900">Diagnóstico e Inspección Técnica</h3>
-              <p className="text-xs text-slate-500">{order.folio} - {order.clientName}</p>
+              <div className="flex items-center space-x-2">
+                <h3 className="text-base font-bold text-slate-900">Diagnóstico e Inspección Técnica</h3>
+                <span className="font-mono font-bold text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-200">
+                  {order.folio}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 font-medium">{order.clientName} • {order.equipmentType}</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg bg-slate-50 hover:bg-slate-100">
+          <button
+            onClick={() => {
+              stopLiveCamera();
+              onClose();
+            }}
+            className="p-2 text-slate-400 hover:text-slate-600 rounded-xl bg-slate-100 hover:bg-slate-200 cursor-pointer"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Scrollable Form Body */}
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
-          <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4 text-xs">
+          <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-5 text-xs">
 
-            {/* Start Inspection Button if status is Pendiente de Revisión */}
+            {/* Start Inspection Banner */}
             {order.status === 'Pendiente de Revisión' && (
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-900 flex items-center justify-between">
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-4 text-xs text-blue-900 flex items-center justify-between shadow-2xs">
                 <div>
-                  <span className="font-bold block">Iniciar Inspección en Sitio</span>
-                  <p className="text-blue-700 text-[11px]">Presiona para marcar hora de inicio en el reporte.</p>
+                  <span className="font-bold text-sm block text-blue-950">Marcar Llegada / Iniciar Revisión</span>
+                  <p className="text-blue-700 text-[11px] mt-0.5">
+                    Registra la hora exacta de arribo al domicilio del cliente.
+                  </p>
                 </div>
                 <button
                   type="button"
                   onClick={handleStartInspectionClick}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 rounded-lg flex items-center space-x-1 shadow-xs"
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3.5 py-2 rounded-xl flex items-center space-x-1.5 shadow-xs cursor-pointer text-xs"
                 >
                   <PlayCircle className="w-4 h-4" />
-                  <span>Iniciar</span>
+                  <span>Iniciar Ahora</span>
                 </button>
               </div>
             )}
-          {/* Notes */}
-          <div>
-            <label className="font-bold text-slate-700 block mb-1">Notas del Diagnóstico Inicial</label>
-            <textarea
-              rows={3}
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder="Escribe los hallazgos técnicos, medición de voltajes, presiones, causas de la falla..."
-              className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-slate-800 focus:ring-2 focus:ring-emerald-500 outline-hidden"
-              required
-            />
-          </div>
 
-          {/* Photographic Evidence */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="font-bold text-slate-700 flex items-center space-x-1">
-                <Camera className="w-4 h-4 text-slate-500" />
-                <span>Evidencia Fotográfica ({photos.length})</span>
+            {/* 1. Diagnostic Notes */}
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-800 text-xs flex items-center justify-between">
+                <span>Notas del Diagnóstico Inicial e Inspección Física *</span>
+                <span className="text-slate-400 font-normal text-[11px]">Obligatorio</span>
               </label>
-              <button
-                type="button"
-                onClick={handleAddSamplePhoto}
-                className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-md font-bold flex items-center space-x-1"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Capturar Foto</span>
-              </button>
+              <textarea
+                rows={3}
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="Detalla los hallazgos técnicos: voltaje, amperaje, presión de gas, fugas, códigos de error en tarjeta, desgaste mecánico..."
+                className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-slate-800 text-xs font-medium focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-hidden transition-all shadow-2xs resize-none"
+                required
+              />
             </div>
 
-            {photos.length === 0 ? (
-              <div className="text-center py-4 border border-dashed border-slate-300 rounded-lg text-slate-400">
-                Aún no hay fotos adjuntas. Toma evidencia con la cámara.
-              </div>
-            ) : (
-              <div className="grid grid-cols-3 gap-2">
-                {photos.map((p, idx) => (
-                  <div key={idx} className="relative group">
-                    <img src={p} alt="Evidencia" className="w-full h-20 object-cover rounded-lg border border-slate-200" />
-                    <button
-                      type="button"
-                      onClick={() => setPhotos(photos.filter((_, i) => i !== idx))}
-                      className="absolute top-1 right-1 bg-rose-600 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+            {/* 2. Photographic Evidence Section */}
+            <div className="space-y-2.5 bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-2xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <label className="font-bold text-slate-800 text-xs flex items-center space-x-1.5">
+                    <Camera className="w-4 h-4 text-emerald-600" />
+                    <span>Evidencia Fotográfica de la Falla</span>
+                    <span className="bg-emerald-100 text-emerald-800 text-[11px] px-2 py-0.2 rounded-full font-bold">
+                      {photos.length} {photos.length === 1 ? 'foto' : 'fotos'}
+                    </span>
+                  </label>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Sube capturas del equipo, placa técnica o piezas dañadas.
+                  </p>
+                </div>
 
-          {/* Spare Parts Request */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="font-bold text-slate-700">Refacciones / Piezas Necesarias para Oficina</label>
-              <button
-                type="button"
-                onClick={handleAddPart}
-                className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-md font-bold flex items-center space-x-1"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Agregar Repuesto</span>
-              </button>
-            </div>
-
-            <div className="space-y-2 max-h-36 overflow-y-auto">
-              {requestedParts.map((p, idx) => (
-                <div key={p.id || idx} className="flex items-center space-x-2 bg-slate-50 p-2 rounded-lg border border-slate-200">
-                  <input
-                    type="text"
-                    value={p.name}
-                    onChange={e => {
-                      const updated = [...requestedParts];
-                      updated[idx].name = e.target.value;
-                      setRequestedParts(updated);
-                    }}
-                    placeholder="Nombre del repuesto..."
-                    className="flex-1 bg-white border border-slate-300 rounded-md p-1 font-medium"
-                  />
-                  <input
-                    type="number"
-                    min="1"
-                    value={p.quantity}
-                    onChange={e => {
-                      const updated = [...requestedParts];
-                      updated[idx].quantity = Number(e.target.value);
-                      setRequestedParts(updated);
-                    }}
-                    className="w-14 bg-white border border-slate-300 rounded-md p-1 text-center font-bold"
-                  />
+                {/* Upload & Mobile Camera Buttons */}
+                <div className="flex flex-wrap items-center gap-2">
+                  
+                  {/* Button: Mobile Camera / Native Capture */}
                   <button
                     type="button"
-                    onClick={() => setRequestedParts(requestedParts.filter((_, i) => i !== idx))}
-                    className="text-slate-400 hover:text-rose-600"
+                    onClick={() => {
+                      if (cameraInputRef.current) {
+                        cameraInputRef.current.click();
+                      }
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl font-bold flex items-center space-x-1.5 shadow-xs cursor-pointer text-xs"
+                    title="Abre la cámara del dispositivo móvil para tomar una foto directamente"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Smartphone className="w-3.5 h-3.5" />
+                    <span>📸 Tomar Foto Móvil</span>
                   </button>
+
+                  {/* Button: In-App Live Camera */}
+                  <button
+                    type="button"
+                    onClick={startLiveCamera}
+                    className="bg-teal-700 hover:bg-teal-800 text-white px-3 py-2 rounded-xl font-bold flex items-center space-x-1.5 shadow-xs cursor-pointer text-xs"
+                    title="Activar visor de cámara en pantalla con permisos en vivo"
+                  >
+                    <Video className="w-3.5 h-3.5" />
+                    <span>Cámara en Vivo</span>
+                  </button>
+
+                  {/* Button: Upload from PC / Storage */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (fileInputRef.current) {
+                        fileInputRef.current.click();
+                      }
+                    }}
+                    className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl font-bold flex items-center space-x-1.5 shadow-2xs cursor-pointer text-xs"
+                    title="Subir una o varias imágenes guardadas en el ordenador o galería"
+                  >
+                    <Laptop className="w-3.5 h-3.5 text-slate-500" />
+                    <span>💻 Subir del Ordenador</span>
+                  </button>
+
                 </div>
-              ))}
+              </div>
+
+              {/* Live Camera Viewfinder Overlay */}
+              {isLiveCameraOpen && (
+                <div className="bg-slate-900 p-3 rounded-2xl border border-slate-700 space-y-3 animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between text-white text-xs">
+                    <span className="font-bold flex items-center space-x-1.5">
+                      <span className="w-2.5 h-2.5 bg-rose-500 rounded-full animate-ping" />
+                      <span>Visor de Cámara en Vivo</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={stopLiveCamera}
+                      className="text-slate-400 hover:text-white p-1"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {cameraError ? (
+                    <div className="p-3 bg-rose-500/20 border border-rose-500/40 text-rose-200 rounded-xl text-[11px] space-y-2">
+                      <p className="flex items-center space-x-1">
+                        <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                        <span>{cameraError}</span>
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (cameraInputRef.current) cameraInputRef.current.click();
+                        }}
+                        className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs"
+                      >
+                        Abrir Cámara Nativa Directa
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="relative rounded-xl overflow-hidden bg-black aspect-video flex items-center justify-center">
+                        <video
+                          ref={videoRef}
+                          autoPlay
+                          playsInline
+                          muted
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="flex items-center justify-center space-x-3">
+                        <button
+                          type="button"
+                          onClick={capturePhotoFromLiveStream}
+                          className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-5 py-2 rounded-xl flex items-center space-x-2 text-xs shadow-lg cursor-pointer"
+                        >
+                          <Camera className="w-4 h-4" />
+                          <span>¡Capturar y Adjuntar Foto!</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={stopLiveCamera}
+                          className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-xl text-xs font-semibold"
+                        >
+                          Cerrar Visor
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Photos Gallery Grid */}
+              {photos.length === 0 ? (
+                <div className="text-center py-6 border-2 border-dashed border-slate-300 rounded-2xl bg-white space-y-2">
+                  <Camera className="w-8 h-8 text-slate-300 mx-auto" />
+                  <p className="text-slate-500 font-semibold text-xs">
+                    No hay fotografías de evidencia adjuntadas.
+                  </p>
+                  <p className="text-slate-400 text-[11px]">
+                    Usa <strong>"Tomar Foto Móvil"</strong> o <strong>"Subir del Ordenador"</strong> para capturar evidencias.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+                  {photos.map((p, idx) => (
+                    <div
+                      key={idx}
+                      className="relative group rounded-xl overflow-hidden border border-slate-300 bg-black aspect-square shadow-2xs"
+                    >
+                      <img
+                        src={p}
+                        alt={`Evidencia ${idx + 1}`}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                      />
+                      <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center space-x-2">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewPhoto(p)}
+                          className="bg-white/90 hover:bg-white text-slate-900 p-1.5 rounded-lg shadow-sm cursor-pointer"
+                          title="Ver en grande"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPhotos(photos.filter((_, i) => i !== idx))}
+                          className="bg-rose-600 hover:bg-rose-700 text-white p-1.5 rounded-lg shadow-sm cursor-pointer"
+                          title="Eliminar foto"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <span className="absolute bottom-1 left-1 bg-black/60 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md backdrop-blur-xs">
+                        #{idx + 1}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
+
+            {/* 3. Spare Parts Request */}
+            <div className="space-y-2.5 bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="font-bold text-slate-800 text-xs block">
+                    Refacciones / Piezas Necesarias para Cotizar
+                  </label>
+                  <p className="text-[11px] text-slate-500">
+                    Especifica qué materiales o repuestos debe cotizar la administración.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddPart}
+                  className="text-emerald-800 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 px-3 py-1.5 rounded-xl font-bold flex items-center space-x-1 text-xs cursor-pointer shadow-2xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Agregar Pieza</span>
+                </button>
+              </div>
+
+              {requestedParts.length === 0 ? (
+                <div className="p-3 text-center text-slate-400 bg-white rounded-xl border border-slate-200 text-[11px]">
+                  No se han solicitado refacciones adicionales (sólo mano de obra / diagnóstico).
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {requestedParts.map((p, idx) => (
+                    <div
+                      key={p.id || idx}
+                      className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs"
+                    >
+                      <input
+                        type="text"
+                        value={p.name}
+                        onChange={e => {
+                          const updated = [...requestedParts];
+                          updated[idx].name = e.target.value;
+                          setRequestedParts(updated);
+                        }}
+                        placeholder="Ej. Capacitor 45uF / Válvula de Expansión / Banda V..."
+                        className="flex-1 bg-slate-50 border border-slate-300 rounded-lg p-2 font-medium text-xs text-slate-800 focus:bg-white outline-hidden"
+                        required
+                      />
+                      <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-1 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
+                          <span className="text-[10px] font-bold text-slate-500">Cant:</span>
+                          <input
+                            type="number"
+                            min="1"
+                            value={p.quantity}
+                            onChange={e => {
+                              const updated = [...requestedParts];
+                              updated[idx].quantity = Math.max(1, Number(e.target.value));
+                              setRequestedParts(updated);
+                            }}
+                            className="w-12 bg-white border border-slate-300 rounded-md p-1 text-center font-bold text-xs"
+                            required
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setRequestedParts(requestedParts.filter((_, i) => i !== idx))}
+                          className="text-slate-400 hover:text-rose-600 p-1.5 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                          title="Eliminar repuesto"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
           </div>
 
-          {/* Submit Footer - Fixed */}
-          <div className="p-4 border-t border-slate-100 bg-slate-50 shrink-0 flex items-center justify-end space-x-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 border border-slate-300 bg-white rounded-lg text-slate-700 font-semibold text-xs"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow-md flex items-center space-x-1.5 text-xs"
-            >
-              <Send className="w-4 h-4" />
-              <span>Enviar a Oficina</span>
-            </button>
+          {/* Submit Footer */}
+          <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50 shrink-0 flex items-center justify-between">
+            <div className="text-[11px] text-slate-500 font-medium hidden sm:block">
+              Al enviar, se notificará a Administración para emitir presupuesto formal.
+            </div>
+
+            <div className="flex items-center space-x-2 ml-auto">
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => {
+                  stopLiveCamera();
+                  onClose();
+                }}
+                className="px-4 py-2.5 border border-slate-300 bg-white rounded-xl text-slate-700 font-semibold text-xs cursor-pointer hover:bg-slate-100 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-md flex items-center space-x-2 text-xs cursor-pointer disabled:opacity-50 transition-all"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Guardando en Supabase...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    <span>Guardar y Enviar a Oficina</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
+
+        {/* Enlarged Photo Preview Modal */}
+        {previewPhoto && (
+          <div className="fixed inset-0 bg-black/90 z-60 flex items-center justify-center p-4">
+            <div className="relative max-w-3xl w-full max-h-[90vh] flex flex-col items-center">
+              <button
+                onClick={() => setPreviewPhoto(null)}
+                className="absolute top-2 right-2 bg-white/20 hover:bg-white text-white hover:text-black p-2 rounded-full backdrop-blur-xs transition-colors cursor-pointer"
+              >
+                <X className="w-6 h-6" />
+              </button>
+              <img
+                src={previewPhoto}
+                alt="Vista Previa"
+                className="max-h-[85vh] max-w-full rounded-2xl object-contain shadow-2xl border border-white/10"
+              />
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

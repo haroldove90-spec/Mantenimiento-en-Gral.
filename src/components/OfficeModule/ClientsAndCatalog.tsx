@@ -47,48 +47,77 @@ export const ClientsAndCatalog: React.FC = () => {
     (p.category || '').toLowerCase().includes(q)
   );
 
-  const handleCreateClient = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newClientName.trim()) return;
+  // Feedback state
+  const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isClientSubmitting, setIsClientSubmitting] = useState(false);
 
-    if (editingClientId) {
-      updateClient(editingClientId, {
-        name: newClientName,
-        taxId: newClientTaxId,
-        email: newClientEmail,
-        address: newClientAddress,
-        phone: newClientPhone,
-        whatsapp: newClientWhatsapp,
-        model: newClientModel,
-        fault: newClientFault
-      });
-      setEditingClientId(null);
-    } else {
-      addClient({
-        name: newClientName,
-        taxId: newClientTaxId || 'XAXX010101000',
-        email: newClientEmail || 'contacto@cliente.com',
-        address: newClientAddress,
-        phone: newClientPhone,
-        whatsapp: newClientWhatsapp,
-        model: newClientModel,
-        fault: newClientFault,
-        status: 'Activo',
-        departments: [
-          { id: `dep-${Date.now()}-1`, name: 'Planta Principal', contactName: newClientName, phone: newClientPhone || '555-0001', address: newClientAddress }
-        ]
-      });
+  const showFeedback = (type: 'success' | 'error', text: string) => {
+    setFeedbackMsg({ type, text });
+    setTimeout(() => setFeedbackMsg(null), 4000);
+  };
+
+  const handleCreateClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newClientName.trim()) {
+      showFeedback('error', 'El nombre del cliente es obligatorio');
+      return;
     }
 
-    setIsClientModalOpen(false);
-    setNewClientName('');
-    setNewClientTaxId('');
-    setNewClientEmail('');
-    setNewClientAddress('');
-    setNewClientPhone('');
-    setNewClientWhatsapp('');
-    setNewClientModel('');
-    setNewClientFault('');
+    setIsClientSubmitting(true);
+
+    try {
+      if (editingClientId) {
+        await updateClient(editingClientId, {
+          name: newClientName.trim(),
+          taxId: newClientTaxId.trim() || 'XAXX010101000',
+          email: newClientEmail.trim() || 'contacto@cliente.com',
+          address: newClientAddress.trim() || 'Dirección no especificada',
+          phone: newClientPhone.trim() || 'S/N',
+          whatsapp: newClientWhatsapp.trim() || newClientPhone.trim() || 'S/N',
+          model: newClientModel.trim(),
+          fault: newClientFault.trim()
+        });
+        showFeedback('success', `¡Cliente "${newClientName.trim()}" actualizado correctamente!`);
+        setEditingClientId(null);
+      } else {
+        await addClient({
+          name: newClientName.trim(),
+          taxId: newClientTaxId.trim() || 'XAXX010101000',
+          email: newClientEmail.trim() || 'contacto@cliente.com',
+          address: newClientAddress.trim() || 'Dirección no especificada',
+          phone: newClientPhone.trim() || 'S/N',
+          whatsapp: newClientWhatsapp.trim() || newClientPhone.trim() || 'S/N',
+          model: newClientModel.trim(),
+          fault: newClientFault.trim(),
+          status: 'Activo',
+          departments: [
+            {
+              id: `dep-${Date.now()}-1`,
+              name: 'Planta / Matriz Principal',
+              contactName: newClientName.trim(),
+              phone: newClientPhone.trim() || 'S/N',
+              address: newClientAddress.trim() || 'Dirección no especificada'
+            }
+          ]
+        });
+        showFeedback('success', `¡Cliente "${newClientName.trim()}" registrado y sincronizado con éxito!`);
+      }
+
+      setIsClientModalOpen(false);
+      setNewClientName('');
+      setNewClientTaxId('');
+      setNewClientEmail('');
+      setNewClientAddress('');
+      setNewClientPhone('');
+      setNewClientWhatsapp('');
+      setNewClientModel('');
+      setNewClientFault('');
+    } catch (err: any) {
+      console.error('Error al guardar cliente:', err);
+      showFeedback('error', 'Ocurrió un problema al guardar el cliente.');
+    } finally {
+      setIsClientSubmitting(false);
+    }
   };
 
   const handleCreatePart = (e: React.FormEvent) => {
@@ -125,6 +154,24 @@ export const ClientsAndCatalog: React.FC = () => {
   return (
     <div className="space-y-6">
       
+      {/* Feedback Banner */}
+      {feedbackMsg && (
+        <div
+          className={`p-4 rounded-2xl flex items-center space-x-3 text-sm font-bold shadow-xs border ${
+            feedbackMsg.type === 'success'
+              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+              : 'bg-rose-50 text-rose-800 border-rose-200'
+          }`}
+        >
+          {feedbackMsg.type === 'success' ? (
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+          ) : (
+            <XCircle className="w-5 h-5 text-rose-600 shrink-0" />
+          )}
+          <span>{feedbackMsg.text}</span>
+        </div>
+      )}
+
       {/* Top Header Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
         
@@ -497,27 +544,29 @@ export const ClientsAndCatalog: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Modelo y Falla */}
+                {/* Modelo y Falla (Opcionales) */}
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Modelo de Equipo / Aparato *</label>
+                  <label className="font-semibold text-slate-700 block mb-1">
+                    Modelo de Equipo / Sistema <span className="text-slate-400 font-normal">(Opcional)</span>
+                  </label>
                   <input
                     type="text"
-                    required
                     value={newClientModel}
                     onChange={e => setNewClientModel(e.target.value)}
-                    placeholder="Ej. Minisplit Inverter Carrier 2 TR / Refrigerador Industrial Mabe"
+                    placeholder="Ej. Minisplit Inverter Carrier 2 TR / Refrigerador Comercial"
                     className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white text-slate-800 text-xs font-medium"
                   />
                 </div>
 
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Falla / Descripción del Problema *</label>
+                  <label className="font-semibold text-slate-700 block mb-1">
+                    Falla / Notas Iniciales <span className="text-slate-400 font-normal">(Opcional)</span>
+                  </label>
                   <textarea
-                    required
-                    rows={3}
+                    rows={2}
                     value={newClientFault}
                     onChange={e => setNewClientFault(e.target.value)}
-                    placeholder="Ej. No enciende, tira agua por la bandeja principal y hace un ruido metálico inusual..."
+                    placeholder="Ej. Mantenimiento preventivo periódico programado..."
                     className="w-full border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:bg-white text-slate-800 text-xs font-medium resize-none"
                   />
                 </div>
@@ -526,16 +575,21 @@ export const ClientsAndCatalog: React.FC = () => {
               <div className="p-4 border-t border-slate-100 bg-slate-50 shrink-0 flex items-center justify-end space-x-2">
                 <button
                   type="button"
+                  disabled={isClientSubmitting}
                   onClick={() => setIsClientModalOpen(false)}
-                  className="px-4 py-2 border border-slate-300 bg-white rounded-lg text-xs font-semibold text-slate-700"
+                  className="px-4 py-2 border border-slate-300 bg-white rounded-lg text-xs font-semibold text-slate-700 cursor-pointer disabled:opacity-50"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs shadow-md"
+                  disabled={isClientSubmitting}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs shadow-md cursor-pointer disabled:opacity-50 flex items-center space-x-1.5"
                 >
-                  Guardar Cliente
+                  {isClientSubmitting && (
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  )}
+                  <span>{isClientSubmitting ? 'Guardando...' : 'Guardar Cliente'}</span>
                 </button>
               </div>
             </form>

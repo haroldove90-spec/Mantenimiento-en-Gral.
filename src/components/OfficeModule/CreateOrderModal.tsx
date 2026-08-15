@@ -381,7 +381,7 @@ export const CreateOrderModal: React.FC<{ isOpen: boolean; onClose: () => void }
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Teléfono / WhatsApp *
+                      Teléfono / WhatsApp <span className="text-slate-400 font-normal">(Opcional)</span>
                     </label>
                     <div className="relative">
                       <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -391,7 +391,6 @@ export const CreateOrderModal: React.FC<{ isOpen: boolean; onClose: () => void }
                         onChange={e => setNewClientPhone(e.target.value)}
                         placeholder="Ej. 3312345678"
                         className="w-full pl-9 pr-3 py-2 bg-white border border-slate-300 text-slate-800 text-xs sm:text-sm rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-hidden font-medium"
-                        required={clientMode === 'new'}
                       />
                     </div>
                   </div>
@@ -400,7 +399,7 @@ export const CreateOrderModal: React.FC<{ isOpen: boolean; onClose: () => void }
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Dirección / Domicilio *
+                      Dirección / Domicilio <span className="text-slate-400 font-normal">(Opcional)</span>
                     </label>
                     <div className="relative">
                       <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -410,7 +409,6 @@ export const CreateOrderModal: React.FC<{ isOpen: boolean; onClose: () => void }
                         onChange={e => setNewClientAddress(e.target.value)}
                         placeholder="Ej. Av. Hidalgo 450, Centro"
                         className="w-full pl-9 pr-3 py-2 bg-white border border-slate-300 text-slate-800 text-xs sm:text-sm rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-hidden font-medium"
-                        required={clientMode === 'new'}
                       />
                     </div>
                   </div>

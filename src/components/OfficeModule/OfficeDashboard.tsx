@@ -30,7 +30,17 @@ import {
   ShieldAlert,
   Phone,
   Send,
-  Trash2
+  Trash2,
+  Sparkles,
+  ArrowUp,
+  ArrowDown,
+  Map,
+  ExternalLink,
+  CalendarDays,
+  Compass,
+  UserCheck,
+  PhoneCall,
+  UserPlus
 } from 'lucide-react';
 
 const STAGES: OrderStatus[] = [
@@ -65,8 +75,12 @@ export const OfficeDashboard: React.FC = () => {
 
   const [viewType, setViewType] = useState<'kanban' | 'list'>('list');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTechRoute, setSelectedTechRoute] = useState<string>(technicians[0]?.id || '');
+  
+  // Routes & Scheduling state
+  const [selectedTechRoute, setSelectedTechRoute] = useState<string>('ALL');
   const [selectedRouteDate, setSelectedRouteDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [dateFilterMode, setDateFilterMode] = useState<'all' | 'specific'>('all');
+  const [routeFeedbackMsg, setRouteFeedbackMsg] = useState<string | null>(null);
 
   // Modals state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -90,10 +104,84 @@ export const OfficeDashboard: React.FC = () => {
       (o.equipmentType || '').toLowerCase().includes(q)
   );
 
-  // Route calculation for active technician
-  const currentTechRouteOrders = orders
-    .filter(o => o.technicianId === selectedTechRoute && o.status !== 'Cobrado/Cerrado')
-    .sort((a, b) => (a.routeOrder || 99) - (b.routeOrder || 99));
+  // Active unclosed orders
+  const activeUnclosedOrders = orders.filter(o => o.status !== 'Cobrado/Cerrado');
+
+  // Orders not yet assigned to any technician or in need of scheduling
+  const unassignedRouteOrders = activeUnclosedOrders.filter(
+    o => !o.technicianId || o.status === 'Pendiente de Visita'
+  );
+
+  // Route calculation for active technician / filter
+  const currentTechRouteOrders = activeUnclosedOrders
+    .filter(o => {
+      // Tech filter
+      if (selectedTechRoute === 'UNASSIGNED') {
+        if (o.technicianId) return false;
+      } else if (selectedTechRoute !== 'ALL') {
+        if (o.technicianId !== selectedTechRoute) return false;
+      }
+      // Date filter
+      if (dateFilterMode === 'specific' && selectedRouteDate) {
+        if (o.scheduledDate !== selectedRouteDate) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      // Priority ordering first if no route order, else routeOrder
+      if (a.scheduledDate !== b.scheduledDate) {
+        return (a.scheduledDate || '').localeCompare(b.scheduledDate || '');
+      }
+      return (a.routeOrder || 99) - (b.routeOrder || 99);
+    });
+
+  // Auto-optimize and generate routes intelligently
+  const handleAutoOptimizeRoutes = () => {
+    let count = 0;
+    const targetTechs = selectedTechRoute === 'ALL' || selectedTechRoute === 'UNASSIGNED'
+      ? technicians
+      : technicians.filter(t => t.id === selectedTechRoute);
+
+    // If unassigned orders exist, distribute them among available technicians
+    const unassigned = orders.filter(o => !o.technicianId && o.status !== 'Cobrado/Cerrado');
+    if (unassigned.length > 0 && targetTechs.length > 0) {
+      unassigned.forEach((ord, index) => {
+        const assignedTech = targetTechs[index % targetTechs.length];
+        assignTechnician(ord.id, assignedTech.id, index + 1, ord.scheduledDate || selectedRouteDate);
+        count++;
+      });
+    }
+
+    // Now re-sequence orders per technician by priority (Alta -> Media -> Baja)
+    targetTechs.forEach(t => {
+      const techOrders = orders.filter(o => o.technicianId === t.id && o.status !== 'Cobrado/Cerrado');
+      const priorityWeight: Record<string, number> = { Alta: 1, Media: 2, Baja: 3 };
+      
+      techOrders.sort((a, b) => {
+        const weightA = priorityWeight[a.priority] || 2;
+        const weightB = priorityWeight[b.priority] || 2;
+        return weightA - weightB;
+      });
+
+      techOrders.forEach((ord, idx) => {
+        const newPos = idx + 1;
+        updateOrderRoute(ord.id, newPos, ord.scheduledDate || selectedRouteDate);
+        count++;
+      });
+    });
+
+    setRouteFeedbackMsg(`¡Rutas optimizadas y generadas automáticamente con éxito (${count} folios organizados)!`);
+    setTimeout(() => setRouteFeedbackMsg(null), 5000);
+  };
+
+  // Move route order up/down
+  const handleMoveRoutePosition = (orderId: string, currentPos: number, direction: 'up' | 'down') => {
+    const newPos = direction === 'up' ? Math.max(1, currentPos - 1) : currentPos + 1;
+    const targetOrd = orders.find(o => o.id === orderId);
+    if (targetOrd) {
+      updateOrderRoute(orderId, newPos, targetOrd.scheduledDate || selectedRouteDate);
+    }
+  };
 
   const handleReopenWarranty = (e: React.FormEvent) => {
     e.preventDefault();
@@ -469,103 +557,351 @@ export const OfficeDashboard: React.FC = () => {
       {/* SUBMODULE 2: AGENDA Y RUTAS DE ATENCIÓN OPTIMIZADAS */}
       {activeTab === 'routes' && (
         <div className="space-y-6">
-          <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          
+          {/* Feedback banner for routes */}
+          {routeFeedbackMsg && (
+            <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl flex items-center space-x-3 text-sm font-bold shadow-xs">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              <span>{routeFeedbackMsg}</span>
+            </div>
+          )}
+
+          {/* Main Controls Card */}
+          <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs space-y-5">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <div>
-                <h3 className="text-base font-bold text-slate-900">Programación y Generación de Rutas Optimizadas</h3>
-                <p className="text-xs text-slate-500">Asignación de folios por técnico según zonas geográficas y direcciones de entrega</p>
+                <div className="flex items-center space-x-2">
+                  <span className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+                    <Navigation className="w-4 h-4" />
+                  </span>
+                  <h3 className="text-lg font-bold text-slate-900">Programación y Generación de Rutas Optimizadas</h3>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Planificación logística, secuencia inteligente por cercanía/urgencia y navegación GPS directa para técnicos.
+                </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center space-x-2 text-xs">
-                  <span className="font-bold text-slate-700">Técnico:</span>
-                  <select
-                    value={selectedTechRoute}
-                    onChange={e => setSelectedTechRoute(e.target.value)}
-                    className="bg-slate-100 border border-slate-300 text-slate-900 font-bold px-3 py-2 rounded-xl focus:outline-hidden"
-                  >
-                    {technicians.map(t => (
-                      <option key={t.id} value={t.id}>
-                        {t.name} ({t.specialty})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex items-center space-x-2 text-xs">
-                  <span className="font-bold text-slate-700">Fecha:</span>
-                  <input
-                    type="date"
-                    value={selectedRouteDate}
-                    onChange={e => setSelectedRouteDate(e.target.value)}
-                    className="bg-slate-100 border border-slate-300 text-slate-900 font-bold px-3 py-1.5 rounded-xl"
-                  />
-                </div>
+              {/* Action Button: Auto-Optimize & Generate Routes */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={handleAutoOptimizeRoutes}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center space-x-2 cursor-pointer"
+                  title="Asignar y ordenar paradas de ruta automáticamente según urgencia y disponibilidad"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-300" />
+                  <span>⚡ Generar y Optimizar Rutas Automáticas</span>
+                </button>
               </div>
             </div>
 
-            {/* Tech Route List */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-bold uppercase text-slate-500 tracking-wider">
-                Secuencia de Visitas Programadas en Domicilio ({currentTechRouteOrders.length})
-              </h4>
+            {/* Filter Bar */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-3 border-t border-slate-100">
+              
+              {/* Filter by Technician */}
+              <div>
+                <label className="text-xs font-bold text-slate-600 block mb-1.5 flex items-center space-x-1">
+                  <UserCheck className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Filtrar por Técnico:</span>
+                </label>
+                <select
+                  value={selectedTechRoute}
+                  onChange={e => setSelectedTechRoute(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 text-slate-900 font-bold px-3 py-2 rounded-xl text-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="ALL">🌐 Todos los Técnicos ({activeUnclosedOrders.length} folios)</option>
+                  <option value="UNASSIGNED">⚠️ Órdenes Sin Asignar ({orders.filter(o => !o.technicianId && o.status !== 'Cobrado/Cerrado').length})</option>
+                  {technicians.map(t => {
+                    const techCount = activeUnclosedOrders.filter(o => o.technicianId === t.id).length;
+                    return (
+                      <option key={t.id} value={t.id}>
+                        👨‍🔧 {t.name} ({techCount} asignados - {t.specialty})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
 
-              {currentTechRouteOrders.length === 0 ? (
-                <div className="p-8 text-center text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200 font-medium text-xs">
-                  No hay servicios programados en la ruta para este técnico en la fecha seleccionada.
+              {/* Date Filter Mode & Selector */}
+              <div className="sm:col-span-1 lg:col-span-2 flex flex-col sm:flex-row items-start sm:items-end gap-2">
+                <div className="flex-1 w-full">
+                  <label className="text-xs font-bold text-slate-600 block mb-1.5 flex items-center space-x-1">
+                    <CalendarDays className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Filtro de Fecha:</span>
+                  </label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => setDateFilterMode('all')}
+                      className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                        dateFilterMode === 'all'
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      Todas las Fechas
+                    </button>
+                    <button
+                      onClick={() => {
+                        setDateFilterMode('specific');
+                        setSelectedRouteDate(new Date().toISOString().split('T')[0]);
+                      }}
+                      className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                        dateFilterMode === 'specific' && selectedRouteDate === new Date().toISOString().split('T')[0]
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      Hoy
+                    </button>
+                    <input
+                      type="date"
+                      value={selectedRouteDate}
+                      onChange={e => {
+                        setSelectedRouteDate(e.target.value);
+                        setDateFilterMode('specific');
+                      }}
+                      className="bg-slate-50 border border-slate-300 text-slate-900 font-bold px-3 py-1.5 rounded-xl text-xs focus:outline-hidden"
+                    />
+                  </div>
                 </div>
-              ) : (
-                currentTechRouteOrders.map((ord, idx) => {
+              </div>
+
+            </div>
+
+          </div>
+
+          {/* Quick Tray: Unassigned Orders Ready to be Routed */}
+          {unassignedRouteOrders.length > 0 && selectedTechRoute !== 'UNASSIGNED' && (
+            <div className="bg-amber-50/70 border border-amber-200 p-4 sm:p-5 rounded-2xl space-y-3 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <AlertCircle className="w-5 h-5 text-amber-600" />
+                  <h4 className="font-bold text-slate-900 text-sm">
+                    Órdenes Pendientes de Atención / Asignación ({unassignedRouteOrders.length})
+                  </h4>
+                </div>
+                <span className="text-[11px] font-semibold text-amber-700 bg-amber-100 px-2.5 py-0.5 rounded-full border border-amber-200">
+                  Requieren Programación
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {unassignedRouteOrders.slice(0, 6).map(ord => (
+                  <div key={ord.id} className="bg-white border border-amber-200/80 p-3 rounded-xl shadow-2xs space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-bold text-xs text-blue-600">{ord.folio}</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        ord.priority === 'Alta' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
+                      }`}>
+                        {ord.priority}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-900 text-xs truncate">{ord.clientName}</p>
+                      <p className="text-[11px] text-slate-500 truncate">{ord.equipmentType}</p>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                      <select
+                        defaultValue=""
+                        onChange={e => {
+                          if (e.target.value) {
+                            assignTechnician(ord.id, e.target.value, 1, ord.scheduledDate || selectedRouteDate);
+                          }
+                        }}
+                        className="bg-slate-50 border border-slate-300 text-slate-800 text-[11px] font-medium rounded-lg p-1 flex-1 focus:outline-hidden"
+                      >
+                        <option value="" disabled>Asignar a técnico...</option>
+                        {technicians.map(t => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Scheduled Routes Sequence */}
+          <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-bold uppercase text-slate-800 tracking-wider flex items-center space-x-2">
+                  <span>Secuencia de Visitas Programadas en Domicilio</span>
+                  <span className="bg-blue-100 text-blue-800 text-xs px-2.5 py-0.5 rounded-full font-bold">
+                    {currentTechRouteOrders.length}
+                  </span>
+                </h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {dateFilterMode === 'all' ? 'Mostrando todos los servicios agendados' : `Servicios agendados para ${selectedRouteDate}`}
+                </p>
+              </div>
+            </div>
+
+            {currentTechRouteOrders.length === 0 ? (
+              <div className="p-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 space-y-3">
+                <Navigation className="w-10 h-10 text-slate-300 mx-auto" />
+                <p className="text-slate-600 font-bold text-sm">
+                  No hay servicios programados en la ruta con los filtros actuales.
+                </p>
+                <p className="text-slate-400 text-xs max-w-md mx-auto">
+                  Selecciona "Todos los Técnicos" o haz clic en "⚡ Generar y Optimizar Rutas Automáticas" para programar los servicios activos.
+                </p>
+                <button
+                  onClick={handleAutoOptimizeRoutes}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold inline-flex items-center space-x-1.5 shadow-xs cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-300" />
+                  <span>Generar Rutas Ahora</span>
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {currentTechRouteOrders.map((ord, idx) => {
                   const client = clients.find(c => c.id === ord.clientId);
-                  const dept = client?.departments.find(d => d.id === ord.departmentId);
+                  const dept = client?.departments?.find(d => d.id === ord.departmentId);
+                  const address = dept?.address || client?.address || client?.deliveryAddress || client?.fiscalAddress || 'Ubicación General';
+                  const contactName = dept?.contactName || client?.name || 'Contacto en Sitio';
+                  const contactPhone = dept?.phone || client?.phone || client?.whatsapp || '';
+                  const assignedTech = technicians.find(t => t.id === ord.technicianId);
+                  const currentPos = ord.routeOrder || idx + 1;
 
                   return (
                     <div
                       key={ord.id}
-                      className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-white transition-all shadow-2xs"
+                      className="bg-slate-50 hover:bg-white border border-slate-200 p-4 sm:p-5 rounded-2xl flex flex-col lg:flex-row lg:items-center justify-between gap-4 transition-all shadow-2xs hover:shadow-md"
                     >
-                      <div className="flex items-center space-x-4">
-                        <div className="w-10 h-10 rounded-full bg-emerald-600 text-white font-black text-sm flex items-center justify-center shrink-0">
-                          #{ord.routeOrder || idx + 1}
+                      {/* Left: Position Badge & Order Info */}
+                      <div className="flex items-start space-x-4 flex-1">
+                        <div className="flex flex-col items-center justify-center shrink-0">
+                          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 text-white font-black text-base flex items-center justify-center shadow-xs">
+                            #{currentPos}
+                          </div>
+                          <span className="text-[10px] font-bold text-slate-400 mt-1 uppercase">Parada</span>
                         </div>
-                        <div>
-                          <div className="flex items-center space-x-2">
-                            <span className="font-mono font-bold text-blue-600">{ord.folio}</span>
+
+                        <div className="space-y-1.5 flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-mono font-bold text-blue-600 text-sm bg-blue-50 px-2.5 py-0.5 rounded-lg border border-blue-200">
+                              {ord.folio}
+                            </span>
                             <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-800">
                               {ord.status}
                             </span>
+                            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                              ord.priority === 'Alta' ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'
+                            }`}>
+                              Prioridad {ord.priority}
+                            </span>
+                            {ord.scheduledDate && (
+                              <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md flex items-center space-x-1">
+                                <Calendar className="w-3 h-3 text-slate-400" />
+                                <span>{ord.scheduledDate}</span>
+                              </span>
+                            )}
                           </div>
-                          <h5 className="font-bold text-slate-900 text-sm mt-0.5">{ord.clientName}</h5>
-                          <p className="text-xs text-slate-500 flex items-center mt-0.5">
+
+                          <h5 className="font-bold text-slate-900 text-base leading-snug truncate">
+                            {ord.clientName}
+                          </h5>
+
+                          <p className="text-xs text-slate-600 flex items-center">
                             <MapPin className="w-3.5 h-3.5 mr-1 text-slate-400 shrink-0" />
-                            <span>{dept?.address || client?.deliveryAddress || client?.fiscalAddress || 'Domicilio en registro'}</span>
+                            <span className="truncate">{address}</span>
+                          </p>
+
+                          <p className="text-xs text-slate-500 flex items-center space-x-3">
+                            <span>🛠️ <strong>{ord.equipmentType}</strong></span>
+                            <span>•</span>
+                            <span>👤 {contactName} {contactPhone && `(${contactPhone})`}</span>
                           </p>
                         </div>
                       </div>
 
-                      <div className="flex items-center space-x-3 shrink-0 justify-end">
-                        <div className="text-right text-xs">
-                          <span className="font-bold text-indigo-900 block">{ord.equipmentType || 'Equipo General'}</span>
-                          <span className="text-slate-500">Contacto: {dept?.contactName} ({dept?.phone})</span>
+                      {/* Middle: Technician Assignment */}
+                      <div className="bg-white p-3 rounded-xl border border-slate-200 shrink-0 flex flex-col justify-center text-xs space-y-1 min-w-[200px]">
+                        <span className="text-slate-400 font-bold text-[10px] uppercase">Técnico Asignado:</span>
+                        <div className="flex items-center space-x-2 font-bold text-slate-800">
+                          <span>👨‍🔧</span>
+                          <span>{assignedTech?.name || ord.technicianName || 'Sin Asignar'}</span>
                         </div>
-
-                        <button
-                          onClick={() => {
-                            const newPos = prompt('Ingresa la nueva posición de orden en ruta:', String(ord.routeOrder || idx + 1));
-                            if (newPos && !isNaN(parseInt(newPos))) {
-                              updateOrderRoute(ord.id, parseInt(newPos), selectedRouteDate);
+                        <select
+                          value={ord.technicianId || ''}
+                          onChange={e => {
+                            if (e.target.value) {
+                              assignTechnician(ord.id, e.target.value, ord.routeOrder || 1, ord.scheduledDate || selectedRouteDate);
                             }
                           }}
-                          className="bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-bold px-3 py-2 rounded-xl"
+                          className="bg-slate-50 border border-slate-200 text-slate-700 text-[11px] font-medium rounded-lg p-1 mt-1 focus:outline-hidden cursor-pointer"
                         >
-                          Reordenar Posición
+                          <option value="" disabled>Cambiar Técnico...</option>
+                          {technicians.map(t => (
+                            <option key={t.id} value={t.id}>{t.name} ({t.specialty})</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Right: Actions (GPS Map, Up/Down, Reorder, Details) */}
+                      <div className="flex flex-wrap lg:flex-col items-center lg:items-end justify-between gap-2 shrink-0">
+                        
+                        {/* GPS Navigation Link */}
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer"
+                          title="Abrir ubicación en Google Maps"
+                        >
+                          <Compass className="w-3.5 h-3.5" />
+                          <span>🗺️ Navegar GPS</span>
+                          <ExternalLink className="w-3 h-3 ml-0.5" />
+                        </a>
+
+                        {/* Order Sequence Reordering Buttons */}
+                        <div className="flex items-center space-x-1">
+                          <button
+                            onClick={() => handleMoveRoutePosition(ord.id, currentPos, 'up')}
+                            className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 cursor-pointer"
+                            title="Subir parada de ruta"
+                          >
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleMoveRoutePosition(ord.id, currentPos, 'down')}
+                            className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 cursor-pointer"
+                            title="Bajar parada de ruta"
+                          >
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              const newPos = prompt('Ingresa el número de posición en ruta:', String(currentPos));
+                              if (newPos && !isNaN(parseInt(newPos))) {
+                                updateOrderRoute(ord.id, parseInt(newPos), ord.scheduledDate || selectedRouteDate);
+                              }
+                            }}
+                            className="bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-bold px-2.5 py-1.5 rounded-lg cursor-pointer"
+                          >
+                            #{currentPos}
+                          </button>
+                        </div>
+
+                        {/* Detail Button */}
+                        <button
+                          onClick={() => setDetailOrder(ord)}
+                          className="text-blue-600 hover:text-blue-800 text-xs font-bold flex items-center space-x-1 cursor-pointer pt-1"
+                        >
+                          <span>Ver Orden Completa</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
                         </button>
+
                       </div>
                     </div>
                   );
-                })
-              )}
-            </div>
+                })}
+              </div>
+            )}
+
           </div>
         </div>
       )}

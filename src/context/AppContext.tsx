@@ -4,6 +4,7 @@ import {
   RoleType,
   ServiceOrder,
   Client,
+  Department,
   SparePart,
   Technician,
   Notification,
@@ -81,7 +82,7 @@ interface AppContextType {
   sendBudgetToClient: (orderId: string) => void;
   updateOrder: (id: string, orderData: Partial<ServiceOrder>) => void;
   deleteOrder: (id: string) => void;
-  addClient: (client: Omit<Client, 'id'>) => void;
+  addClient: (client: Omit<Client, 'id'>) => Promise<Client>;
   updateClient: (id: string, clientData: Partial<Client>) => void;
   deleteClient: (id: string) => void;
   toggleClientStatus: (id: string) => void;
@@ -409,7 +410,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     description,
     priority,
     technicianId,
-    scheduledDate
+    scheduledDate,
+    clientName,
+    departmentName
   }: {
     clientId: string;
     departmentId: string;
@@ -418,22 +421,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     priority: PriorityType;
     technicianId?: string;
     scheduledDate?: string;
+    clientName?: string;
+    departmentName?: string;
   }): ServiceOrder => {
     const client = clients.find(c => c.id === clientId);
-    const department = client?.departments.find(d => d.id === departmentId);
+    const department = client?.departments?.find(d => d.id === departmentId);
     const tech = technicians.find(t => t.id === technicianId);
 
     const newFolioNumber = 1000 + orders.length + 1;
     const folio = `OS-${newFolioNumber}`;
     const nowStr = new Date().toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
 
+    const finalClientName = client?.name || clientName || 'Cliente';
+    const finalDeptName = department?.name || departmentName || 'Matriz Principal';
+
     const newOrder: ServiceOrder = {
       id: `ord-${Date.now()}`,
       folio,
       clientId,
-      clientName: client?.name || 'Cliente Desconocido',
+      clientName: finalClientName,
       departmentId,
-      departmentName: department?.name || 'Departamento Principal',
+      departmentName: finalDeptName,
       equipmentType: equipmentType || 'Equipo General',
       description,
       priority,
@@ -481,6 +489,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       title: 'Nueva OS Registrada',
       message: `Orden ${folio} creada para ${newOrder.clientName}.`
     });
+
+    // Asynchronously try to sync to Supabase service_orders if available
+    (async () => {
+      try {
+        const orderPayload: any = {
+          folio: newOrder.folio,
+          client_name: finalClientName,
+          client_email: client?.email || '',
+          department_name: finalDeptName,
+          equipment_type: newOrder.equipmentType,
+          description: newOrder.description,
+          priority: newOrder.priority,
+          status: 'En Diagnóstico', // valid order_stage enum in Supabase
+          technician_name: tech?.name || null,
+          scheduled_date: newOrder.scheduledDate,
+          is_warranty: false,
+          timeline: newOrder.timeline
+        };
+
+        if (clientId && clientId.includes('-') && !clientId.startsWith('cli-')) {
+          orderPayload.client_id = clientId;
+        }
+        if (departmentId && departmentId.includes('-') && !departmentId.startsWith('dept-')) {
+          orderPayload.department_id = departmentId;
+        }
+        if (tech?.id && tech.id.includes('-') && !tech.id.startsWith('tech-')) {
+          orderPayload.technician_id = tech.id;
+        }
+
+        const { data, error } = await supabase.from('service_orders').insert([orderPayload]).select();
+        if (error) {
+          // If schema doesn't have extended columns yet, try inserting core schema columns
+          const corePayload: any = {
+            folio: newOrder.folio,
+            equipment_type: newOrder.equipmentType,
+            description: newOrder.description,
+            priority: newOrder.priority,
+            status: 'En Diagnóstico',
+            scheduled_date: newOrder.scheduledDate
+          };
+          if (orderPayload.client_id) corePayload.client_id = orderPayload.client_id;
+          if (orderPayload.department_id) corePayload.department_id = orderPayload.department_id;
+          if (orderPayload.technician_id) corePayload.technician_id = orderPayload.technician_id;
+
+          const { data: coreData } = await supabase.from('service_orders').insert([corePayload]).select();
+          if (coreData && coreData[0]?.id) {
+            setOrders(current => current.map(o => o.id === newOrder.id ? { ...o, id: coreData[0].id } : o));
+          }
+        } else if (data && data[0]?.id) {
+          const dbId = data[0].id;
+          setOrders(current => current.map(o => o.id === newOrder.id ? { ...o, id: dbId } : o));
+        }
+      } catch (err) {
+        console.warn('Silent Supabase order sync notice:', err);
+      }
+    })();
 
     return newOrder;
   };
@@ -901,11 +965,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const addClient = async (clientData: Omit<Client, 'id'>) => {
-    const newClient: Client = {
+  const addClient = async (clientData: Omit<Client, 'id'>): Promise<Client> => {
+    const tempId = `cli-${Date.now()}`;
+    const defaultDepts: Department[] = (clientData.departments && clientData.departments.length > 0)
+      ? clientData.departments
+      : [
+          {
+            id: `dept-${tempId}-1`,
+            name: 'Matriz Principal',
+            contactName: clientData.name || 'Contacto Principal',
+            phone: clientData.phone || '',
+            address: clientData.address || ''
+          }
+        ];
+
+    let newClient: Client = {
       ...clientData,
-      id: `cli-${Date.now()}`
+      id: tempId,
+      departments: defaultDepts,
+      status: clientData.status || 'Activo'
     };
+
     setClients(prev => [...prev, newClient]);
 
     // Sync to Supabase clients table adaptively
@@ -930,20 +1010,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (error) {
         // Retry with minimal required columns
         console.warn('Clients upsert warning, retrying with core columns:', error.message);
-        await supabase.from('clients').insert([{
+        const { data: retryData } = await supabase.from('clients').insert([{
           name: clientData.name,
           contact_name: clientData.name,
           contact_phone: clientData.phone || 'S/N',
           contact_email: clientData.email || '',
-          tax_id: clientData.taxId || ''
-        }]);
+          tax_id: clientData.taxId || 'XAXX010101000'
+        }]).select();
+        if (retryData && retryData[0]?.id) {
+          const dbId = retryData[0].id;
+          newClient = { ...newClient, id: dbId };
+          setClients(prev => prev.map(c => c.id === tempId ? newClient : c));
+        }
       } else if (data && data[0]?.id) {
         // Update local id to Supabase UUID
-        setClients(prev => prev.map(c => c.id === newClient.id ? { ...c, id: data[0].id } : c));
+        const dbId = data[0].id;
+        newClient = { ...newClient, id: dbId };
+        setClients(prev => prev.map(c => c.id === tempId ? newClient : c));
+      }
+
+      // Also create department row in Supabase departments table if client has UUID
+      if (newClient.id && newClient.id.includes('-') && !newClient.id.startsWith('cli-')) {
+        try {
+          const deptPayload = {
+            client_id: newClient.id,
+            name: defaultDepts[0]?.name || 'Matriz Principal',
+            contact_name: defaultDepts[0]?.contactName || clientData.name || 'Contacto Principal',
+            phone: defaultDepts[0]?.phone || clientData.phone || 'S/N',
+            address: defaultDepts[0]?.address || clientData.address || 'Ubicación General'
+          };
+          const { data: deptData } = await supabase.from('departments').insert([deptPayload]).select();
+          if (deptData && deptData[0]?.id) {
+            const deptUuid = deptData[0].id;
+            newClient = {
+              ...newClient,
+              departments: [{
+                ...defaultDepts[0],
+                id: deptUuid
+              }]
+            };
+            setClients(prev => prev.map(c => c.id === newClient.id ? newClient : c));
+          }
+        } catch (dErr) {
+          console.warn('Silent departments sync notice:', dErr);
+        }
       }
     } catch (err) {
       console.warn('Error sincronizando cliente en Supabase:', err);
     }
+
+    return newClient;
   };
 
   const updateClient = async (id: string, clientData: Partial<Client>) => {

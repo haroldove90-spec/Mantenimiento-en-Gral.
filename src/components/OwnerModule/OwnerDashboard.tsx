@@ -1019,6 +1019,14 @@ ALTER TABLE IF EXISTS public.clients ADD COLUMN IF NOT EXISTS fault TEXT;
 ALTER TABLE IF EXISTS public.clients ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Activo';
 ALTER TABLE IF EXISTS public.clients ALTER COLUMN contact_name DROP NOT NULL;
 ALTER TABLE IF EXISTS public.clients ALTER COLUMN contact_phone DROP NOT NULL;
+ALTER TABLE IF EXISTS public.clients ALTER COLUMN contact_email DROP NOT NULL;
+
+ALTER TABLE IF EXISTS public.departments ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE IF EXISTS public.departments ADD COLUMN IF NOT EXISTS contact_name TEXT;
+ALTER TABLE IF EXISTS public.departments ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE IF EXISTS public.departments ALTER COLUMN address DROP NOT NULL;
+ALTER TABLE IF EXISTS public.departments ALTER COLUMN contact_name DROP NOT NULL;
+ALTER TABLE IF EXISTS public.departments ALTER COLUMN phone DROP NOT NULL;
 
 ALTER TABLE IF EXISTS public.service_orders ALTER COLUMN status TYPE TEXT USING status::text;
 ALTER TABLE IF EXISTS public.service_orders DROP CONSTRAINT IF EXISTS service_orders_status_check;
@@ -1033,6 +1041,7 @@ ALTER TABLE IF EXISTS public.service_orders ADD COLUMN IF NOT EXISTS timeline JS
 ALTER TABLE IF EXISTS public.service_orders ADD COLUMN IF NOT EXISTS is_warranty BOOLEAN DEFAULT false;
 ALTER TABLE IF EXISTS public.service_orders ADD COLUMN IF NOT EXISTS is_direct_delivery BOOLEAN DEFAULT false;
 ALTER TABLE IF EXISTS public.service_orders ALTER COLUMN client_id DROP NOT NULL;
+ALTER TABLE IF EXISTS public.service_orders ALTER COLUMN department_id DROP NOT NULL;
 
 -- 1.2 CREAR TABLAS SI NO EXISTEN
 CREATE TABLE IF NOT EXISTS public.system_users (
@@ -1053,7 +1062,7 @@ CREATE TABLE IF NOT EXISTS public.clients (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     tax_id TEXT,
-    contact_email TEXT UNIQUE,
+    contact_email TEXT,
     address TEXT,
     phone TEXT,
     whatsapp TEXT,
@@ -1064,6 +1073,16 @@ CREATE TABLE IF NOT EXISTS public.clients (
     delivery_address TEXT,
     contact_name TEXT,
     contact_phone TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.departments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id UUID REFERENCES public.clients(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    contact_name TEXT,
+    phone TEXT,
+    address TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -1128,6 +1147,7 @@ CREATE TABLE IF NOT EXISTS public.operating_expenses (
 -- 1.3 Habilitar RLS y Políticas de acceso total
 ALTER TABLE public.system_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.departments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.service_orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.spare_parts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.technicians ENABLE ROW LEVEL SECURITY;
@@ -1138,6 +1158,9 @@ CREATE POLICY "full_access_system_users" ON public.system_users FOR ALL USING (t
 
 DROP POLICY IF EXISTS "full_access_clients" ON public.clients;
 CREATE POLICY "full_access_clients" ON public.clients FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "full_access_departments" ON public.departments;
+CREATE POLICY "full_access_departments" ON public.departments FOR ALL USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "full_access_service_orders" ON public.service_orders;
 CREATE POLICY "full_access_service_orders" ON public.service_orders FOR ALL USING (true) WITH CHECK (true);

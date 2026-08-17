@@ -897,7 +897,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }): ServiceOrder => {
     const client = clients.find(c => c.id === clientId);
     const department = client?.departments?.find(d => d.id === departmentId);
-    const tech = technicians.find(t => t.id === technicianId);
+    let tech = technicians.find(
+      t =>
+        t.id === technicianId ||
+        t.name === technicianId ||
+        (t.email && technicianId && t.email.toLowerCase() === technicianId.toLowerCase())
+    );
+
+    // Fallback: If only 1 technician is in the system and no other was picked, default to him
+    if (!tech && technicians.length === 1) {
+      tech = technicians[0];
+    }
 
     const newFolioNumber = 1000 + orders.length + 1;
     const folio = `OS-${newFolioNumber}`;
@@ -930,7 +940,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           id: `tl-${Date.now()}`,
           timestamp: nowStr,
           title: 'Orden de Servicio Creada',
-          author: 'Oficina (Admin)',
+          author: currentUser?.name || 'Administración (Oficina)',
           note: `Folio: ${folio} | Equipo: ${equipmentType || 'General'}`
         }
       ]
@@ -941,7 +951,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         id: `tl-${Date.now() + 1}`,
         timestamp: nowStr,
         title: 'Asignado a Técnico y Ruta',
-        author: 'Oficina (Admin)',
+        author: currentUser?.name || 'Administración',
         note: `Técnico: ${tech.name}`
       });
 
@@ -949,7 +959,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addNotification({
         targetRole: 'tech',
         orderFolio: folio,
-        title: 'Nueva Visita Programada',
+        title: 'Nueva Visita Asignada',
         message: `Asignado servicio ${folio} para ${newOrder.clientName} (${newOrder.equipmentType}). Programado para ${newOrder.scheduledDate}.`
       });
     }
@@ -961,7 +971,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       targetRole: 'office',
       orderFolio: folio,
       title: 'Nueva OS Registrada',
-      message: `Orden ${folio} creada para ${newOrder.clientName}.`
+      message: `Orden ${folio} creada para ${newOrder.clientName}. Técnico: ${tech?.name || 'Sin Asignar'}`
     });
 
     addNotification({
@@ -1134,65 +1144,97 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const assignTechnician = (orderId: string, technicianId: string, routeOrder?: number, scheduledDate?: string) => {
-    const tech = technicians.find(t => t.id === technicianId);
-    if (!tech) return;
+    const tech = technicians.find(
+      t =>
+        t.id === technicianId ||
+        t.name === technicianId ||
+        (t.email && technicianId && t.email.toLowerCase() === technicianId.toLowerCase())
+    );
+    if (!tech) {
+      console.warn('Técnico no encontrado para ID/Nombre:', technicianId);
+      return;
+    }
 
     const nowStr = new Date().toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
+    const authorName = currentUser?.name || 'Administrador (Oficina)';
+    const newTimelineItem = {
+      id: `tl-${Date.now()}`,
+      timestamp: nowStr,
+      title: 'Técnico y Ruta Asignados / Reasignados',
+      author: authorName,
+      note: `Asignado a: ${tech.name} (${tech.specialty || 'General'})`
+    };
+
+    let targetFolio = '';
+    let targetClientName = '';
+    let targetEquip = '';
 
     setOrders(prev =>
       prev.map(ord => {
-        if (ord.id !== orderId) return ord;
+        if (ord.id !== orderId && ord.folio !== orderId) return ord;
+        targetFolio = ord.folio;
+        targetClientName = ord.clientName;
+        targetEquip = ord.equipmentType;
         return {
           ...ord,
           technicianId: tech.id,
           technicianName: tech.name,
           routeOrder: routeOrder || ord.routeOrder || 1,
           scheduledDate: scheduledDate || ord.scheduledDate || new Date().toISOString().split('T')[0],
-          timeline: [
-            ...ord.timeline,
-            {
-              id: `tl-${Date.now()}`,
-              timestamp: nowStr,
-              title: 'Ruta y Técnico Asignado',
-              author: 'Oficina (Logística)',
-              note: `Asignado a ${tech.name} en ruta`
-            }
-          ]
+          timeline: [...ord.timeline, newTimelineItem]
         };
       })
     );
 
-    const targetOrd = orders.find(o => o.id === orderId);
-    if (targetOrd) {
-      addNotification({
-        targetRole: 'tech',
-        orderFolio: targetOrd.folio,
-        title: 'Asignación de Servicio',
-        message: `Te han asignado la orden ${targetOrd.folio} (${targetOrd.clientName}) para ${targetOrd.equipmentType}.`
-      });
+    const targetOrd = orders.find(o => o.id === orderId || o.folio === orderId);
+    const finalFolio = targetOrd?.folio || targetFolio;
+    const finalClientName = targetOrd?.clientName || targetClientName || 'Cliente';
+    const finalEquipment = targetOrd?.equipmentType || targetEquip || 'General';
 
-      addNotification({
-        targetRole: 'office',
-        orderFolio: targetOrd.folio,
-        title: 'Técnico Asignado',
-        message: `La orden ${targetOrd.folio} ha sido asignada a ${tech.name}.`
-      });
+    // 1. Send High-Priority Realtime Notification to Technician
+    addNotification({
+      targetRole: 'tech',
+      orderFolio: finalFolio,
+      title: '📋 Nueva Orden Asignada a tu Ruta',
+      message: `Se te ha asignado la orden ${finalFolio} (${finalClientName}) para ${finalEquipment}.`
+    });
 
-      // Synchronize with Supabase
-      (async () => {
-        try {
-          const updatePayload: any = {
-            technician_name: tech.name,
-            scheduled_date: scheduledDate || targetOrd.scheduledDate || new Date().toISOString().split('T')[0],
-            route_order: routeOrder || targetOrd.routeOrder || 1
-          };
-          if (isUuid(tech.id)) updatePayload.technician_id = tech.id;
-          await supabase.from('service_orders').update(updatePayload).or(`id.eq.${orderId},folio.eq.${targetOrd.folio}`);
-        } catch (e) {
-          console.warn('Error sincronizando asignación de técnico en Supabase:', e);
+    // 2. Send Notification to Office
+    addNotification({
+      targetRole: 'office',
+      orderFolio: finalFolio,
+      title: 'Técnico Asignado',
+      message: `La orden ${finalFolio} ha sido asignada a ${tech.name}.`
+    });
+
+    // 3. Send Notification to Owner / Admin
+    addNotification({
+      targetRole: 'owner',
+      orderFolio: finalFolio,
+      title: 'Reasignación de Servicio',
+      message: `Orden ${finalFolio} asignada a ${tech.name} por ${authorName}.`
+    });
+
+    // 4. Synchronize immediately with Supabase service_orders
+    (async () => {
+      try {
+        const updatePayload: any = {
+          technician_name: tech.name,
+          technician_id: tech.id,
+          scheduled_date: scheduledDate || targetOrd?.scheduledDate || new Date().toISOString().split('T')[0],
+          route_order: routeOrder || targetOrd?.routeOrder || 1
+        };
+        if (targetOrd?.timeline) {
+          updatePayload.timeline = [...targetOrd.timeline, newTimelineItem];
         }
-      })();
-    }
+        await supabase
+          .from('service_orders')
+          .update(updatePayload)
+          .or(`id.eq.${orderId},folio.eq.${finalFolio}`);
+      } catch (e) {
+        console.warn('Error sincronizando asignación de técnico en Supabase:', e);
+      }
+    })();
   };
 
   const updateOrderRoute = (orderId: string, routeOrder: number, scheduledDate: string, notes?: string) => {

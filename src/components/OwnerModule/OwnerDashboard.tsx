@@ -1625,6 +1625,14 @@ DO $$ BEGIN
 
     DROP POLICY IF EXISTS "Public Access notifications" ON public.notifications;
     CREATE POLICY "Public Access notifications" ON public.notifications FOR ALL USING (true) WITH CHECK (true);
+END $$;
+
+-- 12. HABILITAR PUBLICACIÓN EN TIEMPO REAL (SUPABASE REALTIME)
+DO $$ BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.service_orders, public.notifications, public.technicians, public.operating_expenses, public.clients;
+EXCEPTION WHEN OTHERS THEN
+    -- Ignorar si ya están agregadas a la publicación
+    NULL;
 END $$;`}
               </pre>
             </div>
@@ -1644,6 +1652,7 @@ CREATE TABLE IF NOT EXISTS public.service_orders ( id UUID PRIMARY KEY DEFAULT g
 CREATE TABLE IF NOT EXISTS public.spare_parts ( id UUID PRIMARY KEY DEFAULT gen_random_uuid(), code TEXT NOT NULL UNIQUE, name TEXT NOT NULL, category TEXT DEFAULT 'General', unit_price NUMERIC(10,2) NOT NULL DEFAULT 0, stock INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'Activo', created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() );
 CREATE TABLE IF NOT EXISTS public.services ( id UUID PRIMARY KEY DEFAULT gen_random_uuid(), code TEXT NOT NULL UNIQUE, name TEXT NOT NULL, category TEXT DEFAULT 'Mantenimiento', description TEXT, base_price NUMERIC(10,2) NOT NULL DEFAULT 0, estimated_duration_hours NUMERIC(4,1) DEFAULT 1, warranty_days INTEGER DEFAULT 30, status TEXT NOT NULL DEFAULT 'Activo', created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() );
 CREATE TABLE IF NOT EXISTS public.operating_expenses ( id UUID PRIMARY KEY DEFAULT gen_random_uuid(), category TEXT NOT NULL, description TEXT NOT NULL, amount NUMERIC(10,2) NOT NULL, date DATE DEFAULT CURRENT_DATE, registered_by TEXT, payment_method TEXT DEFAULT 'Transferencia', invoice_folio TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() );
+CREATE TABLE IF NOT EXISTS public.notifications ( id UUID PRIMARY KEY DEFAULT gen_random_uuid(), target_role TEXT NOT NULL DEFAULT 'office', order_folio TEXT, title TEXT NOT NULL, message TEXT NOT NULL, read BOOLEAN DEFAULT false, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() );
 ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.departments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_users ENABLE ROW LEVEL SECURITY;
@@ -1652,6 +1661,7 @@ ALTER TABLE public.service_orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.spare_parts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.services ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.operating_expenses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Public Access clients" ON public.clients FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public Access departments" ON public.departments FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public Access system_users" ON public.system_users FOR ALL USING (true) WITH CHECK (true);
@@ -1659,7 +1669,9 @@ CREATE POLICY "Public Access technicians" ON public.technicians FOR ALL USING (t
 CREATE POLICY "Public Access service_orders" ON public.service_orders FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public Access spare_parts" ON public.spare_parts FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public Access services" ON public.services FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public Access operating_expenses" ON public.operating_expenses FOR ALL USING (true) WITH CHECK (true);`);
+CREATE POLICY "Public Access operating_expenses" ON public.operating_expenses FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public Access notifications" ON public.notifications FOR ALL USING (true) WITH CHECK (true);
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.service_orders, public.notifications, public.technicians, public.operating_expenses, public.clients; EXCEPTION WHEN OTHERS THEN NULL; END $$;`);
                   setCopiedSql(true);
                   setTimeout(() => setCopiedSql(false), 3000);
                 }}

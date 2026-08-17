@@ -742,34 +742,39 @@ export const OfficeDashboard: React.FC = () => {
 
                         {/* Tech Assigned & Scheduling (Span 5) */}
                         <div className="lg:col-span-5 bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
-                          <span className="text-[11px] font-bold text-slate-500 block uppercase tracking-wider">
-                            Técnico & Agenda en Ruta
-                          </span>
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="font-bold text-slate-500 uppercase tracking-wider">
+                              👨‍🔧 Técnico Responsable:
+                            </span>
+                            <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                              {ord.technicianName ? ord.technicianName : 'Sin Asignar'}
+                            </span>
+                          </div>
                           
-                          {ord.technicianName ? (
-                            <div className="text-xs sm:text-sm font-bold text-slate-900 flex items-center space-x-2">
-                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></span>
-                              <span className="truncate">{ord.technicianName}</span>
-                            </div>
-                          ) : (
-                            <select
-                              value=""
-                              onChange={e => assignTechnician(ord.id, e.target.value)}
-                              className="w-full bg-amber-50 border border-amber-300 text-amber-900 text-xs font-bold rounded-lg p-2 focus:outline-hidden"
-                            >
-                              <option value="">+ Asignar Técnico de Campo...</option>
-                              {technicians.map(t => (
-                                <option key={t.id} value={t.id}>
-                                  {t.name} ({t.specialty})
-                                </option>
-                              ))}
-                            </select>
-                          )}
+                          {/* Reassign Tech Dropdown */}
+                          <select
+                            value={ord.technicianId || ''}
+                            onChange={e => {
+                              if (e.target.value) {
+                                assignTechnician(ord.id, e.target.value, ord.routeOrder || 1, ord.scheduledDate);
+                              }
+                            }}
+                            className="w-full bg-white border border-slate-300 hover:border-blue-400 text-slate-800 text-xs font-bold rounded-xl p-2 focus:ring-2 focus:ring-blue-500 focus:outline-hidden cursor-pointer shadow-2xs"
+                          >
+                            <option value="" disabled>
+                              {ord.technicianName ? 'Cambiar / Reasignar Técnico...' : '+ Asignar Técnico de Campo...'}
+                            </option>
+                            {technicians.map(t => (
+                              <option key={t.id} value={t.id}>
+                                👨‍🔧 {t.name} ({t.specialty || 'General'})
+                              </option>
+                            ))}
+                          </select>
 
                           <div className="text-[11px] font-semibold text-slate-600 flex items-center justify-between pt-1 border-t border-slate-200/60">
                             <span className="flex items-center space-x-1">
                               <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                              <span>Fecha:</span>
+                              <span>Fecha Programada:</span>
                             </span>
                             <span className="font-bold text-slate-800">{ord.scheduledDate || 'Sin programar'}</span>
                           </div>
@@ -914,13 +919,32 @@ export const OfficeDashboard: React.FC = () => {
                               </select>
                             </div>
 
+                            {/* Quick Technician Reassign Dropdown */}
+                            <div className="pt-1 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                              <span className="text-slate-500 font-bold">👨‍🔧 Técnico:</span>
+                              <select
+                                value={ord.technicianId || ''}
+                                onChange={e => {
+                                  if (e.target.value) {
+                                    assignTechnician(ord.id, e.target.value, ord.routeOrder || 1, ord.scheduledDate);
+                                  }
+                                }}
+                                className="bg-slate-50 border border-slate-200 text-slate-800 text-[11px] font-bold rounded-lg px-2 py-0.5 focus:outline-hidden cursor-pointer max-w-[140px] truncate"
+                              >
+                                <option value="" disabled>
+                                  {ord.technicianName ? ord.technicianName : '+ Asignar...'}
+                                </option>
+                                {technicians.map(t => (
+                                  <option key={t.id} value={t.id}>
+                                    {t.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
                             <div className="pt-1 flex items-center justify-between text-xs">
-                              <span className="text-slate-600 font-medium truncate">
-                                {ord.technicianName ? (
-                                  <span className="text-slate-800 font-semibold">👨‍🔧 {ord.technicianName}</span>
-                                ) : (
-                                  <span className="text-amber-600 font-semibold">⚠️ Sin Técnico</span>
-                                )}
+                              <span className="text-slate-600 font-medium truncate text-[11px]">
+                                📅 {ord.scheduledDate || 'Sin fecha'}
                               </span>
 
                               <div className="flex items-center space-x-2">
@@ -1574,6 +1598,55 @@ export const OfficeDashboard: React.FC = () => {
                   {STAGES.map(s => (
                     <option key={s} value={s}>
                       {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Admin Reassign Technician Controller */}
+              <div className="bg-emerald-50/80 border border-emerald-200/90 rounded-xl p-3.5 space-y-2 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-emerald-900 text-xs flex items-center space-x-1.5">
+                    <Users className="w-4 h-4 text-emerald-600" />
+                    <span>👨‍🔧 Reasignar Técnico Responsable (Panel Admin)</span>
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-md">
+                    {detailOrder.technicianName ? `Asignado: ${detailOrder.technicianName}` : '⚠️ Sin Asignar'}
+                  </span>
+                </div>
+                <select
+                  value={detailOrder.technicianId || ''}
+                  onChange={e => {
+                    const targetTechId = e.target.value;
+                    const tech = technicians.find(t => t.id === targetTechId);
+                    if (tech) {
+                      assignTechnician(detailOrder.id, tech.id, detailOrder.routeOrder || 1, detailOrder.scheduledDate);
+                      const nowStr = new Date().toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
+                      setDetailOrder({
+                        ...detailOrder,
+                        technicianId: tech.id,
+                        technicianName: tech.name,
+                        timeline: [
+                          ...detailOrder.timeline,
+                          {
+                            id: `tl-${Date.now()}`,
+                            timestamp: nowStr,
+                            title: `Técnico Reasignado a ${tech.name}`,
+                            author: 'Administrador (Oficina)',
+                            note: `Reasignado a ${tech.name} (${tech.specialty || 'General'})`
+                          }
+                        ]
+                      });
+                    }
+                  }}
+                  className="w-full bg-white border border-emerald-300 text-slate-900 text-xs font-bold rounded-xl p-2.5 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 shadow-2xs cursor-pointer"
+                >
+                  <option value="" disabled>
+                    {detailOrder.technicianName ? 'Cambiar / Reasignar a otro Técnico...' : '+ Seleccionar Técnico Responsable...'}
+                  </option>
+                  {technicians.map(t => (
+                    <option key={t.id} value={t.id}>
+                      👨‍🔧 {t.name} — {t.specialty || 'Técnico de Campo'} ({t.status || 'Disponible'})
                     </option>
                   ))}
                 </select>

@@ -37,10 +37,22 @@ export const TechMobileView: React.FC = () => {
     notifications,
     currentUser,
     updateOrderStatus,
+    assignTechnician,
     clearSampleData
   } = useApp();
 
-  const [activeTechId, setActiveTechId] = useState<string>(() => technicians[0]?.id || '');
+  const [activeTechId, setActiveTechId] = useState<string>(() => {
+    if (currentUser?.role === 'tech') {
+      const match = technicians.find(
+        t => t.id === currentUser.id ||
+             (t.email && currentUser.email && t.email.toLowerCase() === currentUser.email.toLowerCase()) ||
+             (t.name && currentUser.name && t.name.toLowerCase() === currentUser.name.toLowerCase())
+      );
+      if (match) return match.id;
+    }
+    return technicians[0]?.id || 'all';
+  });
+
   const [sortBy, setSortBy] = useState<'priority' | 'date'>('priority');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'in_progress' | 'completed'>('all');
 
@@ -63,10 +75,10 @@ export const TechMobileView: React.FC = () => {
         return;
       }
     }
-    if ((!activeTechId || !technicians.some(t => t.id === activeTechId)) && technicians.length > 0) {
+    if (!activeTechId && technicians.length > 0) {
       setActiveTechId(technicians[0].id);
     }
-  }, [technicians, activeTechId, currentUser]);
+  }, [technicians, currentUser]);
 
   const currentTech = technicians.find(t => t.id === activeTechId) || technicians[0];
 
@@ -76,40 +88,42 @@ export const TechMobileView: React.FC = () => {
 
   // Assigned orders for selected technician (resilient cross-device matching)
   const assignedOrders = orders.filter(o => {
-    // If no technician registered or no selection, show orders
-    if (!activeTechId && technicians.length === 0) return true;
+    // 1. Show all if 'all' is selected or no technician registered
+    if (activeTechId === 'all' || technicians.length === 0) return true;
 
-    // 1. Direct ID match
-    const matchId = Boolean(
-      activeTechId && (o.technicianId === activeTechId || (currentTech && o.technicianId === currentTech.id))
-    );
+    // 2. Direct ID match
+    if (o.technicianId && (o.technicianId === activeTechId || (currentTech && o.technicianId === currentTech.id))) {
+      return true;
+    }
 
-    // 2. Name match (case-insensitive & trimmed)
+    // 3. Name match (case-insensitive & trimmed)
     const techNameClean = (currentTech?.name || '').trim().toLowerCase();
     const orderTechClean = (o.technicianName || '').trim().toLowerCase();
 
-    const matchName = Boolean(
-      techNameClean && orderTechClean && (
-        techNameClean === orderTechClean ||
-        techNameClean.includes(orderTechClean) ||
-        orderTechClean.includes(techNameClean)
-      )
-    );
+    if (techNameClean && orderTechClean && (
+      techNameClean === orderTechClean ||
+      techNameClean.includes(orderTechClean) ||
+      orderTechClean.includes(techNameClean)
+    )) {
+      return true;
+    }
 
-    // 3. Current logged-in user match
+    // 4. Current logged-in user match
     const userNameClean = (currentUser?.name || '').trim().toLowerCase();
     const userClean = (currentUser?.username || '').trim().toLowerCase();
-    const matchUser = Boolean(
-      currentUser?.role === 'tech' && orderTechClean && (
-        (userNameClean && (userNameClean === orderTechClean || userNameClean.includes(orderTechClean) || orderTechClean.includes(userNameClean))) ||
-        (userClean && orderTechClean.includes(userClean))
-      )
-    );
+    if (currentUser?.role === 'tech' && orderTechClean && (
+      (userNameClean && (userNameClean === orderTechClean || userNameClean.includes(orderTechClean) || orderTechClean.includes(userNameClean))) ||
+      (userClean && orderTechClean.includes(userClean))
+    )) {
+      return true;
+    }
 
-    // 4. Single technician fallback: if only 1 tech is in the system, show orders
-    const isSingleTech = technicians.length <= 1;
+    // 5. Single technician fallback: if only 1 tech is in the system, show all orders
+    if (technicians.length <= 1) {
+      return true;
+    }
 
-    return matchId || matchName || matchUser || isSingleTech;
+    return false;
   });
 
   // Filter by lifecycle category
@@ -118,14 +132,17 @@ export const TechMobileView: React.FC = () => {
       return (
         o.status === 'Pendiente de Visita' ||
         o.status === 'Presupuesto Pendiente' ||
-        o.status === 'Esperando Aprobación'
+        o.status === 'Esperando Aprobación' ||
+        o.status === 'Garantía Reabierta' ||
+        (o.status as any) === 'Recepción Inicial' ||
+        (o.status as any) === 'Asignada'
       );
     }
     if (statusFilter === 'in_progress') {
-      return o.status === 'En Diagnóstico' || o.status === 'En Reparación';
+      return o.status === 'En Diagnóstico' || o.status === 'En Reparación' || (o.status as any) === 'En proceso';
     }
     if (statusFilter === 'completed') {
-      return o.status === 'Cobrado/Cerrado';
+      return o.status === 'Cobrado/Cerrado' || (o.status as any) === 'Terminado' || (o.status as any) === 'Finalizada';
     }
     return true;
   });
@@ -241,22 +258,26 @@ export const TechMobileView: React.FC = () => {
 
         {/* Technician Selector & Sorting */}
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto justify-end">
-          {technicians.length > 0 && (
-            <div className="flex items-center space-x-2">
-              <label className="text-xs font-semibold text-slate-600 whitespace-nowrap">Cambiar Técnico:</label>
-              <select
-                value={activeTechId}
-                onChange={e => setActiveTechId(e.target.value)}
-                className="bg-slate-50 border border-slate-300 text-slate-900 text-xs font-bold rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-hidden"
-              >
-                {technicians.map(t => (
+          <div className="flex items-center space-x-2">
+            <label className="text-xs font-semibold text-slate-600 whitespace-nowrap">Vista Técnico:</label>
+            <select
+              value={activeTechId}
+              onChange={e => setActiveTechId(e.target.value)}
+              className="bg-slate-50 border border-slate-300 text-slate-900 text-xs font-bold rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-hidden cursor-pointer"
+            >
+              <option value="all">🌐 Ver Todas las Órdenes ({orders.length})</option>
+              {technicians.map(t => {
+                const count = orders.filter(
+                  o => o.technicianId === t.id || (o.technicianName && o.technicianName.toLowerCase() === t.name.toLowerCase())
+                ).length;
+                return (
                   <option key={t.id} value={t.id}>
-                    👨‍🔧 {t.name} ({t.specialty})
+                    👨‍🔧 {t.name} ({count} asignadas)
                   </option>
-                ))}
-              </select>
-            </div>
-          )}
+                );
+              })}
+            </select>
+          </div>
 
           <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-semibold">
             <button

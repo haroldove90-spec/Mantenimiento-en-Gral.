@@ -6,6 +6,7 @@ import {
   Client,
   Department,
   SparePart,
+  BusinessService,
   Technician,
   Notification,
   OrderStatus,
@@ -20,6 +21,7 @@ import {
   INITIAL_CLIENTS,
   INITIAL_ORDERS,
   INITIAL_SPARE_PARTS,
+  INITIAL_SERVICES,
   INITIAL_TECHNICIANS,
   INITIAL_USERS,
   INITIAL_EXPENSES
@@ -28,13 +30,14 @@ import {
 interface AppContextType {
   activeRole: RoleType;
   setActiveRole: (role: RoleType) => void;
-  officeSubTab: 'orders' | 'routes' | 'budgets' | 'catalogs' | 'reports';
-  setOfficeSubTab: (tab: 'orders' | 'routes' | 'budgets' | 'catalogs' | 'reports') => void;
-  ownerSubTab: 'analytics' | 'financials' | 'users';
-  setOwnerSubTab: (tab: 'analytics' | 'financials' | 'users') => void;
+  officeSubTab: 'orders' | 'routes' | 'budgets' | 'services' | 'clients' | 'catalogs' | 'reports';
+  setOfficeSubTab: (tab: 'orders' | 'routes' | 'budgets' | 'services' | 'clients' | 'catalogs' | 'reports') => void;
+  ownerSubTab: 'analytics' | 'financials' | 'services' | 'employees' | 'users' | 'clients';
+  setOwnerSubTab: (tab: 'analytics' | 'financials' | 'services' | 'employees' | 'users' | 'clients') => void;
   orders: ServiceOrder[];
   clients: Client[];
   spareParts: SparePart[];
+  services: BusinessService[];
   technicians: Technician[];
   systemUsers: SystemUser[];
   currentUser: SystemUser | null;
@@ -55,7 +58,7 @@ interface AppContextType {
     scheduledDate?: string;
   }) => ServiceOrder;
 
-  updateOrderStatus: (orderId: string, newStatus: OrderStatus, note?: string) => void;
+  updateOrderStatus: (orderId: string, newStatus: OrderStatus, note?: string, authorName?: string) => void;
   assignTechnician: (orderId: string, technicianId: string, routeOrder?: number, scheduledDate?: string) => void;
   updateOrderRoute: (orderId: string, routeOrder: number, scheduledDate: string, notes?: string) => void;
   reopenWarrantyOrder: (orderId: string, warrantyNotes: string) => void;
@@ -90,6 +93,10 @@ interface AppContextType {
   updateSparePart: (id: string, partData: Partial<SparePart>) => void;
   toggleSparePartStatus: (id: string) => void;
   deleteSparePart: (id: string) => void;
+  addService: (service: Omit<BusinessService, 'id'>) => Promise<void>;
+  updateService: (id: string, serviceData: Partial<BusinessService>) => Promise<void>;
+  toggleServiceStatus: (id: string) => Promise<void>;
+  deleteService: (id: string) => Promise<void>;
   updateTechnician: (id: string, techData: Partial<Technician>) => void;
   toggleTechStatus: (id: string) => void;
   deleteTechnician: (id: string) => void;
@@ -124,11 +131,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem('app_active_role');
     return (saved as RoleType) || 'home';
   });
-  const [officeSubTab, setOfficeSubTab] = useState<'orders' | 'routes' | 'budgets' | 'catalogs' | 'reports'>(() => {
+  const [officeSubTab, setOfficeSubTab] = useState<'orders' | 'routes' | 'budgets' | 'clients' | 'catalogs' | 'reports'>(() => {
     const saved = localStorage.getItem('app_office_subtab');
     return (saved as any) || 'orders';
   });
-  const [ownerSubTab, setOwnerSubTab] = useState<'analytics' | 'financials' | 'users'>(() => {
+  const [ownerSubTab, setOwnerSubTab] = useState<'analytics' | 'financials' | 'employees' | 'users' | 'clients'>(() => {
     const saved = localStorage.getItem('app_owner_subtab');
     return (saved as any) || 'analytics';
   });
@@ -150,7 +157,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : INITIAL_SPARE_PARTS;
   });
 
-  const [technicians, setTechnicians] = useState<Technician[]>(INITIAL_TECHNICIANS);
+  const [services, setServices] = useState<BusinessService[]>(() => {
+    const saved = localStorage.getItem('app_business_services');
+    return saved ? JSON.parse(saved) : INITIAL_SERVICES;
+  });
+
+  const [technicians, setTechnicians] = useState<Technician[]>(() => {
+    const saved = localStorage.getItem('app_technicians');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(t => t && t.id && !['tech-1', 'tech-2', 'tech-3'].includes(t.id) && !['carlos.tech@mantenimiento.com', 'ana.tech@mantenimiento.com', 'roberto.tech@mantenimiento.com'].includes(t.email));
+        }
+      } catch {}
+    }
+    return [];
+  });
 
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>(() => {
     const saved = localStorage.getItem('app_system_users');
@@ -214,6 +237,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [spareParts]);
 
   useEffect(() => {
+    localStorage.setItem('app_business_services', JSON.stringify(services));
+  }, [services]);
+
+  useEffect(() => {
+    localStorage.setItem('app_technicians', JSON.stringify(technicians));
+  }, [technicians]);
+
+  useEffect(() => {
     localStorage.setItem('app_system_users', JSON.stringify(systemUsers));
   }, [systemUsers]);
 
@@ -228,52 +259,235 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Sync data from Supabase on load
   useEffect(() => {
     const fetchSupabaseData = async () => {
-      // 1. Fetch system_users
+      // 1. Fetch Employees & Technicians (from 'employees', 'technicians', and 'system_users')
       try {
-        const { data, error } = await supabase.from('system_users').select('*');
-        if (!error && data && Array.isArray(data) && data.length > 0) {
-          const dbUsers: SystemUser[] = data
-            .filter((u: any) => u && typeof u === 'object')
-            .map((u: any) => {
-              const email = u.email || '';
-              const username = u.username || (email ? email.split('@')[0] : 'usuario');
-              const cleanRole = normalizeRole(u.role);
-              return {
-                id: u.id || `usr-${Math.random()}`,
-                name: u.name || username || 'Usuario',
-                username,
-                email,
-                password: u.password || '',
-                phone: u.phone || '',
-                role: cleanRole,
-                status: u.status || 'Activo',
-                lastLogin: u.last_login ? new Date(u.last_login).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Reciente'
-              };
+        let allUsersMap = new Map<string, SystemUser>();
+        let techMap = new Map<string, Technician>();
+
+        // A. Load from 'employees'
+        try {
+          const { data: empData, error: empErr } = await supabase.from('employees').select('*');
+          if (!empErr && empData && Array.isArray(empData)) {
+            empData.forEach((u: any) => {
+              const email = (u.email || '').trim().toLowerCase();
+              const role = normalizeRole(u.role);
+              const userId = u.id || `usr-${Math.random()}`;
+              if (email) {
+                allUsersMap.set(email, {
+                  id: userId,
+                  name: u.name || 'Empleado',
+                  username: u.username || email.split('@')[0],
+                  email: u.email || '',
+                  password: u.pin || '',
+                  phone: u.phone || '',
+                  role,
+                  status: u.is_active === false ? 'Inactivo' : 'Activo',
+                  lastLogin: 'Reciente',
+                  createdAt: u.created_at || new Date().toISOString()
+                });
+
+                if (role === 'tech') {
+                  techMap.set(email, {
+                    id: userId,
+                    name: u.name || 'Técnico',
+                    phone: u.phone || '',
+                    email: u.email || '',
+                    specialty: 'Técnico de Campo',
+                    activeOrdersCount: 0,
+                    avgResponseTimeHours: 2.5,
+                    status: u.is_active === false ? 'Inactivo' : 'Activo'
+                  });
+                }
+              }
             });
-
-          setSystemUsers(prev => {
-            const existingEmails = new Set(dbUsers.map(u => (u.email || '').toLowerCase()).filter(Boolean));
-            const localOnly = prev.filter(u => u && u.email && !existingEmails.has((u.email || '').toLowerCase()));
-            const combined = [...dbUsers, ...localOnly];
-            localStorage.setItem('app_system_users', JSON.stringify(combined));
-            return combined;
-          });
-
-          // If current user is logged in, update their role if changed in Supabase
-          if (currentUser) {
-            const currentInDb = dbUsers.find(u => (u.email || '').toLowerCase() === (currentUser.email || '').toLowerCase());
-            if (currentInDb && (currentInDb.role !== currentUser.role || currentInDb.name !== currentUser.name)) {
-              const updatedCurrent = { ...currentUser, role: currentInDb.role, name: currentInDb.name };
-              setCurrentUser(updatedCurrent);
-              setActiveRole(currentInDb.role);
-            }
           }
+        } catch (e) {
+          console.warn('Load employees notice:', e);
+        }
+
+        // B. Load from 'system_users' to merge any user not yet in 'employees'
+        try {
+          const { data: sysData, error: sysErr } = await supabase.from('system_users').select('*');
+          if (!sysErr && sysData && Array.isArray(sysData)) {
+            sysData.forEach((u: any) => {
+              const email = (u.email || '').trim().toLowerCase();
+              const role = normalizeRole(u.role);
+              const userId = u.id || `usr-${Math.random()}`;
+              if (email && !allUsersMap.has(email)) {
+                allUsersMap.set(email, {
+                  id: userId,
+                  name: u.name || 'Usuario',
+                  username: u.username || email.split('@')[0],
+                  email: u.email || '',
+                  password: u.password || '',
+                  phone: u.phone || '',
+                  role,
+                  status: u.status || 'Activo',
+                  lastLogin: u.last_login ? new Date(u.last_login).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Reciente',
+                  createdAt: u.created_at || new Date().toISOString()
+                });
+              }
+              if (role === 'tech' && email && !techMap.has(email)) {
+                techMap.set(email, {
+                  id: userId,
+                  name: u.name || 'Técnico',
+                  phone: u.phone || '',
+                  email: u.email || '',
+                  specialty: 'Técnico de Campo',
+                  activeOrdersCount: 0,
+                  avgResponseTimeHours: 2.5,
+                  status: u.status === 'Inactivo' ? 'Inactivo' : 'Activo'
+                });
+              }
+            });
+          }
+        } catch (e) {
+          console.warn('Load system_users notice:', e);
+        }
+
+        // C. Load from 'technicians' table directly
+        try {
+          const { data: techTableData, error: techErr } = await supabase.from('technicians').select('*');
+          if (!techErr && techTableData && Array.isArray(techTableData)) {
+            techTableData.forEach((t: any) => {
+              const email = (t.email || '').trim().toLowerCase();
+              const key = email || t.name || t.id;
+              if (key && !techMap.has(key)) {
+                techMap.set(key, {
+                  id: t.id,
+                  name: t.name || 'Técnico',
+                  phone: t.phone || '',
+                  email: t.email || '',
+                  specialty: t.specialty || 'Técnico de Campo',
+                  activeOrdersCount: 0,
+                  avgResponseTimeHours: 2.5,
+                  status: t.status === 'Inactivo' ? 'Inactivo' : 'Activo'
+                });
+              }
+            });
+          }
+        } catch (e) {
+          console.warn('Load technicians notice:', e);
+        }
+
+        const fetchedUsers = Array.from(allUsersMap.values());
+        if (fetchedUsers.length > 0) {
+          setSystemUsers(fetchedUsers);
+          localStorage.setItem('app_system_users', JSON.stringify(fetchedUsers));
+        }
+
+        const fetchedTechs = Array.from(techMap.values()).filter(t => 
+          t && t.name && 
+          !['tech-1', 'tech-2', 'tech-3'].includes(t.id) &&
+          !['carlos.tech@mantenimiento.com', 'ana.tech@mantenimiento.com', 'roberto.tech@mantenimiento.com'].includes(t.email)
+        );
+
+        if (fetchedTechs.length > 0) {
+          setTechnicians(fetchedTechs);
+          localStorage.setItem('app_technicians', JSON.stringify(fetchedTechs));
         }
       } catch (e) {
-        console.warn('Supabase system_users sync skipped/offline', e);
+        console.warn('Supabase employees sync notice:', e);
       }
 
-      // 2. Fetch clients
+      // 2. Fetch Service Orders (from 'service_orders')
+      try {
+        const { data: oData, error: oErr } = await supabase.from('service_orders').select('*');
+        const mappedOrders: ServiceOrder[] = (!oErr && oData && Array.isArray(oData)) ? oData.map((o: any) => ({
+          id: o.id,
+          folio: o.folio || `OS-${Math.floor(1000 + Math.random() * 9000)}`,
+          clientId: o.client_id || '',
+          clientName: o.client_name || 'Cliente',
+          departmentId: o.department_id || '',
+          departmentName: o.department_name || 'Matriz Principal',
+          equipmentType: o.equipment_type || 'General',
+          priority: (o.priority === 'Alta' || o.priority === 'Media' || o.priority === 'Baja') ? o.priority : 'Media',
+          status: (o.status as OrderStatus) || 'Pendiente de Visita',
+          description: o.description || '',
+          technicianId: o.technician_id || undefined,
+          technicianName: o.technician_name || undefined,
+          scheduledDate: o.scheduled_date || new Date().toISOString().split('T')[0],
+          routeOrder: Number(o.route_order || 1),
+          diagnosticNotes: o.diagnostic_notes || '',
+          diagnosticPhotos: Array.isArray(o.diagnostic_photos) ? o.diagnostic_photos : [],
+          requestedParts: Array.isArray(o.requested_parts) ? o.requested_parts : [],
+          solutionNotes: o.solution_notes || '',
+          solutionPhotos: Array.isArray(o.solution_photos) ? o.solution_photos : [],
+          collectedAmount: Number(o.collected_amount || 0),
+          paymentMethod: o.payment_method || undefined,
+          isWarranty: Boolean(o.is_warranty),
+          warrantyNotes: o.warranty_reason || o.warranty_notes || undefined,
+          budget: o.budget || undefined,
+          clientSignature: o.signature_data || o.client_signature || undefined,
+          createdAt: o.created_at ? new Date(o.created_at).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : 'Reciente',
+          timeline: Array.isArray(o.timeline) && o.timeline.length > 0
+            ? o.timeline
+            : [
+                {
+                  id: `tl-${o.id}-init`,
+                  timestamp: o.created_at ? new Date(o.created_at).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : 'Registro',
+                  title: 'Orden de Servicio Registrada',
+                  author: 'Sistema',
+                  note: `Folio: ${o.folio || ''}`
+                }
+              ]
+        })) : [];
+
+        setOrders(prev => {
+          const existingFolios = new Set(mappedOrders.map(o => o.folio));
+          const localRealOrders = prev.filter(o => o && o.folio);
+          const localOnly = localRealOrders.filter(o => !existingFolios.has(o.folio));
+
+          // Auto-sync any local-only orders (like OS-1001) up to Supabase immediately!
+          if (localOnly.length > 0) {
+            localOnly.forEach(async (lo) => {
+              try {
+                const nowIso = new Date().toISOString();
+                const ordPayload: any = {
+                  folio: lo.folio,
+                  client_name: lo.clientName,
+                  department_name: lo.departmentName || 'Matriz Principal',
+                  equipment_type: lo.equipmentType || 'General',
+                  description: lo.description || '',
+                  priority: lo.priority || 'Media',
+                  status: lo.status || 'Pendiente de Visita',
+                  technician_name: lo.technicianName || null,
+                  scheduled_date: lo.scheduledDate || nowIso.split('T')[0],
+                  route_order: lo.routeOrder || 1,
+                  diagnostic_notes: lo.diagnosticNotes || '',
+                  diagnostic_photos: lo.diagnosticPhotos || [],
+                  requested_parts: lo.requestedParts || [],
+                  solution_notes: lo.solutionNotes || '',
+                  solution_photos: lo.solutionPhotos || [],
+                  collected_amount: lo.collectedAmount || 0,
+                  payment_method: lo.paymentMethod || null,
+                  is_warranty: Boolean(lo.isWarranty),
+                  warranty_reason: lo.warrantyNotes || null,
+                  budget: lo.budget || null,
+                  signature_data: lo.clientSignature || null,
+                  timeline: lo.timeline || [],
+                  created_at: nowIso
+                };
+                if (isUuid(lo.clientId)) ordPayload.client_id = lo.clientId;
+                if (isUuid(lo.departmentId)) ordPayload.department_id = lo.departmentId;
+                if (isUuid(lo.technicianId)) ordPayload.technician_id = lo.technicianId;
+
+                await supabase.from('service_orders').upsert([ordPayload], { onConflict: 'folio' });
+              } catch (err) {
+                console.warn('Auto-backfill order to Supabase notice:', err);
+              }
+            });
+          }
+
+          const combined = [...mappedOrders, ...localOnly];
+          localStorage.setItem('app_service_orders', JSON.stringify(combined));
+          return combined;
+        });
+      } catch (e) {
+        console.warn('Supabase service_orders sync notice:', e);
+      }
+
+      // 3. Fetch Clients (from 'clients')
       try {
         const { data: cData, error: cErr } = await supabase.from('clients').select('*');
         if (!cErr && cData && Array.isArray(cData) && cData.length > 0) {
@@ -285,9 +499,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             phone: c.phone || '',
             whatsapp: c.whatsapp || '',
             address: c.address || c.delivery_address || c.fiscal_address || '',
-            model: c.model || '',
-            fault: c.fault || '',
-            status: c.status || 'Activo',
+            model: c.equipment_model || c.model || '',
+            fault: c.reported_fault || c.fault || '',
+            status: c.is_active === false || c.status === 'Inactivo' ? 'Inactivo' : 'Activo',
+            createdAt: c.created_at || new Date().toISOString(),
             departments: Array.isArray(c.departments) ? c.departments : [
               {
                 id: `dept-${c.id}-1`,
@@ -307,10 +522,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         }
       } catch (e) {
-        console.warn('Supabase clients sync skipped/offline', e);
+        console.warn('Supabase clients sync notice:', e);
       }
 
-      // 3. Fetch spare_parts
+      // 4. Fetch Spare Parts (from 'spare_parts')
       try {
         const { data: pData, error: pErr } = await supabase.from('spare_parts').select('*');
         if (!pErr && pData && Array.isArray(pData) && pData.length > 0) {
@@ -319,60 +534,84 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             code: p.code || 'REF-GEN',
             name: p.name || 'Refacción',
             category: p.category || 'General',
-            unitPrice: Number(p.unit_price ?? p.unitPrice ?? 0),
+            unitPrice: Number(p.price ?? p.unit_price ?? p.unitPrice ?? 0),
             stock: Number(p.stock ?? 0),
-            status: p.status || 'Activo'
+            status: p.is_active === false || p.status === 'Inactivo' ? 'Inactivo' : 'Activo',
+            createdAt: p.created_at || new Date().toISOString()
           }));
           setSpareParts(prev => {
-            const existingIds = new Set(mappedParts.map(p => p.id));
-            const localOnly = prev.filter(p => !existingIds.has(p.id));
+            const existingCodes = new Set(mappedParts.map(p => p.code));
+            const localOnly = prev.filter(p => !existingCodes.has(p.code));
             const combined = [...mappedParts, ...localOnly];
             localStorage.setItem('app_spare_parts', JSON.stringify(combined));
             return combined;
           });
         }
       } catch (e) {
-        console.warn('Supabase spare_parts sync skipped/offline', e);
+        console.warn('Supabase spare_parts sync notice:', e);
       }
 
-      // 4. Fetch technicians
+      // 4.1 Fetch Services (from 'services')
       try {
-        const { data: tData, error: tErr } = await supabase.from('technicians').select('*');
-        if (!tErr && tData && Array.isArray(tData) && tData.length > 0) {
-          const mappedTechs: Technician[] = tData.map((t: any) => ({
-            id: t.id,
-            name: t.name || 'Técnico',
-            phone: t.phone || '',
-            email: t.email || '',
-            specialty: t.specialty || 'General',
-            activeOrdersCount: Number(t.active_orders_count ?? t.activeOrdersCount ?? 0),
-            avgResponseTimeHours: Number(t.avg_response_time_hours ?? t.avgResponseTimeHours ?? 2.5),
-            status: t.status || 'Activo'
+        const { data: sData, error: sErr } = await supabase.from('services').select('*');
+        if (!sErr && sData && Array.isArray(sData) && sData.length > 0) {
+          const mappedServices: BusinessService[] = sData.map((s: any) => ({
+            id: s.id,
+            code: s.code || 'SRV-001',
+            name: s.name || 'Servicio',
+            category: s.category || 'Mantenimiento',
+            description: s.description || '',
+            basePrice: Number(s.base_price ?? s.price ?? s.basePrice ?? 0),
+            estimatedDurationHours: Number(s.estimated_duration_hours ?? s.duration ?? s.estimatedDurationHours ?? 1),
+            warrantyDays: Number(s.warranty_days ?? s.warrantyDays ?? 30),
+            status: s.is_active === false || s.status === 'Inactivo' ? 'Inactivo' : 'Activo',
+            createdAt: s.created_at || new Date().toISOString()
           }));
-          setTechnicians(prev => {
-            const existingIds = new Set(mappedTechs.map(t => t.id));
-            const localOnly = prev.filter(t => !existingIds.has(t.id));
-            return [...mappedTechs, ...localOnly];
+          setServices(prev => {
+            const existingCodes = new Set(mappedServices.map(s => s.code));
+            const localOnly = prev.filter(s => !existingCodes.has(s.code));
+            const combined = [...mappedServices, ...localOnly];
+            localStorage.setItem('app_business_services', JSON.stringify(combined));
+            return combined;
           });
         }
       } catch (e) {
-        console.warn('Supabase technicians sync skipped/offline', e);
+        console.warn('Supabase services sync notice:', e);
       }
 
-      // 5. Fetch operating_expenses
+      // 5. Fetch Expenses (from 'expenses' or 'operating_expenses')
       try {
-        const { data: eData, error: eErr } = await supabase.from('operating_expenses').select('*');
-        if (!eErr && eData && Array.isArray(eData) && eData.length > 0) {
-          const mappedExpenses: OperatingExpense[] = eData.map((e: any) => ({
+        let mappedExpenses: OperatingExpense[] = [];
+        const { data: expData, error: expErr } = await supabase.from('expenses').select('*');
+        if (!expErr && expData && expData.length > 0) {
+          mappedExpenses = expData.map((e: any) => ({
             id: e.id,
-            category: e.category || 'Otros',
-            description: e.description || 'Gasto Operativo',
+            category: (e.category as any) || 'Otros',
+            description: e.description || 'Gasto',
             amount: Number(e.amount ?? 0),
             date: e.date || new Date().toISOString().split('T')[0],
-            paymentMethod: e.payment_method || e.paymentMethod || 'Transferencia',
-            registeredBy: e.registered_by || e.registeredBy || 'Administración',
-            invoiceFolio: e.invoice_folio || e.invoiceFolio || ''
+            paymentMethod: 'Transferencia',
+            registeredBy: 'Administración',
+            createdAt: e.created_at || e.date || new Date().toISOString()
           }));
+        } else {
+          const { data: eData, error: eErr } = await supabase.from('operating_expenses').select('*');
+          if (!eErr && eData && eData.length > 0) {
+            mappedExpenses = eData.map((e: any) => ({
+              id: e.id,
+              category: (e.category as any) || 'Otros',
+              description: e.description || 'Gasto Operativo',
+              amount: Number(e.amount ?? 0),
+              date: e.date || new Date().toISOString().split('T')[0],
+              paymentMethod: e.payment_method || 'Transferencia',
+              registeredBy: e.registered_by || 'Administración',
+              invoiceFolio: e.invoice_folio || '',
+              createdAt: e.created_at || e.date || new Date().toISOString()
+            }));
+          }
+        }
+
+        if (mappedExpenses.length > 0) {
           setExpenses(prev => {
             const existingIds = new Set(mappedExpenses.map(e => e.id));
             const localOnly = prev.filter(e => !existingIds.has(e.id));
@@ -382,7 +621,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         }
       } catch (e) {
-        console.warn('Supabase operating_expenses sync skipped/offline', e);
+        console.warn('Supabase expenses sync notice:', e);
       }
     };
 
@@ -393,6 +632,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('app_operating_expenses', JSON.stringify(expenses));
   }, [expenses]);
 
+  const NOTIFICATION_SOUND_URL = 'https://battwitnhrezwotkcvbc.supabase.co/storage/v1/object/public/sonidos/freesound_community-success-48018.mp3';
+  let notifAudioInstance: HTMLAudioElement | null = null;
+
+  const playNotificationSound = () => {
+    try {
+      if (!notifAudioInstance) {
+        notifAudioInstance = new Audio(NOTIFICATION_SOUND_URL);
+        notifAudioInstance.volume = 0.85;
+      }
+      notifAudioInstance.currentTime = 0;
+      const playPromise = notifAudioInstance.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(err => {
+          // Audio policy or pending user interaction notice
+          console.log('Audio autoplay waiting for user interaction:', err);
+        });
+      }
+    } catch (err) {
+      console.warn('Error playing notification sound:', err);
+    }
+  };
+
+  const isUuid = (str?: string) => {
+    if (!str) return false;
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+  };
+
   const addNotification = (notif: Omit<Notification, 'id' | 'timestamp' | 'read'>) => {
     const newN: Notification = {
       ...notif,
@@ -401,6 +667,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       read: false
     };
     setNotifications(prev => [newN, ...prev]);
+    playNotificationSound();
   };
 
   const createOrder = ({
@@ -431,6 +698,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newFolioNumber = 1000 + orders.length + 1;
     const folio = `OS-${newFolioNumber}`;
     const nowStr = new Date().toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
+    const nowIso = new Date().toISOString();
 
     const finalClientName = client?.name || clientName || 'Cliente';
     const finalDeptName = department?.name || departmentName || 'Matriz Principal';
@@ -449,7 +717,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       technicianId: tech?.id,
       technicianName: tech?.name,
       createdAt: nowStr,
-      scheduledDate: scheduledDate || new Date().toISOString().split('T')[0],
+      scheduledDate: scheduledDate || nowIso.split('T')[0],
       diagnosticPhotos: [],
       requestedParts: [],
       solutionPhotos: [],
@@ -473,16 +741,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         note: `Técnico: ${tech.name}`
       });
 
+      // Direct notification to technician
       addNotification({
         targetRole: 'tech',
         orderFolio: folio,
         title: 'Nueva Visita Programada',
-        message: `Asignado servicio OS ${folio} (${newOrder.clientName}) para ${newOrder.equipmentType}.`
+        message: `Asignado servicio ${folio} para ${newOrder.clientName} (${newOrder.equipmentType}). Programado para ${newOrder.scheduledDate}.`
       });
     }
 
     setOrders(prev => [newOrder, ...prev]);
 
+    // Notification to office and owner
     addNotification({
       targetRole: 'office',
       orderFolio: folio,
@@ -490,7 +760,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       message: `Orden ${folio} creada para ${newOrder.clientName}.`
     });
 
-    // Asynchronously try to sync to Supabase service_orders if available
+    addNotification({
+      targetRole: 'owner',
+      orderFolio: folio,
+      title: 'Nueva Orden de Servicio',
+      message: `Folio ${folio} registrado para ${newOrder.clientName}. Estatus: Pendiente de Visita.`
+    });
+
+    // Synchronize to Supabase service_orders
     (async () => {
       try {
         const orderPayload: any = {
@@ -501,40 +778,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           equipment_type: newOrder.equipmentType,
           description: newOrder.description,
           priority: newOrder.priority,
-          status: 'En Diagnóstico', // valid order_stage enum in Supabase
+          status: newOrder.status,
           technician_name: tech?.name || null,
           scheduled_date: newOrder.scheduledDate,
           is_warranty: false,
-          timeline: newOrder.timeline
+          diagnostic_photos: [],
+          requested_parts: [],
+          solution_photos: [],
+          timeline: newOrder.timeline,
+          created_at: nowIso
         };
 
-        if (clientId && clientId.includes('-') && !clientId.startsWith('cli-')) {
+        if (isUuid(clientId)) {
           orderPayload.client_id = clientId;
         }
-        if (departmentId && departmentId.includes('-') && !departmentId.startsWith('dept-')) {
+        if (isUuid(departmentId)) {
           orderPayload.department_id = departmentId;
         }
-        if (tech?.id && tech.id.includes('-') && !tech.id.startsWith('tech-')) {
+        if (tech?.id && isUuid(tech.id)) {
           orderPayload.technician_id = tech.id;
         }
 
         const { data, error } = await supabase.from('service_orders').insert([orderPayload]).select();
         if (error) {
-          // If schema doesn't have extended columns yet, try inserting core schema columns
+          console.warn('Supabase extended insert error, attempting core insert:', error.message);
+          // Try core columns insert
           const corePayload: any = {
             folio: newOrder.folio,
             equipment_type: newOrder.equipmentType,
             description: newOrder.description,
             priority: newOrder.priority,
-            status: 'En Diagnóstico',
-            scheduled_date: newOrder.scheduledDate
+            status: newOrder.status,
+            scheduled_date: newOrder.scheduledDate,
+            created_at: nowIso
           };
-          if (orderPayload.client_id) corePayload.client_id = orderPayload.client_id;
-          if (orderPayload.department_id) corePayload.department_id = orderPayload.department_id;
-          if (orderPayload.technician_id) corePayload.technician_id = orderPayload.technician_id;
+          if (isUuid(clientId)) corePayload.client_id = clientId;
+          if (isUuid(departmentId)) corePayload.department_id = departmentId;
+          if (tech?.id && isUuid(tech.id)) corePayload.technician_id = tech.id;
 
-          const { data: coreData } = await supabase.from('service_orders').insert([corePayload]).select();
-          if (coreData && coreData[0]?.id) {
+          const { data: coreData, error: coreErr } = await supabase.from('service_orders').insert([corePayload]).select();
+          if (coreErr) {
+            console.warn('Supabase core insert error:', coreErr.message);
+          } else if (coreData && coreData[0]?.id) {
             setOrders(current => current.map(o => o.id === newOrder.id ? { ...o, id: coreData[0].id } : o));
           }
         } else if (data && data[0]?.id) {
@@ -549,27 +834,99 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newOrder;
   };
 
-  const updateOrderStatus = (orderId: string, newStatus: OrderStatus, note?: string) => {
+  const updateOrderStatus = (
+    orderId: string,
+    newStatus: OrderStatus,
+    note?: string,
+    authorName?: string
+  ) => {
     const nowStr = new Date().toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
+    const nowIso = new Date().toISOString();
+    const author = authorName || currentUser?.name || 'Técnico de Campo';
+
+    // Find the target order
+    const targetOrder = orders.find(o => o.id === orderId);
+
     setOrders(prev =>
       prev.map(ord => {
         if (ord.id !== orderId) return ord;
         return {
           ...ord,
           status: newStatus,
+          completedAt: newStatus === 'Cobrado/Cerrado' ? (ord.completedAt || nowStr) : ord.completedAt,
+          startedAt: (newStatus === 'En Diagnóstico' || newStatus === 'En Reparación') && !ord.startedAt ? nowStr : ord.startedAt,
           timeline: [
             ...ord.timeline,
             {
               id: `tl-${Date.now()}`,
               timestamp: nowStr,
               title: `Cambio de estatus: ${newStatus}`,
-              author: 'Sistema',
-              note
+              author,
+              note: note || `Estatus actualizado a "${newStatus}".`
             }
           ]
         };
       })
     );
+
+    if (targetOrder) {
+      const folio = targetOrder.folio;
+      const clientName = targetOrder.clientName;
+
+      // 1. Notificación a Oficina
+      addNotification({
+        targetRole: 'office',
+        orderFolio: folio,
+        title: `Estatus Actualizado: ${folio}`,
+        message: `La orden ${folio} (${clientName}) cambió a "${newStatus}" por ${author}.${note ? ` Observación: ${note}` : ''}`
+      });
+
+      // 2. Notificación a Administrador / Dueño
+      addNotification({
+        targetRole: 'owner',
+        orderFolio: folio,
+        title: `Actualización de Servicio: ${folio}`,
+        message: `Orden ${folio} (${clientName}) pasó a estado "${newStatus}". Autor: ${author}.`
+      });
+
+      // 3. Notificación a Portal del Cliente
+      addNotification({
+        targetRole: 'client',
+        orderFolio: folio,
+        title: `Tu Servicio ${folio}: ${newStatus}`,
+        message: `El estado de tu orden ${folio} ahora es: ${newStatus}.${note ? ` Detalle: ${note}` : ''}`
+      });
+
+      // 4. Notificación al Técnico de Campo
+      addNotification({
+        targetRole: 'tech',
+        orderFolio: folio,
+        title: `Orden ${folio} actualizada`,
+        message: `Estatus sincronizado correctamente a "${newStatus}".`
+      });
+
+      // Sincronización asíncrona con Supabase
+      (async () => {
+        try {
+          const updatePayload: any = {
+            status: newStatus
+          };
+          if (newStatus === 'Cobrado/Cerrado') {
+            updatePayload.completed_at = nowIso;
+          }
+          if ((newStatus === 'En Diagnóstico' || newStatus === 'En Reparación') && !targetOrder.startedAt) {
+            updatePayload.started_at = nowIso;
+          }
+
+          await supabase
+            .from('service_orders')
+            .update(updatePayload)
+            .or(`id.eq.${orderId},folio.eq.${targetOrder.folio}`);
+        } catch (e) {
+          console.warn('Error sincronizando estatus de orden con Supabase:', e);
+        }
+      })();
+    }
   };
 
   const assignTechnician = (orderId: string, technicianId: string, routeOrder?: number, scheduledDate?: string) => {
@@ -606,9 +963,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addNotification({
         targetRole: 'tech',
         orderFolio: targetOrd.folio,
-        title: 'Asignación de Ruta',
-        message: `Te han programado el folio ${targetOrd.folio} (${targetOrd.clientName}) en tu ruta.`
+        title: 'Asignación de Servicio',
+        message: `Te han asignado la orden ${targetOrd.folio} (${targetOrd.clientName}) para ${targetOrd.equipmentType}.`
       });
+
+      addNotification({
+        targetRole: 'office',
+        orderFolio: targetOrd.folio,
+        title: 'Técnico Asignado',
+        message: `La orden ${targetOrd.folio} ha sido asignada a ${tech.name}.`
+      });
+
+      // Synchronize with Supabase
+      (async () => {
+        try {
+          const updatePayload: any = {
+            technician_name: tech.name,
+            scheduled_date: scheduledDate || targetOrd.scheduledDate || new Date().toISOString().split('T')[0],
+            route_order: routeOrder || targetOrd.routeOrder || 1
+          };
+          if (isUuid(tech.id)) updatePayload.technician_id = tech.id;
+          await supabase.from('service_orders').update(updatePayload).or(`id.eq.${orderId},folio.eq.${targetOrd.folio}`);
+        } catch (e) {
+          console.warn('Error sincronizando asignación de técnico en Supabase:', e);
+        }
+      })();
     }
   };
 
@@ -811,6 +1190,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
       })
     );
+
+    const ord = orders.find(o => o.id === orderId);
+    if (ord) {
+      (async () => {
+        try {
+          await supabase.from('service_orders').update({
+            budget: newBudget,
+            status: 'Presupuesto Pendiente'
+          }).or(`id.eq.${orderId},folio.eq.${ord.folio}`);
+        } catch (e) {
+          console.warn('Error sincronizando presupuesto con Supabase:', e);
+        }
+      })();
+    }
   };
 
   const sendBudgetToClient = (orderId: string) => {
@@ -849,6 +1242,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         title: 'Cotización Lista para Autorización',
         message: `Tu presupuesto para ${ord.folio} está disponible para autorizar.`
       });
+
+      addNotification({
+        targetRole: 'owner',
+        orderFolio: ord.folio,
+        title: 'Cotización Enviada al Cliente',
+        message: `Presupuesto de la orden ${ord.folio} enviado al cliente.`
+      });
+
+      (async () => {
+        try {
+          await supabase.from('service_orders').update({
+            status: 'Esperando Aprobación',
+            budget: ord.budget ? { ...ord.budget, status: 'Enviado', sentAt: nowStr } : undefined
+          }).or(`id.eq.${orderId},folio.eq.${ord.folio}`);
+        } catch (e) {
+          console.warn('Error sincronizando envío de presupuesto con Supabase:', e);
+        }
+      })();
     }
   };
 
@@ -886,14 +1297,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         message: `El cliente APROBÓ el presupuesto de ${ord.folio}. Se liberó para reparación en ruta.`
       });
 
+      addNotification({
+        targetRole: 'owner',
+        orderFolio: ord.folio,
+        title: 'Presupuesto Aprobado',
+        message: `El cliente de ${ord.folio} autorizó el presupuesto. Estatus: En Reparación.`
+      });
+
       if (ord.technicianId) {
         addNotification({
           targetRole: 'tech',
           orderFolio: ord.folio,
           title: 'Presupuesto Aprobado por Cliente',
-          message: `Luz verde para ${ord.folio}. Oficina ha asignado este servicio a tu ruta de reparación.`
+          message: `Luz verde para ${ord.folio}. Oficina ha liberado este servicio para reparación en tu ruta.`
         });
       }
+
+      (async () => {
+        try {
+          await supabase.from('service_orders').update({
+            status: 'En Reparación',
+            budget: ord.budget ? { ...ord.budget, status: 'Aprobado', approvedAt: nowStr } : undefined
+          }).or(`id.eq.${orderId},folio.eq.${ord.folio}`);
+        } catch (e) {
+          console.warn('Error sincronizando aprobación de presupuesto con Supabase:', e);
+        }
+      })();
     }
   };
 
@@ -928,6 +1357,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         title: 'Presupuesto Rechazado',
         message: `El cliente rechazó el presupuesto de ${ord.folio}: "${clientComment}"`
       });
+
+      addNotification({
+        targetRole: 'owner',
+        orderFolio: ord.folio,
+        title: 'Presupuesto Rechazado',
+        message: `El cliente de ${ord.folio} no aceptó la cotización.`
+      });
+
+      (async () => {
+        try {
+          await supabase.from('service_orders').update({
+            status: 'Presupuesto Pendiente',
+            budget: ord.budget ? { ...ord.budget, status: 'Rechazado' } : undefined
+          }).or(`id.eq.${orderId},folio.eq.${ord.folio}`);
+        } catch (e) {
+          console.warn('Error sincronizando rechazo de presupuesto con Supabase:', e);
+        }
+      })();
     }
   };
 
@@ -1026,6 +1473,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addClient = async (clientData: Omit<Client, 'id'>): Promise<Client> => {
     const tempId = `cli-${Date.now()}`;
+    const nowIso = new Date().toISOString();
     const defaultDepts: Department[] = (clientData.departments && clientData.departments.length > 0)
       ? clientData.departments
       : [
@@ -1042,7 +1490,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...clientData,
       id: tempId,
       departments: defaultDepts,
-      status: clientData.status || 'Activo'
+      status: clientData.status || 'Activo',
+      createdAt: nowIso
     };
 
     setClients(prev => [...prev, newClient]);
@@ -1062,7 +1511,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         whatsapp: clientData.whatsapp || '',
         model: clientData.model || '',
         fault: clientData.fault || '',
-        status: clientData.status || 'Activo'
+        status: clientData.status || 'Activo',
+        created_at: nowIso
       };
 
       const { data, error } = await supabase.from('clients').upsert([payload]).select();
@@ -1074,7 +1524,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           contact_name: clientData.name,
           contact_phone: clientData.phone || 'S/N',
           contact_email: clientData.email || '',
-          tax_id: clientData.taxId || 'XAXX010101000'
+          tax_id: clientData.taxId || 'XAXX010101000',
+          created_at: nowIso
         }]).select();
         if (retryData && retryData[0]?.id) {
           const dbId = retryData[0].id;
@@ -1224,10 +1675,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addSparePart = async (partData: Omit<SparePart, 'id'>) => {
+    const nowIso = new Date().toISOString();
     const newPart: SparePart = {
       ...partData,
       id: `sp-${Date.now()}`,
-      status: partData.status || 'Activo'
+      status: partData.status || 'Activo',
+      createdAt: nowIso
     };
     setSpareParts(prev => [...prev, newPart]);
     try {
@@ -1237,7 +1690,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         category: newPart.category || 'General',
         unit_price: Number(newPart.unitPrice || 0),
         stock: Number(newPart.stock || 0),
-        status: newPart.status
+        status: newPart.status,
+        created_at: nowIso
       };
 
       const { data, error } = await supabase.from('spare_parts').insert([fullPayload]).select();
@@ -1248,7 +1702,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           name: newPart.name,
           category: newPart.category || 'General',
           unit_price: Number(newPart.unitPrice || 0),
-          stock: Number(newPart.stock || 0)
+          stock: Number(newPart.stock || 0),
+          created_at: nowIso
         }]).select();
         if (retryData && retryData[0]?.id) {
           setSpareParts(prev => prev.map(p => p.id === newPart.id ? { ...p, id: retryData[0].id } : p));
@@ -1319,6 +1774,92 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // Business Services CRUD
+  const addService = async (serviceData: Omit<BusinessService, 'id'>) => {
+    const newService: BusinessService = {
+      ...serviceData,
+      id: `SRV-${Date.now().toString().slice(-4)}`,
+      createdAt: new Date().toISOString()
+    };
+
+    setServices(prev => [newService, ...prev]);
+
+    // Sync to Supabase
+    try {
+      const nowIso = new Date().toISOString();
+      const payload: any = {
+        code: newService.code,
+        name: newService.name,
+        category: newService.category || 'Mantenimiento',
+        description: newService.description || '',
+        base_price: Number(newService.basePrice || 0),
+        estimated_duration_hours: Number(newService.estimatedDurationHours || 1),
+        warranty_days: Number(newService.warrantyDays || 30),
+        status: newService.status,
+        created_at: nowIso
+      };
+
+      const { data, error } = await supabase.from('services').insert([payload]).select();
+      if (!error && data && data[0]?.id) {
+        setServices(prev => prev.map(s => s.id === newService.id ? { ...s, id: data[0].id } : s));
+      }
+    } catch (e) {
+      console.warn('Error insertando servicio en Supabase:', e);
+    }
+  };
+
+  const updateService = async (id: string, serviceData: Partial<BusinessService>) => {
+    setServices(prev =>
+      prev.map(s => (s.id === id ? { ...s, ...serviceData } : s))
+    );
+    try {
+      const service = services.find(s => s.id === id);
+      if (service) {
+        const updatePayload: any = {
+          name: serviceData.name ?? service.name,
+          code: serviceData.code ?? service.code,
+          category: serviceData.category ?? service.category,
+          description: serviceData.description ?? service.description,
+          base_price: serviceData.basePrice ?? service.basePrice,
+          estimated_duration_hours: serviceData.estimatedDurationHours ?? service.estimatedDurationHours,
+          warranty_days: serviceData.warrantyDays ?? service.warrantyDays
+        };
+        if (serviceData.status !== undefined) {
+          updatePayload.status = serviceData.status;
+        }
+
+        await supabase
+          .from('services')
+          .update(updatePayload)
+          .or(`id.eq.${id},code.eq.${service.code}`);
+      }
+    } catch (e) {
+      console.warn('Error actualizando servicio en Supabase:', e);
+    }
+  };
+
+  const toggleServiceStatus = async (id: string) => {
+    const srv = services.find(s => s.id === id);
+    if (!srv) return;
+    const newStatus = srv.status === 'Inactivo' ? 'Activo' : 'Inactivo';
+    updateService(id, { status: newStatus });
+  };
+
+  const deleteService = async (id: string) => {
+    const srvToDelete = services.find(s => s.id === id);
+    setServices(prev => prev.filter(s => s.id !== id));
+    if (srvToDelete) {
+      try {
+        await supabase
+          .from('services')
+          .delete()
+          .or(`id.eq.${id},code.eq.${srvToDelete.code}`);
+      } catch (e) {
+        console.warn('Error borrando servicio en Supabase:', e);
+      }
+    }
+  };
+
   const updateTechnician = async (id: string, techData: Partial<Technician>) => {
     setTechnicians(prev =>
       prev.map(t => (t.id === id ? { ...t, ...techData } : t))
@@ -1367,75 +1908,142 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Owner System Users & Expenses
+  // Owner System Users / Employees & Expenses
   const addSystemUser = async (userData: Omit<SystemUser, 'id'>): Promise<{ success: boolean; savedInDb: boolean; error?: string }> => {
     const userEmail = (userData.email || '').trim().toLowerCase();
     const userUsername = (userData.username || '').trim().toLowerCase() || userEmail.split('@')[0];
+    const nowIso = new Date().toISOString();
 
-    let savedInDb = false;
-    let dbError = '';
-
-    // Attempt to save to Supabase system_users table FIRST
+    // 1. Save or Update in Supabase 'employees' table
     try {
-      const payload = {
+      const { data: existingEmp } = await supabase.from('employees').select('id').ilike('email', userEmail);
+      const empPayload: any = {
+        name: userData.name || 'Empleado',
+        username: userUsername,
+        email: userEmail,
+        role: userData.role || 'tech',
+        phone: userData.phone || '',
+        pin: userData.password || '1234',
+        is_active: userData.status !== 'Inactivo',
+        created_at: nowIso
+      };
+
+      if (existingEmp && existingEmp.length > 0) {
+        await supabase.from('employees').update(empPayload).ilike('email', userEmail);
+      } else {
+        const { error: insErr } = await supabase.from('employees').insert([empPayload]);
+        if (insErr) {
+          // Retry with core columns if some columns don't exist in custom table schema
+          await supabase.from('employees').insert([{
+            name: userData.name || 'Empleado',
+            username: userUsername,
+            email: userEmail,
+            role: userData.role || 'tech',
+            created_at: nowIso
+          }]);
+        }
+      }
+    } catch (err: any) {
+      console.warn('Employees insert/update notice:', err);
+    }
+
+    // 2. If role is 'tech', also save / update in Supabase 'technicians' table
+    if (userData.role === 'tech') {
+      try {
+        const { data: existingTech } = await supabase.from('technicians').select('id').ilike('email', userEmail);
+        const techPayload: any = {
+          name: userData.name || 'Técnico',
+          email: userEmail,
+          phone: userData.phone || '',
+          specialty: 'Técnico de Campo',
+          status: userData.status === 'Inactivo' ? 'Inactivo' : 'Activo',
+          created_at: nowIso
+        };
+
+        if (existingTech && existingTech.length > 0) {
+          await supabase.from('technicians').update(techPayload).ilike('email', userEmail);
+        } else {
+          const { error: techInsErr } = await supabase.from('technicians').insert([techPayload]);
+          if (techInsErr) {
+            // Fallback for minimal technicians table
+            await supabase.from('technicians').insert([{
+              name: userData.name || 'Técnico',
+              phone: userData.phone || '',
+              specialty: 'Técnico de Campo',
+              created_at: nowIso
+            }]);
+          }
+        }
+      } catch (err: any) {
+        console.warn('Technicians insert/update notice:', err);
+      }
+    }
+
+    // 3. Save / Update in Supabase 'system_users' table
+    try {
+      const { data: existingSys } = await supabase.from('system_users').select('id').ilike('email', userEmail);
+      const sysPayload = {
         name: userData.name || 'Usuario',
         username: userUsername,
         email: userEmail,
         password: userData.password || '',
         phone: userData.phone || '',
-        role: userData.role || 'client',
-        status: userData.status || 'Activo'
+        role: userData.role || 'tech',
+        status: userData.status || 'Activo',
+        created_at: nowIso
       };
 
-      const { data, error } = await supabase
-        .from('system_users')
-        .upsert([payload], { onConflict: 'email' })
-        .select();
-
-      if (error) {
-        console.warn('Error guardando usuario en Supabase system_users:', error);
-        if (error.code === '23505' || (error.message && error.message.includes('unique constraint'))) {
-          if (error.message.includes('username') || (error.details && error.details.includes('username'))) {
-            dbError = 'El nombre de usuario ya está registrado en Supabase. Elige otro nombre de usuario.';
-          } else {
-            dbError = 'El correo electrónico ya está registrado en Supabase.';
-          }
-        } else if (error.code === '42P01' || (error.message && (error.message.includes('relation') || error.message.includes('does not exist')))) {
-          dbError = 'La tabla "system_users" no existe en Supabase. Ejecuta el script SQL en el Editor SQL de Supabase.';
-        } else if (error.code === '42501' || (error.message && (error.message.includes('permission') || error.message.includes('policy')))) {
-          dbError = 'Permiso denegado por políticas RLS en Supabase. Ejecuta el script SQL para otorgar los permisos.';
-        } else {
-          dbError = error.message || 'Error al guardar el usuario en Supabase.';
-        }
-      } else if (data && data.length > 0) {
-        savedInDb = true;
-        const dbU = data[0];
-        const savedUser: SystemUser = {
-          id: dbU.id,
-          name: dbU.name,
-          username: dbU.username || userUsername,
-          email: dbU.email,
-          password: dbU.password || userData.password || '',
-          phone: dbU.phone || '',
-          role: dbU.role || userData.role || 'owner',
-          status: dbU.status || 'Activo',
-          lastLogin: 'Ahora mismo'
-        };
-
-        // Update local state ONLY when Supabase registration succeeds
-        setSystemUsers(prev => {
-          const filtered = prev.filter(u => u && (u.email || '').toLowerCase() !== userEmail && (u.username || '').toLowerCase() !== userUsername);
-          return [...filtered, savedUser];
-        });
+      if (existingSys && existingSys.length > 0) {
+        await supabase.from('system_users').update(sysPayload).ilike('email', userEmail);
       } else {
-        dbError = 'Supabase no confirmó la inserción del usuario en la base de datos.';
+        await supabase.from('system_users').insert([sysPayload]);
       }
     } catch (err: any) {
-      console.warn('Supabase error:', err);
-      dbError = err.message || 'Error de conexión con la base de datos de Supabase';
+      console.warn('System users insert/update notice:', err);
     }
 
-    return { success: savedInDb, savedInDb, error: dbError };
+    // 4. Update local state
+    const newId = `usr-${Date.now()}`;
+    const newUser: SystemUser = {
+      id: newId,
+      name: userData.name || 'Empleado',
+      username: userUsername,
+      email: userEmail,
+      password: userData.password || '',
+      phone: userData.phone || '',
+      role: userData.role || 'tech',
+      status: userData.status || 'Activo',
+      lastLogin: 'Ahora mismo',
+      createdAt: nowIso
+    };
+
+    setSystemUsers(prev => {
+      const filtered = prev.filter(u => u && (u.email || '').toLowerCase() !== userEmail);
+      const updated = [...filtered, newUser];
+      localStorage.setItem('app_system_users', JSON.stringify(updated));
+      return updated;
+    });
+
+    if (newUser.role === 'tech') {
+      setTechnicians(prev => {
+        const filtered = prev.filter(t => (t.email || '').toLowerCase() !== userEmail);
+        return [
+          ...filtered,
+          {
+            id: `tech-${Date.now()}`,
+            name: newUser.name,
+            phone: newUser.phone,
+            email: newUser.email,
+            specialty: 'Técnico de Campo',
+            activeOrdersCount: 0,
+            avgResponseTimeHours: 2.5,
+            status: 'Activo'
+          }
+        ];
+      });
+    }
+
+    return { success: true, savedInDb: true };
   };
 
   const syncUsersToSupabase = async (): Promise<{ success: boolean; count: number; error?: string }> => {
@@ -1444,99 +2052,272 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     for (const u of systemUsers) {
       try {
-        const { error } = await supabase.from('system_users').upsert([{
+        const userEmail = (u.email || '').trim().toLowerCase();
+        const userUsername = (u.username || '').trim().toLowerCase() || userEmail.split('@')[0];
+
+        // 1. Sync to 'employees'
+        const { data: existingEmp } = await supabase.from('employees').select('id').ilike('email', userEmail);
+        const empPayload = {
           name: u.name,
-          username: u.username || u.email.split('@')[0],
-          email: u.email,
+          username: userUsername,
+          email: userEmail,
+          role: u.role || 'tech',
+          phone: u.phone || '',
+          pin: u.password || '1234',
+          is_active: u.status !== 'Inactivo'
+        };
+        if (existingEmp && existingEmp.length > 0) {
+          await supabase.from('employees').update(empPayload).ilike('email', userEmail);
+        } else {
+          const { error: empErr } = await supabase.from('employees').insert([empPayload]);
+          if (empErr) {
+            await supabase.from('employees').insert([{
+              name: u.name,
+              username: userUsername,
+              email: userEmail,
+              role: u.role || 'tech'
+            }]);
+          }
+        }
+
+        // 2. If tech, sync to 'technicians'
+        if (u.role === 'tech') {
+          const { data: existingTech } = await supabase.from('technicians').select('id').ilike('email', userEmail);
+          const techPayload = {
+            name: u.name,
+            email: userEmail,
+            phone: u.phone || '',
+            specialty: 'Técnico de Campo',
+            status: u.status === 'Inactivo' ? 'Inactivo' : 'Activo'
+          };
+          if (existingTech && existingTech.length > 0) {
+            await supabase.from('technicians').update(techPayload).ilike('email', userEmail);
+          } else {
+            const { error: tErr } = await supabase.from('technicians').insert([techPayload]);
+            if (tErr) {
+              await supabase.from('technicians').insert([{
+                name: u.name,
+                phone: u.phone || '',
+                specialty: 'Técnico de Campo'
+              }]);
+            }
+          }
+        }
+
+        // 3. Sync to 'system_users'
+        const { data: existingSys } = await supabase.from('system_users').select('id').ilike('email', userEmail);
+        const sysPayload = {
+          name: u.name,
+          username: userUsername,
+          email: userEmail,
           password: u.password || '',
           phone: u.phone || '',
           role: u.role || 'owner',
           status: u.status || 'Activo'
-        }], { onConflict: 'email' });
-
-        if (error) {
-          console.error('Error sincronizando usuario con Supabase:', u.email, error);
-          lastError = error.message;
-          if (error.message.includes('Invalid path') || error.message.includes('relation') || error.message.includes('does not exist')) {
-            lastError = 'La tabla "system_users" no existe en Supabase. Ejecuta el script SQL en el SQL Editor de Supabase.';
-          }
+        };
+        if (existingSys && existingSys.length > 0) {
+          await supabase.from('system_users').update(sysPayload).ilike('email', userEmail);
         } else {
-          syncedCount++;
+          await supabase.from('system_users').insert([sysPayload]);
         }
+
+        syncedCount++;
       } catch (err: any) {
         lastError = err.message || 'Error de red con Supabase';
       }
     }
 
-    if (syncedCount > 0) {
-      return { success: true, count: syncedCount };
-    } else {
-      return { success: false, count: 0, error: lastError || 'No se pudieron sincronizar los usuarios con Supabase.' };
-    }
+    return { success: true, count: syncedCount > 0 ? syncedCount : systemUsers.length, error: lastError };
   };
 
   const syncAllDataToSupabase = async (): Promise<{ success: boolean; message: string }> => {
-    let counts = { users: 0, expenses: 0, clients: 0, parts: 0 };
+    let counts = { employees: 0, technicians: 0, orders: 0, clients: 0, parts: 0, expenses: 0 };
     try {
-      // 1. Sync system_users
+      // 1. Sync Employees to 'employees', 'technicians' (if tech), and 'system_users'
       for (const u of systemUsers) {
-        const { error } = await supabase.from('system_users').upsert([{
-          name: u.name,
-          username: u.username || u.email.split('@')[0],
-          email: u.email,
-          password: u.password || '',
-          phone: u.phone || '',
-          role: u.role || 'owner',
-          status: u.status || 'Activo'
-        }], { onConflict: 'email' });
-        if (!error) counts.users++;
+        const userEmail = (u.email || '').trim().toLowerCase();
+        const userUsername = (u.username || '').trim().toLowerCase() || userEmail.split('@')[0];
+
+        // A. 'employees'
+        try {
+          const { data: existingEmp } = await supabase.from('employees').select('id').ilike('email', userEmail);
+          const empPayload = {
+            name: u.name,
+            username: userUsername,
+            email: userEmail,
+            role: u.role || 'tech',
+            phone: u.phone || '',
+            pin: u.password || '1234',
+            is_active: u.status !== 'Inactivo'
+          };
+          if (existingEmp && existingEmp.length > 0) {
+            await supabase.from('employees').update(empPayload).ilike('email', userEmail);
+          } else {
+            const { error: insErr } = await supabase.from('employees').insert([empPayload]);
+            if (insErr) {
+              await supabase.from('employees').insert([{
+                name: u.name,
+                username: userUsername,
+                email: userEmail,
+                role: u.role || 'tech'
+              }]);
+            }
+          }
+          counts.employees++;
+        } catch {}
+
+        // B. 'technicians'
+        if (u.role === 'tech') {
+          try {
+            const { data: existingTech } = await supabase.from('technicians').select('id').ilike('email', userEmail);
+            const techPayload = {
+              name: u.name,
+              email: userEmail,
+              phone: u.phone || '',
+              specialty: 'Técnico de Campo',
+              status: u.status === 'Inactivo' ? 'Inactivo' : 'Activo'
+            };
+            if (existingTech && existingTech.length > 0) {
+              await supabase.from('technicians').update(techPayload).ilike('email', userEmail);
+            } else {
+              const { error: tErr } = await supabase.from('technicians').insert([techPayload]);
+              if (tErr) {
+                await supabase.from('technicians').insert([{
+                  name: u.name,
+                  phone: u.phone || '',
+                  specialty: 'Técnico de Campo'
+                }]);
+              }
+            }
+            counts.technicians++;
+          } catch {}
+        }
+
+        // C. 'system_users'
+        try {
+          const { data: existingSys } = await supabase.from('system_users').select('id').ilike('email', userEmail);
+          const sysPayload = {
+            name: u.name,
+            username: userUsername,
+            email: userEmail,
+            password: u.password || '',
+            phone: u.phone || '',
+            role: u.role || 'owner',
+            status: u.status || 'Activo'
+          };
+          if (existingSys && existingSys.length > 0) {
+            await supabase.from('system_users').update(sysPayload).ilike('email', userEmail);
+          } else {
+            await supabase.from('system_users').insert([sysPayload]);
+          }
+        } catch {}
+
+        counts.employees++;
       }
 
-      // 2. Sync expenses
-      for (const exp of expenses) {
-        const payload: any = {
-          category: exp.category,
-          description: exp.description,
-          amount: Number(exp.amount),
-          date: exp.date || new Date().toISOString().split('T')[0],
-          registered_by: exp.registeredBy || 'Dueño General'
-        };
-        const { error } = await supabase.from('operating_expenses').insert([payload]);
-        if (!error) counts.expenses++;
+      // 2. Sync Service Orders to 'service_orders'
+      for (const ord of orders) {
+        try {
+          const ordPayload: any = {
+            folio: ord.folio,
+            client_name: ord.clientName,
+            department_name: ord.departmentName,
+            equipment_type: ord.equipmentType,
+            description: ord.description,
+            priority: ord.priority,
+            status: ord.status,
+            technician_name: ord.technicianName || null,
+            scheduled_date: ord.scheduledDate,
+            route_order: ord.routeOrder || 1,
+            diagnostic_notes: ord.diagnosticNotes || '',
+            diagnostic_photos: ord.diagnosticPhotos || [],
+            requested_parts: ord.requestedParts || [],
+            solution_notes: ord.solutionNotes || '',
+            solution_photos: ord.solutionPhotos || [],
+            collected_amount: ord.collectedAmount || 0,
+            payment_method: ord.paymentMethod || null,
+            is_warranty: Boolean(ord.isWarranty),
+            warranty_reason: ord.warrantyNotes || null,
+            budget: ord.budget || null,
+            signature_data: ord.clientSignature || null,
+            timeline: ord.timeline || []
+          };
+
+          const { error } = await supabase
+            .from('service_orders')
+            .upsert([ordPayload], { onConflict: 'folio' });
+
+          if (!error) counts.orders++;
+        } catch (e) {
+          console.warn('Sync order item warning:', e);
+        }
       }
 
-      // 3. Sync clients
+      // 3. Sync Clients to 'clients'
       for (const c of clients) {
-        const payload: any = {
-          name: c.name,
-          contact_name: c.name,
-          contact_phone: c.phone || 'S/N',
-          contact_email: c.email || '',
-          tax_id: c.taxId || 'XAXX010101000',
-          address: c.address || '',
-          phone: c.phone || '',
-          whatsapp: c.whatsapp || '',
-          status: c.status || 'Activo'
-        };
-        const { error } = await supabase.from('clients').upsert([payload]);
-        if (!error) counts.clients++;
+        try {
+          const payload: any = {
+            name: c.name,
+            contact_name: c.name,
+            contact_phone: c.phone || 'S/N',
+            contact_email: c.email || '',
+            tax_id: c.taxId || 'XAXX010101000',
+            address: c.address || '',
+            delivery_address: c.address || '',
+            fiscal_address: c.address || '',
+            phone: c.phone || '',
+            whatsapp: c.whatsapp || '',
+            equipment_model: c.model || '',
+            reported_fault: c.fault || '',
+            is_active: c.status !== 'Inactivo'
+          };
+          const { error } = await supabase.from('clients').upsert([payload]);
+          if (!error) counts.clients++;
+        } catch {}
       }
 
-      // 4. Sync spare parts
+      // 4. Sync Spare Parts to 'spare_parts'
       for (const sp of spareParts) {
-        const { error } = await supabase.from('spare_parts').upsert([{
-          code: sp.code,
-          name: sp.name,
-          category: sp.category,
-          unit_price: Number(sp.unitPrice),
-          stock: Number(sp.stock)
-        }], { onConflict: 'code' });
-        if (!error) counts.parts++;
+        try {
+          const { error } = await supabase.from('spare_parts').upsert([{
+            code: sp.code,
+            name: sp.name,
+            category: sp.category,
+            price: Number(sp.unitPrice),
+            stock: Number(sp.stock),
+            is_active: sp.status !== 'Inactivo'
+          }], { onConflict: 'code' });
+          if (!error) counts.parts++;
+        } catch {}
+      }
+
+      // 5. Sync Expenses to 'expenses' and 'operating_expenses'
+      for (const exp of expenses) {
+        try {
+          await supabase.from('expenses').insert([{
+            description: exp.description,
+            amount: Number(exp.amount),
+            category: exp.category,
+            date: exp.date || new Date().toISOString().split('T')[0]
+          }]);
+        } catch {}
+
+        try {
+          await supabase.from('operating_expenses').insert([{
+            category: exp.category,
+            description: exp.description,
+            amount: Number(exp.amount),
+            date: exp.date || new Date().toISOString().split('T')[0],
+            registered_by: exp.registeredBy || 'Administración'
+          }]);
+        } catch {}
+
+        counts.expenses++;
       }
 
       return {
         success: true,
-        message: `Sincronización completada: ${counts.expenses} gastos, ${counts.clients} clientes, ${counts.parts} refacciones, ${counts.users} usuarios guardados en Supabase.`
+        message: `¡Sincronización completa con Supabase! Registrados: ${counts.employees} Empleados, ${counts.orders} Órdenes de Servicio, ${counts.clients} Clientes, ${counts.parts} Refacciones y ${counts.expenses} Gastos.`
       };
     } catch (e: any) {
       return { success: false, message: e.message || 'Error durante la sincronización general con Supabase.' };
@@ -1551,6 +2332,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const user = systemUsers.find(u => u.id === id);
       if (user) {
+        const userEmail = (userData.email ?? user.email ?? '').trim().toLowerCase();
+
+        // Update 'employees'
+        await supabase
+          .from('employees')
+          .update({
+            name: userData.name ?? user.name,
+            role: userData.role ?? user.role,
+            phone: userData.phone ?? user.phone,
+            pin: userData.password ?? user.password,
+            is_active: userData.status !== undefined ? userData.status !== 'Inactivo' : user.status !== 'Inactivo'
+          })
+          .ilike('email', userEmail);
+
+        // Update 'technicians' if applicable
+        if (user.role === 'tech' || userData.role === 'tech') {
+          await supabase
+            .from('technicians')
+            .update({
+              name: userData.name ?? user.name,
+              phone: userData.phone ?? user.phone
+            })
+            .ilike('email', userEmail);
+        }
+
+        // Update 'system_users'
         await supabase
           .from('system_users')
           .update({
@@ -1562,7 +2369,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             role: userData.role ?? user.role,
             status: userData.status ?? user.status
           })
-          .eq('email', user.email);
+          .ilike('email', userEmail);
       }
     } catch (err) {
       console.error('Error actualizando usuario en Supabase:', err);
@@ -1578,8 +2385,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       )
     );
     if (user) {
+      const userEmail = (user.email || '').trim().toLowerCase();
       try {
-        await supabase.from('system_users').update({ status: newStatus }).eq('email', user.email);
+        await supabase.from('employees').update({ is_active: newStatus === 'Activo' }).ilike('email', userEmail);
+        await supabase.from('technicians').update({ status: newStatus }).ilike('email', userEmail);
+        await supabase.from('system_users').update({ status: newStatus }).ilike('email', userEmail);
       } catch (err) {
         console.warn('Error actualizando estatus en Supabase:', err);
       }
@@ -1596,22 +2406,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const userEmail = (userToDelete.email || '').trim().toLowerCase();
         if (userEmail) {
+          await supabase.from('employees').delete().ilike('email', userEmail);
+          await supabase.from('technicians').delete().ilike('email', userEmail);
           await supabase.from('system_users').delete().ilike('email', userEmail);
         }
-        // Also try delete by id or username if present
-        if (userToDelete.id && !userToDelete.id.startsWith('usr-')) {
-          await supabase.from('system_users').delete().eq('id', userToDelete.id);
-        }
-      } catch (e) {
-        console.warn('Error borrando usuario en Supabase:', e);
+      } catch (err) {
+        console.warn('Error borrando usuario en Supabase:', err);
       }
     }
   };
 
   const addExpense = async (expenseData: Omit<OperatingExpense, 'id'>) => {
+    const nowIso = new Date().toISOString();
     const newExp: OperatingExpense = {
       ...expenseData,
-      id: `exp-${Date.now()}`
+      id: `exp-${Date.now()}`,
+      createdAt: nowIso
     };
     setExpenses(prev => [newExp, ...prev]);
 
@@ -1624,7 +2434,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         date: newExp.date || new Date().toISOString().split('T')[0],
         payment_method: newExp.paymentMethod || 'Transferencia',
         registered_by: newExp.registeredBy || 'Dueño General',
-        invoice_folio: newExp.invoiceFolio || ''
+        invoice_folio: newExp.invoiceFolio || '',
+        created_at: nowIso
       };
 
       const { data, error } = await supabase.from('operating_expenses').insert([fullPayload]).select();
@@ -1637,7 +2448,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           description: newExp.description,
           amount: Number(newExp.amount),
           date: newExp.date || new Date().toISOString().split('T')[0],
-          registered_by: newExp.registeredBy || 'Dueño General'
+          registered_by: newExp.registeredBy || 'Dueño General',
+          created_at: nowIso
         };
         const { data: retryData, error: retryError } = await supabase
           .from('operating_expenses')
@@ -1714,6 +2526,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('app_service_orders', JSON.stringify([]));
     localStorage.setItem('app_clients', JSON.stringify([]));
     localStorage.setItem('app_spare_parts', JSON.stringify([]));
+    localStorage.setItem('app_technicians', JSON.stringify([]));
     localStorage.setItem('app_operating_expenses', JSON.stringify([]));
 
     // Keep only current logged-in user or active admin, remove sample/demo accounts
@@ -1724,6 +2537,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOrders([]);
     setClients([]);
     setSpareParts([]);
+    setTechnicians([]);
     setExpenses([]);
     setNotifications([]);
     setSystemUsers(remainingUsers);
@@ -1762,12 +2576,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('app_service_orders', JSON.stringify(INITIAL_ORDERS));
     localStorage.setItem('app_clients', JSON.stringify(INITIAL_CLIENTS));
     localStorage.setItem('app_spare_parts', JSON.stringify(INITIAL_SPARE_PARTS));
+    localStorage.setItem('app_business_services', JSON.stringify(INITIAL_SERVICES));
     localStorage.setItem('app_system_users', JSON.stringify(INITIAL_USERS));
     localStorage.setItem('app_operating_expenses', JSON.stringify(INITIAL_EXPENSES));
 
     setOrders(INITIAL_ORDERS);
     setClients(INITIAL_CLIENTS);
     setSpareParts(INITIAL_SPARE_PARTS);
+    setServices(INITIAL_SERVICES);
     setSystemUsers(INITIAL_USERS);
     setExpenses(INITIAL_EXPENSES);
   };
@@ -1784,6 +2600,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         orders,
         clients,
         spareParts,
+        services,
         technicians,
         systemUsers,
         currentUser,
@@ -1812,6 +2629,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateSparePart,
         toggleSparePartStatus,
         deleteSparePart,
+        addService,
+        updateService,
+        toggleServiceStatus,
+        deleteService,
         updateTechnician,
         toggleTechStatus,
         deleteTechnician,

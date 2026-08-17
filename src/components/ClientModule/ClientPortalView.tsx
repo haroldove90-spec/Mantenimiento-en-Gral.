@@ -130,25 +130,78 @@ export const ClientPortalView: React.FC = () => {
         {/* Banner */}
         <div className="bg-slate-900 text-white p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <span className="text-xs font-mono font-bold text-purple-400 bg-purple-950/80 px-2.5 py-1 rounded-md border border-purple-800">
-              {currentOrder.folio}
-            </span>
+            <div className="flex items-center space-x-2">
+              <span className="text-xs font-mono font-bold text-purple-400 bg-purple-950/80 px-2.5 py-1 rounded-md border border-purple-800">
+                {currentOrder.folio}
+              </span>
+              <span className="text-xs font-bold bg-white/10 text-white px-2.5 py-1 rounded-md">
+                Estatus: {currentOrder.status}
+              </span>
+            </div>
             <h3 className="text-xl font-bold mt-2">{currentOrder.clientName}</h3>
             <p className="text-xs text-slate-400 mt-0.5">{currentOrder.departmentName}</p>
           </div>
 
-          <div className="text-right">
+          <div className="text-right flex flex-col items-start sm:items-end gap-1.5">
             <span
-              className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${
-                budget?.status === 'Aprobado'
+              className={`inline-block px-3.5 py-1.5 rounded-full text-xs font-black shadow-xs ${
+                currentOrder.status === 'Cobrado/Cerrado'
+                  ? 'bg-emerald-500 text-white'
+                  : currentOrder.status === 'En Reparación' || currentOrder.status === 'En Diagnóstico'
+                  ? 'bg-blue-500 text-white'
+                  : budget?.status === 'Aprobado'
                   ? 'bg-emerald-500 text-white'
                   : budget?.status === 'Rechazado'
                   ? 'bg-rose-500 text-white'
                   : 'bg-amber-400 text-slate-950'
               }`}
             >
-              {budget?.status ? `Presupuesto ${budget.status}` : 'Cotización en Proceso'}
+              {currentOrder.status === 'Cobrado/Cerrado' ? '✅ Servicio Terminado' : currentOrder.status === 'En Reparación' ? '⚡ En Reparación' : currentOrder.status === 'En Diagnóstico' ? '🔍 En Diagnóstico' : budget?.status ? `Presupuesto ${budget.status}` : '⏳ ' + currentOrder.status}
             </span>
+            <span className="text-[11px] text-slate-400">Técnico Asignado: <strong>{currentOrder.technicianName || 'Por Asignar'}</strong></span>
+          </div>
+        </div>
+
+        {/* Live Service Stepper / Tracker */}
+        <div className="bg-slate-800/60 border-y border-slate-700/50 p-4 px-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-xs">
+            <div className={`p-2 rounded-xl flex flex-col items-center ${
+              currentOrder.status === 'Pendiente de Visita' || currentOrder.status === 'Presupuesto Pendiente' || currentOrder.status === 'Esperando Aprobación' || currentOrder.status === 'En Diagnóstico' || currentOrder.status === 'En Reparación' || currentOrder.status === 'Cobrado/Cerrado'
+                ? 'bg-purple-950/70 border border-purple-700/60 text-purple-200'
+                : 'text-slate-500'
+            }`}>
+              <span className="font-bold text-[10px] uppercase tracking-wider">Paso 1</span>
+              <span className="font-extrabold mt-0.5">1. Recepción & Visita</span>
+            </div>
+
+            <div className={`p-2 rounded-xl flex flex-col items-center ${
+              currentOrder.status === 'En Diagnóstico' || currentOrder.status === 'Presupuesto Pendiente' || currentOrder.status === 'Esperando Aprobación' || currentOrder.status === 'En Reparación' || currentOrder.status === 'Cobrado/Cerrado'
+                ? 'bg-indigo-950/70 border border-indigo-700/60 text-indigo-200'
+                : 'text-slate-500'
+            }`}>
+              <span className="font-bold text-[10px] uppercase tracking-wider">Paso 2</span>
+              <span className="font-extrabold mt-0.5">2. Diagnóstico en Sitio</span>
+            </div>
+
+            <div className={`p-2 rounded-xl flex flex-col items-center ${
+              currentOrder.status === 'En Reparación' || currentOrder.status === 'Cobrado/Cerrado'
+                ? 'bg-blue-950/70 border border-blue-700/60 text-blue-200'
+                : currentOrder.status === 'Esperando Aprobación'
+                ? 'bg-amber-950/70 border border-amber-500 text-amber-200 ring-2 ring-amber-400/40 animate-pulse'
+                : 'text-slate-500'
+            }`}>
+              <span className="font-bold text-[10px] uppercase tracking-wider">Paso 3</span>
+              <span className="font-extrabold mt-0.5">3. En Reparación</span>
+            </div>
+
+            <div className={`p-2 rounded-xl flex flex-col items-center ${
+              currentOrder.status === 'Cobrado/Cerrado'
+                ? 'bg-emerald-950/70 border border-emerald-500 text-emerald-200 ring-2 ring-emerald-400/40'
+                : 'text-slate-500'
+            }`}>
+              <span className="font-bold text-[10px] uppercase tracking-wider">Paso 4</span>
+              <span className="font-extrabold mt-0.5">4. Concluido / Terminado</span>
+            </div>
           </div>
         </div>
 

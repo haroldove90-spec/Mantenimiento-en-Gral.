@@ -19,7 +19,8 @@ import {
   Sparkles,
   PieChart,
   Trash2,
-  RotateCcw
+  RotateCcw,
+  Layers
 } from 'lucide-react';
 
 export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCreateModal }) => {
@@ -126,14 +127,14 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
                   setActiveRole('owner');
                   setOwnerSubTab('analytics');
                 }}
-                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold text-left transition-all cursor-pointer ${
                   activeRole === 'owner' && ownerSubTab === 'analytics'
                     ? 'bg-sij-orange text-white shadow-md font-bold'
                     : 'text-white/80 hover:text-white hover:bg-white/10'
                 }`}
               >
                 <BarChart3 className="w-4 h-4 shrink-0 text-sij-orange" />
-                <span>Analítica & Cobranza</span>
+                <span className="text-left leading-tight">Analítica & Cobranza</span>
               </button>
 
               <button
@@ -142,30 +143,62 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
                   setActiveRole('owner');
                   setOwnerSubTab('financials');
                 }}
-                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold text-left transition-all cursor-pointer ${
                   activeRole === 'owner' && ownerSubTab === 'financials'
                     ? 'bg-sij-orange text-white shadow-md font-bold'
                     : 'text-white/80 hover:text-white hover:bg-white/10'
                 }`}
               >
                 <FileSpreadsheet className="w-4 h-4 shrink-0 text-emerald-400" />
-                <span>Reportes Financieros</span>
+                <span className="text-left leading-tight">Reportes Financieros</span>
               </button>
 
               <button
-                id="role-btn-owner-users"
+                id="role-btn-owner-services"
                 onClick={() => {
                   setActiveRole('owner');
-                  setOwnerSubTab('users');
+                  setOwnerSubTab('services');
                 }}
-                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
-                  activeRole === 'owner' && ownerSubTab === 'users'
+                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold text-left transition-all cursor-pointer ${
+                  activeRole === 'owner' && ownerSubTab === 'services'
+                    ? 'bg-sij-orange text-white shadow-md font-bold'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <Layers className="w-4 h-4 shrink-0 text-cyan-400" />
+                <span className="text-left leading-tight">Catálogo de Servicios</span>
+              </button>
+
+              <button
+                id="role-btn-owner-employees"
+                onClick={() => {
+                  setActiveRole('owner');
+                  setOwnerSubTab('employees');
+                }}
+                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold text-left transition-all cursor-pointer ${
+                  activeRole === 'owner' && (ownerSubTab === 'employees' || ownerSubTab === 'users')
                     ? 'bg-sij-orange text-white shadow-md font-bold'
                     : 'text-white/80 hover:text-white hover:bg-white/10'
                 }`}
               >
                 <Users className="w-4 h-4 shrink-0 text-sij-cyan" />
-                <span>Gestión de Usuarios</span>
+                <span className="text-left leading-tight">Gestión de Empleados</span>
+              </button>
+
+              <button
+                id="role-btn-owner-clients"
+                onClick={() => {
+                  setActiveRole('owner');
+                  setOwnerSubTab('clients');
+                }}
+                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold text-left transition-all cursor-pointer ${
+                  activeRole === 'owner' && ownerSubTab === 'clients'
+                    ? 'bg-sij-orange text-white shadow-md font-bold'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <Building2 className="w-4 h-4 shrink-0 text-purple-400" />
+                <span className="text-left leading-tight">Directorio de Clientes</span>
               </button>
             </div>
           )}
@@ -183,14 +216,14 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
                   setActiveRole('office');
                   setOfficeSubTab('orders');
                 }}
-                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold text-left transition-all cursor-pointer ${
                   activeRole === 'office' && officeSubTab === 'orders'
                     ? 'bg-sij-blue text-white shadow-md font-bold'
                     : 'text-white/80 hover:text-white hover:bg-white/10'
                 }`}
               >
                 <FileText className="w-4 h-4 shrink-0 text-sij-cyan" />
-                <span>Órdenes de Servicio</span>
+                <span className="text-left leading-tight">Órdenes de Servicio</span>
               </button>
 
               <button
@@ -198,14 +231,14 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
                   setActiveRole('office');
                   setOfficeSubTab('routes');
                 }}
-                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold text-left transition-all cursor-pointer ${
                   activeRole === 'office' && officeSubTab === 'routes'
                     ? 'bg-sij-blue text-white shadow-md font-bold'
                     : 'text-white/80 hover:text-white hover:bg-white/10'
                 }`}
               >
                 <Navigation className="w-4 h-4 shrink-0 text-emerald-400" />
-                <span>Agenda & Rutas</span>
+                <span className="text-left leading-tight">Agenda & Rutas</span>
               </button>
 
               <button
@@ -213,14 +246,44 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
                   setActiveRole('office');
                   setOfficeSubTab('budgets');
                 }}
-                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold text-left transition-all cursor-pointer ${
                   activeRole === 'office' && officeSubTab === 'budgets'
                     ? 'bg-sij-blue text-white shadow-md font-bold'
                     : 'text-white/80 hover:text-white hover:bg-white/10'
                 }`}
               >
                 <FileSpreadsheet className="w-4 h-4 shrink-0 text-amber-400" />
-                <span>Cotizaciones & Presupuestos</span>
+                <span className="text-left leading-tight">Cotizaciones & Presupuestos</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveRole('office');
+                  setOfficeSubTab('services');
+                }}
+                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold text-left transition-all cursor-pointer ${
+                  activeRole === 'office' && officeSubTab === 'services'
+                    ? 'bg-sij-blue text-white shadow-md font-bold'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <Layers className="w-4 h-4 shrink-0 text-cyan-400" />
+                <span className="text-left leading-tight">Catálogo de Servicios</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveRole('office');
+                  setOfficeSubTab('clients');
+                }}
+                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold text-left transition-all cursor-pointer ${
+                  activeRole === 'office' && officeSubTab === 'clients'
+                    ? 'bg-sij-blue text-white shadow-md font-bold'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <Building2 className="w-4 h-4 shrink-0 text-purple-400" />
+                <span className="text-left leading-tight">Directorio de Clientes</span>
               </button>
 
               <button
@@ -228,14 +291,14 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
                   setActiveRole('office');
                   setOfficeSubTab('catalogs');
                 }}
-                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold text-left transition-all cursor-pointer ${
                   activeRole === 'office' && officeSubTab === 'catalogs'
                     ? 'bg-sij-blue text-white shadow-md font-bold'
                     : 'text-white/80 hover:text-white hover:bg-white/10'
                 }`}
               >
-                <Users className="w-4 h-4 shrink-0 text-purple-400" />
-                <span>Clientes & Catálogo</span>
+                <Wrench className="w-4 h-4 shrink-0 text-amber-400" />
+                <span className="text-left leading-tight">Catálogo de Refacciones</span>
               </button>
 
               <button
@@ -243,14 +306,14 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
                   setActiveRole('office');
                   setOfficeSubTab('reports');
                 }}
-                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold text-left transition-all cursor-pointer ${
                   activeRole === 'office' && officeSubTab === 'reports'
                     ? 'bg-sij-blue text-white shadow-md font-bold'
                     : 'text-white/80 hover:text-white hover:bg-white/10'
                 }`}
               >
                 <BarChart3 className="w-4 h-4 shrink-0 text-sij-cyan" />
-                <span>Reportes & Rendimiento</span>
+                <span className="text-left leading-tight">Reportes & Rendimiento</span>
               </button>
             </div>
           )}
@@ -582,56 +645,68 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
 
         {/* Owner Role Bottom Bar */}
         {activeRole === 'owner' && (
-          <div className="grid grid-cols-4 gap-1 text-center">
+          <div className="grid grid-cols-5 gap-1 text-center">
             <button
               onClick={() => setOwnerSubTab('analytics')}
-              className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all ${
+              className={`flex flex-col items-center justify-center py-1.5 px-0.5 rounded-xl transition-all ${
                 ownerSubTab === 'analytics'
                   ? 'bg-sij-orange text-white font-bold shadow-xs'
                   : 'text-slate-300 hover:text-white hover:bg-white/10'
               }`}
             >
               <BarChart3 className="w-4 h-4 mb-0.5" />
-              <span className="text-[10px] truncate w-full">Analítica</span>
+              <span className="text-[9px] truncate w-full">Analítica</span>
             </button>
 
             <button
               onClick={() => setOwnerSubTab('financials')}
-              className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all ${
+              className={`flex flex-col items-center justify-center py-1.5 px-0.5 rounded-xl transition-all ${
                 ownerSubTab === 'financials'
                   ? 'bg-sij-orange text-white font-bold shadow-xs'
                   : 'text-slate-300 hover:text-white hover:bg-white/10'
               }`}
             >
               <FileSpreadsheet className="w-4 h-4 mb-0.5 text-emerald-400" />
-              <span className="text-[10px] truncate w-full">Finanzas</span>
+              <span className="text-[9px] truncate w-full">Finanzas</span>
             </button>
 
             <button
-              onClick={() => setOwnerSubTab('users')}
-              className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all ${
-                ownerSubTab === 'users'
+              onClick={() => setOwnerSubTab('employees')}
+              className={`flex flex-col items-center justify-center py-1.5 px-0.5 rounded-xl transition-all ${
+                ownerSubTab === 'employees' || ownerSubTab === 'users'
                   ? 'bg-sij-orange text-white font-bold shadow-xs'
                   : 'text-slate-300 hover:text-white hover:bg-white/10'
               }`}
             >
               <Users className="w-4 h-4 mb-0.5 text-sij-cyan" />
-              <span className="text-[10px] truncate w-full">Usuarios</span>
+              <span className="text-[9px] truncate w-full">Empleados</span>
+            </button>
+
+            <button
+              onClick={() => setOwnerSubTab('clients')}
+              className={`flex flex-col items-center justify-center py-1.5 px-0.5 rounded-xl transition-all ${
+                ownerSubTab === 'clients'
+                  ? 'bg-sij-orange text-white font-bold shadow-xs'
+                  : 'text-slate-300 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              <Building2 className="w-4 h-4 mb-0.5 text-purple-400" />
+              <span className="text-[9px] truncate w-full">Clientes</span>
             </button>
 
             <button
               onClick={() => setActiveRole('home')}
-              className="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl text-slate-300 hover:text-white hover:bg-white/10"
+              className="flex flex-col items-center justify-center py-1.5 px-0.5 rounded-xl text-slate-300 hover:text-white hover:bg-white/10"
             >
               <Home className="w-4 h-4 mb-0.5 text-slate-400" />
-              <span className="text-[10px] truncate w-full">Inicio</span>
+              <span className="text-[9px] truncate w-full">Inicio</span>
             </button>
           </div>
         )}
 
         {/* Office Role Sub-modules Tabs */}
         {activeRole === 'office' && (
-          <div className="grid grid-cols-6 gap-0.5 text-center">
+          <div className="grid grid-cols-7 gap-0.5 text-center">
             <button
               onClick={() => setOfficeSubTab('orders')}
               className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-lg transition-all ${
@@ -641,7 +716,7 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
               }`}
             >
               <FileText className="w-3.5 h-3.5 mb-0.5" />
-              <span className="text-[9px] truncate w-full">Órdenes</span>
+              <span className="text-[8px] truncate w-full">Órdenes</span>
             </button>
 
             <button
@@ -653,7 +728,7 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
               }`}
             >
               <Navigation className="w-3.5 h-3.5 mb-0.5 text-emerald-400" />
-              <span className="text-[9px] truncate w-full">Rutas</span>
+              <span className="text-[8px] truncate w-full">Rutas</span>
             </button>
 
             <button
@@ -665,7 +740,19 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
               }`}
             >
               <FileSpreadsheet className="w-3.5 h-3.5 mb-0.5 text-amber-400" />
-              <span className="text-[9px] truncate w-full">Cotización</span>
+              <span className="text-[8px] truncate w-full">Cotiz.</span>
+            </button>
+
+            <button
+              onClick={() => setOfficeSubTab('clients')}
+              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-lg transition-all ${
+                officeSubTab === 'clients'
+                  ? 'bg-sij-blue text-white font-bold shadow-xs'
+                  : 'text-slate-300 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5 mb-0.5 text-purple-400" />
+              <span className="text-[8px] truncate w-full">Clientes</span>
             </button>
 
             <button
@@ -676,8 +763,8 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
                   : 'text-slate-300 hover:text-white hover:bg-white/10'
               }`}
             >
-              <Users className="w-3.5 h-3.5 mb-0.5 text-purple-400" />
-              <span className="text-[9px] truncate w-full">Catálogo</span>
+              <Wrench className="w-3.5 h-3.5 mb-0.5 text-amber-400" />
+              <span className="text-[8px] truncate w-full">Refacc.</span>
             </button>
 
             <button
@@ -689,7 +776,7 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
               }`}
             >
               <BarChart3 className="w-3.5 h-3.5 mb-0.5 text-sij-cyan" />
-              <span className="text-[9px] truncate w-full">Reportes</span>
+              <span className="text-[8px] truncate w-full">Reporte</span>
             </button>
 
             <button
@@ -697,7 +784,7 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
               className="flex flex-col items-center justify-center py-1 px-0.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/10"
             >
               <Home className="w-3.5 h-3.5 mb-0.5 text-slate-400" />
-              <span className="text-[9px] truncate w-full">Inicio</span>
+              <span className="text-[8px] truncate w-full">Inicio</span>
             </button>
           </div>
         )}

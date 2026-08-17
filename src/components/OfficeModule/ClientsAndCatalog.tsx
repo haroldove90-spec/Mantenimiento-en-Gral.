@@ -4,9 +4,9 @@ import { Building2, Package, Plus, MapPin, Phone, Mail, Search, Tag, Database, E
 import { ConfirmDeleteModal } from '../ConfirmDeleteModal';
 import { Client, SparePart } from '../../types';
 
-export const ClientsAndCatalog: React.FC = () => {
+export const ClientsAndCatalog: React.FC<{ initialTab?: 'clients' | 'catalog' }> = ({ initialTab = 'catalog' }) => {
   const { clients, spareParts, addClient, updateClient, deleteClient, toggleClientStatus, addSparePart, updateSparePart, toggleSparePartStatus, deleteSparePart } = useApp();
-  const [activeTab, setActiveTab] = useState<'clients' | 'catalog'>('clients');
+  const [activeTab, setActiveTab] = useState<'clients' | 'catalog'>(initialTab);
 
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -173,37 +173,23 @@ export const ClientsAndCatalog: React.FC = () => {
       )}
 
       {/* Top Header Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-        
-        {/* Toggle Tabs */}
-        <div className="flex bg-slate-100 p-1 rounded-xl">
-          <button
-            onClick={() => setActiveTab('clients')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-              activeTab === 'clients'
-                ? 'bg-white text-blue-600 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Building2 className="w-4 h-4" />
-            <span>Directorio de Clientes ({clients.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('catalog')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-              activeTab === 'catalog'
-                ? 'bg-white text-blue-600 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Package className="w-4 h-4" />
-            <span>Catálogo de Refacciones ({spareParts.length})</span>
-          </button>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold shrink-0">
+            {activeTab === 'clients' ? <Building2 className="w-5 h-5" /> : <Package className="w-5 h-5" />}
+          </div>
+          <div>
+            <h3 className="font-bold text-slate-900 text-base">
+              {activeTab === 'clients' ? `Directorio de Clientes (${clients.length})` : `Catálogo de Refacciones (${spareParts.length})`}
+            </h3>
+            <p className="text-xs text-slate-500">
+              {activeTab === 'clients' ? 'Listado de empresas, sucursales y contratos' : 'Inventario de refacciones, piezas, stock y precios'}
+            </p>
+          </div>
         </div>
 
         {/* Search & Add Button */}
-        <div className="flex items-center space-x-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 sm:w-64">
             <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
             <input
@@ -211,14 +197,14 @@ export const ClientsAndCatalog: React.FC = () => {
               placeholder={activeTab === 'clients' ? "Buscar cliente o RFC..." : "Buscar refacción..."}
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
           {activeTab === 'clients' ? (
             <button
               onClick={() => setIsClientModalOpen(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-semibold flex items-center space-x-1 shadow-xs transition-colors whitespace-nowrap"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-colors whitespace-nowrap cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Nuevo Cliente</span>
@@ -226,10 +212,10 @@ export const ClientsAndCatalog: React.FC = () => {
           ) : (
             <button
               onClick={() => setIsPartModalOpen(true)}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-xs font-semibold flex items-center space-x-1 shadow-xs transition-colors whitespace-nowrap"
+              className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-colors whitespace-nowrap cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              <span>Nueva Refacción</span>
+              <span>+ Nueva Refacción</span>
             </button>
           )}
         </div>

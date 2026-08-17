@@ -50,7 +50,29 @@ export const PdfQuoteModal: React.FC<{
         </div>
 
         {/* Printable Paper Area - Scrollable */}
-        <div className="p-6 sm:p-10 text-slate-800 space-y-8 bg-white print:p-0 overflow-y-auto flex-1">
+        <div className="p-6 sm:p-10 text-slate-800 space-y-8 bg-white print:p-0 print:m-0 overflow-y-auto flex-1 quote-print-area">
+          <style>{`
+            @page {
+              size: letter portrait;
+              margin: 10mm 12mm;
+            }
+            @media print {
+              body * {
+                visibility: hidden;
+              }
+              .quote-print-area, .quote-print-area * {
+                visibility: visible;
+              }
+              .quote-print-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100% !important;
+                padding: 0 !important;
+                margin: 0 !important;
+              }
+            }
+          `}</style>
           
           {/* Document Header */}
           <div className="flex flex-col sm:flex-row justify-between items-start border-b border-slate-200 pb-6 gap-4">

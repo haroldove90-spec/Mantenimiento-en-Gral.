@@ -5,8 +5,11 @@ import { CreateOrderModal } from './CreateOrderModal';
 import { BudgetGeneratorModal } from './BudgetGeneratorModal';
 import { PdfQuoteModal } from '../PdfQuoteModal';
 import { ClientsAndCatalog } from './ClientsAndCatalog';
+import { ClientsModule } from './ClientsModule';
+import { ServicesModule } from './ServicesModule';
 import { ReportsAndMetrics } from './ReportsAndMetrics';
 import { ConfirmDeleteModal } from '../ConfirmDeleteModal';
+import { exportToExcel, exportToPDF, exportSingleOrderPDF } from '../../lib/exportUtils';
 import {
   Building2,
   LayoutGrid,
@@ -40,7 +43,12 @@ import {
   Compass,
   UserCheck,
   PhoneCall,
-  UserPlus
+  UserPlus,
+  Printer,
+  CheckSquare,
+  Square,
+  Download,
+  RefreshCw
 } from 'lucide-react';
 
 const STAGES: OrderStatus[] = [
@@ -67,7 +75,8 @@ export const OfficeDashboard: React.FC = () => {
     setOfficeSubTab,
     clearSampleData,
     resetToDemoData,
-    deleteOrder
+    deleteOrder,
+    syncAllDataToSupabase
   } = useApp();
 
   const activeTab = officeSubTab;
@@ -76,6 +85,31 @@ export const OfficeDashboard: React.FC = () => {
   const [viewType, setViewType] = useState<'kanban' | 'list'>('list');
   const [searchQuery, setSearchQuery] = useState('');
   
+  // Multi-Selection for Orders
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+
+  // Supabase Sync in Office
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const handleSyncSupabase = async () => {
+    setIsSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await syncAllDataToSupabase();
+      setIsSyncing(false);
+      if (res.success) {
+        setSyncResult({ type: 'success', text: res.message });
+      } else {
+        setSyncResult({ type: 'error', text: res.message });
+      }
+    } catch (e: any) {
+      setIsSyncing(false);
+      setSyncResult({ type: 'error', text: e.message || 'Error de conexión con Supabase' });
+    }
+  };
+
   // Routes & Scheduling state
   const [selectedTechRoute, setSelectedTechRoute] = useState<string>('ALL');
   const [selectedRouteDate, setSelectedRouteDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -98,11 +132,215 @@ export const OfficeDashboard: React.FC = () => {
   const q = (searchQuery || '').toLowerCase();
   const filteredOrders = orders.filter(
     o =>
-      (o.folio || '').toLowerCase().includes(q) ||
+      ((statusFilter === 'ALL' || o.status === statusFilter)) &&
+      ((o.folio || '').toLowerCase().includes(q) ||
       (o.clientName || '').toLowerCase().includes(q) ||
       (o.departmentName || '').toLowerCase().includes(q) ||
-      (o.equipmentType || '').toLowerCase().includes(q)
+      (o.equipmentType || '').toLowerCase().includes(q))
   );
+
+  // Multi-Selection helpers for Orders
+  const isAllOrdersSelected =
+    filteredOrders.length > 0 && filteredOrders.every(o => selectedOrderIds.includes(o.id));
+
+  const handleSelectAllOrders = () => {
+    if (isAllOrdersSelected) {
+      setSelectedOrderIds([]);
+    } else {
+      setSelectedOrderIds(filteredOrders.map(o => o.id));
+    }
+  };
+
+  const handleToggleSelectOrder = (id: string) => {
+    if (selectedOrderIds.includes(id)) {
+      setSelectedOrderIds(prev => prev.filter(item => item !== id));
+    } else {
+      setSelectedOrderIds(prev => [...prev, id]);
+    }
+  };
+
+  // EXPORT HANDLERS FOR ORDERS
+  const handleExportOrdersExcel = (onlySelected = false) => {
+    const list =
+      onlySelected && selectedOrderIds.length > 0
+        ? orders.filter(o => selectedOrderIds.includes(o.id))
+        : filteredOrders;
+
+    const headers = [
+      'Folio',
+      'Cliente',
+      'Departamento / Sucursal',
+      'Tipo de Equipo',
+      'Prioridad',
+      'Estatus Actual',
+      'Técnico Asignado',
+      'Fecha Programada',
+      'Turno Ruta',
+      'Monto Cobrado (MXN)'
+    ];
+
+    const rows = list.map(o => [
+      o.folio,
+      o.clientName,
+      o.departmentName || 'Matriz',
+      o.equipmentType || 'General',
+      o.priority,
+      o.status,
+      o.technicianName || 'Sin asignar',
+      o.scheduledDate || 'Sin programar',
+      o.routeOrder || 1,
+      o.collectedAmount || 0
+    ]);
+
+    const titleSuffix = onlySelected ? 'Seleccionadas' : 'Listado';
+    exportToExcel(`Ordenes_Servicio_SIJ_${titleSuffix}_${new Date().toISOString().slice(0, 10)}`, headers, rows);
+  };
+
+  const handleExportOrdersPDF = (onlySelected = false) => {
+    const list =
+      onlySelected && selectedOrderIds.length > 0
+        ? orders.filter(o => selectedOrderIds.includes(o.id))
+        : filteredOrders;
+
+    const headers = ['Folio', 'Cliente', 'Equipo', 'Prioridad', 'Estatus', 'Técnico', 'Fecha Programada'];
+    const rows = list.map(o => [
+      o.folio,
+      o.clientName,
+      o.equipmentType || 'Equipo General',
+      o.priority,
+      o.status,
+      o.technicianName || 'Sin Asignar',
+      o.scheduledDate || 'Sin fecha'
+    ]);
+
+    exportToPDF({
+      title: 'Reporte de Órdenes de Servicio (SIJ)',
+      subtitle: `Listado de Folios y Control Operativo (${list.length} órdenes)`,
+      headers,
+      rows,
+      summaryCards: [
+        { label: 'Total Órdenes', value: list.length },
+        { label: 'En Reparación', value: list.filter(o => o.status === 'En Reparación').length },
+        { label: 'Cobrado / Cerrado', value: list.filter(o => o.status === 'Cobrado/Cerrado').length }
+      ]
+    });
+  };
+
+  const handleExportSingleOrderExcel = (ord: ServiceOrder) => {
+    const headers = ['Campo', 'Valor'];
+    const rows = [
+      ['Folio', ord.folio],
+      ['Cliente', ord.clientName],
+      ['Ubicación / Sucursal', ord.departmentName || 'N/A'],
+      ['Tipo de Equipo', ord.equipmentType || 'General'],
+      ['Prioridad', ord.priority],
+      ['Estatus Actual', ord.status],
+      ['Técnico Asignado', ord.technicianName || 'Sin Asignar'],
+      ['Fecha Programada', ord.scheduledDate || 'N/A'],
+      ['Turno de Ruta', ord.routeOrder || 1],
+      ['Descripción de la Falla', ord.description],
+      ['Notas de Diagnóstico', ord.diagnosticNotes || 'N/A'],
+      ['Monto Cobrado (MXN)', ord.collectedAmount || 0],
+      ['Método de Pago', ord.paymentMethod || 'N/A']
+    ];
+    exportToExcel(`Ficha_Orden_${ord.folio}`, headers, rows);
+  };
+
+  // EXPORT HANDLERS FOR ROUTES
+  const handleExportRoutesExcel = () => {
+    const headers = [
+      'Turno Ruta',
+      'Folio',
+      'Técnico Asignado',
+      'Cliente',
+      'Ubicación / Dirección',
+      'Tipo de Equipo',
+      'Prioridad',
+      'Estatus',
+      'Fecha Programada'
+    ];
+
+    const rows = currentTechRouteOrders.map((o, idx) => [
+      o.routeOrder || idx + 1,
+      o.folio,
+      o.technicianName || 'Sin Asignar',
+      o.clientName,
+      o.departmentName || 'Dirección no especificada',
+      o.equipmentType || 'General',
+      o.priority,
+      o.status,
+      o.scheduledDate || selectedRouteDate
+    ]);
+
+    exportToExcel(`Hoja_Ruta_Tecnica_${selectedRouteDate}`, headers, rows);
+  };
+
+  const handleExportRoutesPDF = () => {
+    const headers = ['# Parada', 'Folio', 'Técnico', 'Cliente', 'Equipo', 'Prioridad', 'Estatus'];
+    const rows = currentTechRouteOrders.map((o, idx) => [
+      `#${o.routeOrder || idx + 1}`,
+      o.folio,
+      o.technicianName || 'Sin Asignar',
+      o.clientName,
+      o.equipmentType || 'General',
+      o.priority,
+      o.status
+    ]);
+
+    exportToPDF({
+      title: 'Hoja de Ruta y Agenda Técnica de Campo',
+      subtitle: `Planificación de Visitas • Fecha: ${selectedRouteDate} (${currentTechRouteOrders.length} paradas)`,
+      headers,
+      rows,
+      summaryCards: [
+        { label: 'Total Visitas', value: currentTechRouteOrders.length },
+        { label: 'Prioridad Alta', value: currentTechRouteOrders.filter(o => o.priority === 'Alta').length },
+        { label: 'Fecha', value: selectedRouteDate }
+      ]
+    });
+  };
+
+  // EXPORT HANDLERS FOR BUDGETS
+  const handleExportBudgetsExcel = () => {
+    const budgetOrdersList = orders.filter(o => o.requestedParts.length > 0 || o.budget);
+    const headers = ['Folio', 'Cliente', 'Ubicación', 'Estatus Presupuesto', 'Refacciones Solicitadas', 'Total Presupuesto (MXN)'];
+    const rows = budgetOrdersList.map(o => {
+      const partsSummary = o.requestedParts.map(p => `${p.quantity}x ${p.name}`).join('; ');
+      const totalBudget = o.budget ? o.budget.parts.reduce((s, p) => s + p.quantity * p.estimatedUnitPrice, 0) + o.budget.laborCost : 0;
+      return [
+        o.folio,
+        o.clientName,
+        o.departmentName || 'N/A',
+        o.budget?.status || 'Pendiente de Cotizar',
+        partsSummary || 'Sin refacciones',
+        totalBudget
+      ];
+    });
+
+    exportToExcel(`Cotizaciones_Presupuestos_SIJ_${new Date().toISOString().slice(0, 10)}`, headers, rows);
+  };
+
+  const handleExportBudgetsPDF = () => {
+    const budgetOrdersList = orders.filter(o => o.requestedParts.length > 0 || o.budget);
+    const headers = ['Folio', 'Cliente', 'Refacciones', 'Estado Cotización', 'Total (MXN)'];
+    const rows = budgetOrdersList.map(o => {
+      const totalBudget = o.budget ? o.budget.parts.reduce((s, p) => s + p.quantity * p.estimatedUnitPrice, 0) + o.budget.laborCost : 0;
+      return [
+        o.folio,
+        o.clientName,
+        `${o.requestedParts.length} piezas solicitadas`,
+        o.budget?.status || 'Pendiente de Cotizar',
+        `$${totalBudget.toLocaleString('es-MX')} MXN`
+      ];
+    });
+
+    exportToPDF({
+      title: 'Reporte de Presupuestos y Cotizaciones',
+      subtitle: `Control de Refacciones y Mano de Obra (${budgetOrdersList.length} cotizaciones)`,
+      headers,
+      rows
+    });
+  };
 
   // Active unclosed orders
   const activeUnclosedOrders = orders.filter(o => o.status !== 'Cobrado/Cerrado');
@@ -230,215 +468,377 @@ export const OfficeDashboard: React.FC = () => {
       {activeTab === 'orders' && (
         <div className="space-y-4">
           
-          {/* Action bar */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <div className="relative flex-1 w-full sm:max-w-md">
-              <Search className="w-5 h-5 absolute left-3.5 top-3 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Buscar por folio, cliente, ubicación o equipo..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 py-2.5 text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-medium"
-              />
+          {/* Action bar & Filters */}
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+              <div className="relative flex-1">
+                <Search className="w-5 h-5 absolute left-3.5 top-3 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar por folio, cliente, ubicación o equipo..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 py-2.5 text-xs sm:text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-medium"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Status filter */}
+                <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs">
+                  <span className="font-bold text-slate-500">Estatus:</span>
+                  <select
+                    value={statusFilter}
+                    onChange={e => setStatusFilter(e.target.value)}
+                    className="bg-transparent font-bold text-slate-800 outline-hidden cursor-pointer"
+                  >
+                    <option value="ALL">Todos los Estados</option>
+                    {STAGES.map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* View switcher */}
+                <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                  <button
+                    onClick={() => setViewType('list')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition-all ${
+                      viewType === 'list' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                    title="Vista Lista Horizontal"
+                  >
+                    <List className="w-3.5 h-3.5" />
+                    <span>Lista</span>
+                  </button>
+                  <button
+                    onClick={() => setViewType('kanban')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition-all ${
+                      viewType === 'kanban' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                    title="Vista Tablero"
+                  >
+                    <LayoutGrid className="w-3.5 h-3.5" />
+                    <span>Tablero</span>
+                  </button>
+                </div>
+
+                {/* Supabase Sync and Export All Buttons */}
+                <button
+                  onClick={handleSyncSupabase}
+                  disabled={isSyncing}
+                  className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-3 py-2 rounded-xl text-xs font-bold shadow-xs flex items-center space-x-1.5 cursor-pointer transition-all active:scale-95"
+                  title="Sincronizar todas las órdenes y datos con Supabase"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                  <span>{isSyncing ? 'Sincronizando...' : 'Supabase'}</span>
+                </button>
+
+                <button
+                  onClick={() => handleExportOrdersExcel(false)}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs font-bold shadow-xs flex items-center space-x-1.5 cursor-pointer transition-all active:scale-95"
+                  title="Exportar listado completo de órdenes a Excel"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <span>Excel</span>
+                </button>
+
+                <button
+                  onClick={() => handleExportOrdersPDF(false)}
+                  className="bg-slate-800 hover:bg-slate-900 text-white px-3 py-2 rounded-xl text-xs font-bold shadow-xs flex items-center space-x-1.5 cursor-pointer transition-all active:scale-95"
+                  title="Imprimir / Exportar reporte de órdenes en PDF"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>PDF</span>
+                </button>
+
+                <button
+                  onClick={() => setIsCreateOpen(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-md transition-all cursor-pointer whitespace-nowrap active:scale-95"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  <span>Crear OS</span>
+                </button>
+              </div>
             </div>
 
-            <div className="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-end">
-              <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
-                <button
-                  onClick={() => setViewType('list')}
-                  className={`px-3 py-2 rounded-lg text-xs sm:text-sm font-bold flex items-center space-x-1.5 transition-all ${
-                    viewType === 'list' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                  title="Vista Lista Horizontal"
-                >
-                  <List className="w-4 h-4" />
-                  <span>Vista Lista Horizontal</span>
+            {/* Sync Result Banner */}
+            {syncResult && (
+              <div className={`p-3 rounded-xl border flex items-center justify-between text-xs font-bold ${
+                syncResult.type === 'success'
+                  ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
+                  : 'bg-rose-50 text-rose-900 border-rose-200'
+              }`}>
+                <div className="flex items-center space-x-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{syncResult.text}</span>
+                </div>
+                <button onClick={() => setSyncResult(null)} className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer">
+                  ✕
                 </button>
+              </div>
+            )}
+
+            {/* Selection bar */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pt-2 border-t border-slate-100 gap-2 text-xs">
+              <div className="flex items-center space-x-3">
                 <button
-                  onClick={() => setViewType('kanban')}
-                  className={`px-3 py-2 rounded-lg text-xs sm:text-sm font-bold flex items-center space-x-1.5 transition-all ${
-                    viewType === 'kanban' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                  title="Vista Tablero"
+                  onClick={handleSelectAllOrders}
+                  className="flex items-center space-x-2 text-slate-700 font-bold hover:text-blue-700 cursor-pointer"
                 >
-                  <LayoutGrid className="w-4 h-4" />
-                  <span>Tablero Stage</span>
+                  {isAllOrdersSelected ? (
+                    <CheckSquare className="w-4 h-4 text-blue-600" />
+                  ) : (
+                    <Square className="w-4 h-4 text-slate-400" />
+                  )}
+                  <span>
+                    {isAllOrdersSelected
+                      ? 'Deseleccionar Todas'
+                      : selectedOrderIds.length > 0
+                      ? `Seleccionadas (${selectedOrderIds.length} de ${filteredOrders.length})`
+                      : `Seleccionar Todas (${filteredOrders.length})`}
+                  </span>
                 </button>
               </div>
 
-              <button
-                onClick={() => setIsCreateOpen(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center space-x-2 shadow-xs transition-all whitespace-nowrap"
-              >
-                <PlusCircle className="w-4 h-4" />
-                <span>Crear Orden OS</span>
-              </button>
+              {selectedOrderIds.length > 0 && (
+                <div className="flex items-center space-x-2 bg-blue-50 px-3 py-1.5 rounded-xl border border-blue-200">
+                  <span className="font-bold text-blue-900 text-xs">Exportar {selectedOrderIds.length} seleccionadas:</span>
+                  <button
+                    onClick={() => handleExportOrdersExcel(true)}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg font-bold shadow-2xs flex items-center space-x-1 cursor-pointer"
+                  >
+                    <FileSpreadsheet className="w-3 h-3" />
+                    <span>Excel</span>
+                  </button>
+                  <button
+                    onClick={() => handleExportOrdersPDF(true)}
+                    className="bg-slate-800 hover:bg-slate-900 text-white px-2.5 py-1 rounded-lg font-bold shadow-2xs flex items-center space-x-1 cursor-pointer"
+                  >
+                    <Printer className="w-3 h-3" />
+                    <span>PDF</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* LIST VIEW (HORIZONTALLY EXPANDED FULL-WIDTH CARDS) */}
+          {/* LIST VIEW (CLEAN RESPONSIVE CARDS) */}
           {viewType === 'list' ? (
-            <div className="space-y-3">
+            <div className="space-y-3.5">
               {filteredOrders.length === 0 ? (
                 <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center text-slate-500 font-medium text-base">
                   No se encontraron órdenes de servicio con los criterios especificados.
                 </div>
               ) : (
-                filteredOrders.map(ord => (
-                  <div
-                    key={ord.id}
-                    className={`bg-white border rounded-2xl p-5 shadow-xs hover:shadow-md transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-5 ${
-                      ord.isWarranty ? 'border-amber-400 bg-amber-50/20' : 'border-slate-200'
-                    }`}
-                  >
-                    {/* Column 1: Folio, Equipment & Badges */}
-                    <div className="flex items-start lg:items-center space-x-4 min-w-[220px]">
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-mono font-bold text-base shrink-0 ${
-                        ord.isWarranty ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-blue-50 border border-blue-100 text-blue-600'
-                      }`}>
-                        {ord.folio.replace('OS-', '')}
-                      </div>
-                      <div>
-                        <div className="flex items-center space-x-2 mb-1">
-                          <span className="font-mono font-bold text-base text-blue-600">{ord.folio}</span>
-                          <span
-                            className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                              ord.priority === 'Alta'
-                                ? 'bg-rose-100 text-rose-800'
-                                : ord.priority === 'Media'
-                                ? 'bg-amber-100 text-amber-800'
-                                : 'bg-emerald-100 text-emerald-800'
-                            }`}
+                filteredOrders.map(ord => {
+                  const isSelected = selectedOrderIds.includes(ord.id);
+                  return (
+                    <div
+                      key={ord.id}
+                      className={`bg-white border rounded-2xl p-4 sm:p-5 shadow-xs hover:shadow-md transition-all flex flex-col gap-4 ${
+                        isSelected
+                          ? 'border-blue-500 ring-2 ring-blue-400/20 bg-blue-50/10'
+                          : ord.isWarranty
+                          ? 'border-amber-400 bg-amber-50/20'
+                          : 'border-slate-200'
+                      }`}
+                    >
+                      {/* Card Header: Selection, Folio, Priority, Equipment & Stage Selector */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                        <div className="flex items-center space-x-3">
+                          <button
+                            onClick={() => handleToggleSelectOrder(ord.id)}
+                            className="cursor-pointer text-slate-400 hover:text-blue-600 transition-colors shrink-0"
                           >
-                            {ord.priority}
-                          </span>
+                            {isSelected ? <CheckSquare className="w-5 h-5 text-blue-600" /> : <Square className="w-5 h-5" />}
+                          </button>
+
+                          <div className="flex items-center space-x-2">
+                            <span className="font-mono font-black text-base sm:text-lg text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100">
+                              {ord.folio}
+                            </span>
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                                ord.priority === 'Alta'
+                                  ? 'bg-rose-100 text-rose-800'
+                                  : ord.priority === 'Media'
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-emerald-100 text-emerald-800'
+                              }`}
+                            >
+                              {ord.priority}
+                            </span>
+                            {ord.equipmentType && (
+                              <span className="hidden sm:inline-flex text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-md items-center space-x-1">
+                                <span>⚙️</span>
+                                <span>{ord.equipmentType}</span>
+                              </span>
+                            )}
+                          </div>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {/* Admin Status Dropdown */}
-                          <div className="flex items-center space-x-1">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Estatus:</span>
+                        {/* Admin Status Selector */}
+                        <div className="flex items-center space-x-1.5 ml-auto">
+                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider hidden sm:inline">Estatus:</span>
+                          <select
+                            value={ord.status}
+                            onChange={e => {
+                              const newSt = e.target.value as OrderStatus;
+                              updateOrderStatus(ord.id, newSt, 'Estatus modificado directamente por Administración');
+                            }}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-black border cursor-pointer focus:outline-hidden transition-all shadow-2xs ${
+                              ord.status === 'Garantía Reabierta'
+                                ? 'bg-amber-100 text-amber-900 border-amber-300'
+                                : ord.status === 'Cobrado/Cerrado'
+                                ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                : ord.status === 'En Reparación'
+                                ? 'bg-blue-100 text-blue-800 border-blue-300'
+                                : ord.status === 'Esperando Aprobación'
+                                ? 'bg-purple-100 text-purple-800 border-purple-300'
+                                : ord.status === 'En Diagnóstico'
+                                ? 'bg-indigo-100 text-indigo-800 border-indigo-300'
+                                : ord.status === 'Presupuesto Pendiente'
+                                ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                : 'bg-slate-100 text-slate-800 border-slate-300'
+                            }`}
+                            title="Haz clic para cambiar el estatus de la orden"
+                          >
+                            {STAGES.map(stage => (
+                              <option key={stage} value={stage} className="bg-white text-slate-900 font-medium">
+                                {stage}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Card Body: Client info, Problem Description & Assigned Technician */}
+                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+                        {/* Client details & fault description (Span 7) */}
+                        <div className="lg:col-span-7 space-y-2">
+                          <div className="flex flex-wrap items-baseline gap-2">
+                            <h3 className="font-bold text-slate-900 text-base sm:text-lg">{ord.clientName}</h3>
+                            <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                              📍 {ord.departmentName || 'Matriz Principal'}
+                            </span>
+                          </div>
+
+                          {/* Mobile equipment badge if hidden in header */}
+                          {ord.equipmentType && (
+                            <div className="sm:hidden">
+                              <span className="text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md inline-block">
+                                ⚙️ {ord.equipmentType}
+                              </span>
+                            </div>
+                          )}
+
+                          <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-100">
+                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Descripción de la Falla:</span>
+                            <p className="text-xs sm:text-sm text-slate-700 font-medium leading-relaxed">
+                              {ord.description || 'Sin descripción ingresada'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Tech Assigned & Scheduling (Span 5) */}
+                        <div className="lg:col-span-5 bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
+                          <span className="text-[11px] font-bold text-slate-500 block uppercase tracking-wider">
+                            Técnico & Agenda en Ruta
+                          </span>
+                          
+                          {ord.technicianName ? (
+                            <div className="text-xs sm:text-sm font-bold text-slate-900 flex items-center space-x-2">
+                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></span>
+                              <span className="truncate">{ord.technicianName}</span>
+                            </div>
+                          ) : (
                             <select
-                              value={ord.status}
-                              onChange={e => {
-                                const newSt = e.target.value as OrderStatus;
-                                updateOrderStatus(ord.id, newSt, 'Estatus modificado directamente por Administración');
-                              }}
-                              className={`px-2.5 py-1 rounded-lg text-xs font-bold border cursor-pointer focus:outline-hidden transition-all shadow-2xs ${
-                                ord.status === 'Garantía Reabierta'
-                                  ? 'bg-amber-100 text-amber-900 border-amber-300'
-                                  : ord.status === 'Cobrado/Cerrado'
-                                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                                  : ord.status === 'En Reparación'
-                                  ? 'bg-blue-100 text-blue-800 border-blue-300'
-                                  : ord.status === 'Esperando Aprobación'
-                                  ? 'bg-purple-100 text-purple-800 border-purple-300'
-                                  : ord.status === 'En Diagnóstico'
-                                  ? 'bg-indigo-100 text-indigo-800 border-indigo-300'
-                                  : ord.status === 'Presupuesto Pendiente'
-                                  ? 'bg-amber-50 text-amber-800 border-amber-200'
-                                  : 'bg-slate-100 text-slate-800 border-slate-300'
-                              }`}
-                              title="Haz clic para cambiar el estatus de la orden como Admin"
+                              value=""
+                              onChange={e => assignTechnician(ord.id, e.target.value)}
+                              className="w-full bg-amber-50 border border-amber-300 text-amber-900 text-xs font-bold rounded-lg p-2 focus:outline-hidden"
                             >
-                              {STAGES.map(stage => (
-                                <option key={stage} value={stage} className="bg-white text-slate-900 font-medium">
-                                  {stage}
+                              <option value="">+ Asignar Técnico de Campo...</option>
+                              {technicians.map(t => (
+                                <option key={t.id} value={t.id}>
+                                  {t.name} ({t.specialty})
                                 </option>
                               ))}
                             </select>
-                          </div>
-
-                          {ord.equipmentType && (
-                            <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md">
-                              ⚙️ {ord.equipmentType}
-                            </span>
                           )}
+
+                          <div className="text-[11px] font-semibold text-slate-600 flex items-center justify-between pt-1 border-t border-slate-200/60">
+                            <span className="flex items-center space-x-1">
+                              <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                              <span>Fecha:</span>
+                            </span>
+                            <span className="font-bold text-slate-800">{ord.scheduledDate || 'Sin programar'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Card Footer Actions */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100">
+                        {/* Quick single export icons */}
+                        <div className="flex items-center space-x-1.5">
+                          <button
+                            onClick={() => handleExportSingleOrderExcel(ord)}
+                            className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold cursor-pointer transition-colors"
+                            title="Descargar Ficha en Excel"
+                          >
+                            <FileSpreadsheet className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            onClick={() => exportSingleOrderPDF(ord)}
+                            className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-xs font-bold cursor-pointer transition-colors"
+                            title="Imprimir / Exportar Ficha en PDF"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Primary Buttons */}
+                        <div className="flex flex-wrap items-center gap-2">
+                          {ord.status === 'Presupuesto Pendiente' ? (
+                            <button
+                              onClick={() => setBudgetOrder(ord)}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition-colors flex items-center space-x-1.5 shadow-xs cursor-pointer active:scale-95"
+                            >
+                              <FileSpreadsheet className="w-3.5 h-3.5" />
+                              <span>Generar Cotización</span>
+                            </button>
+                          ) : null}
+
+                          {ord.status === 'Cobrado/Cerrado' && (
+                            <button
+                              onClick={() => setWarrantyOrder(ord)}
+                              className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold px-3 py-2 rounded-xl transition-colors flex items-center space-x-1 shadow-xs cursor-pointer active:scale-95"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              <span>Reabrir Garantía</span>
+                            </button>
+                          )}
+
+                          <button
+                            onClick={() => setDetailOrder(ord)}
+                            className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold px-3.5 py-2 rounded-xl transition-colors flex items-center space-x-1 cursor-pointer active:scale-95"
+                          >
+                            <span>Ver Detalles</span>
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            onClick={() => setOrderToDelete(ord)}
+                            className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-colors cursor-pointer"
+                            title="Eliminar Orden de la base de datos"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </div>
                     </div>
-
-                    {/* Column 2: Client & Description */}
-                    <div className="flex-1 min-w-[240px]">
-                      <h3 className="font-bold text-slate-900 text-base sm:text-lg">{ord.clientName}</h3>
-                      <p className="text-sm font-semibold text-slate-500 mt-0.5">{ord.departmentName}</p>
-                      <p className="text-sm text-slate-700 mt-1.5 bg-slate-50 p-2.5 rounded-xl border border-slate-100 font-medium">
-                        {ord.description}
-                      </p>
-                    </div>
-
-                    {/* Column 3: Tech Assigned & Scheduled Date */}
-                    <div className="min-w-[220px] bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-1.5">
-                      <span className="text-xs font-bold text-slate-500 block uppercase tracking-wider">
-                        Técnico & Agenda Ruta
-                      </span>
-                      {ord.technicianName ? (
-                        <div className="text-sm font-bold text-slate-900 flex items-center space-x-2">
-                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-                          <span>{ord.technicianName}</span>
-                        </div>
-                      ) : (
-                        <select
-                          value=""
-                          onChange={e => assignTechnician(ord.id, e.target.value)}
-                          className="w-full bg-amber-50 border border-amber-300 text-amber-900 text-xs font-bold rounded-lg p-2 focus:outline-hidden"
-                        >
-                          <option value="">+ Asignar Técnico de Campo...</option>
-                          {technicians.map(t => (
-                            <option key={t.id} value={t.id}>
-                              {t.name} ({t.specialty})
-                            </option>
-                          ))}
-                        </select>
-                      )}
-
-                      <div className="text-[11px] font-semibold text-slate-600 flex items-center space-x-1 pt-1">
-                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                        <span>Fecha: {ord.scheduledDate || 'Sin programar'}</span>
-                      </div>
-                    </div>
-
-                    {/* Column 4: Actions */}
-                    <div className="flex flex-wrap items-center space-x-2 shrink-0 border-t lg:border-t-0 pt-3 lg:pt-0 border-slate-100 justify-end">
-                      {ord.status === 'Presupuesto Pendiente' ? (
-                        <button
-                          onClick={() => setBudgetOrder(ord)}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold px-4 py-2.5 rounded-xl transition-colors flex items-center space-x-1.5 shadow-xs"
-                        >
-                          <FileSpreadsheet className="w-4 h-4" />
-                          <span>Generar Cotización</span>
-                        </button>
-                      ) : null}
-
-                      {ord.status === 'Cobrado/Cerrado' && (
-                        <button
-                          onClick={() => setWarrantyOrder(ord)}
-                          className="bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold px-3 py-2 rounded-xl transition-colors flex items-center space-x-1 shadow-xs"
-                        >
-                          <RotateCcw className="w-3.5 h-3.5" />
-                          <span>Reabrir Garantía</span>
-                        </button>
-                      )}
-
-                      <button
-                        onClick={() => setDetailOrder(ord)}
-                        className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs sm:text-sm font-bold px-4 py-2.5 rounded-xl transition-colors flex items-center space-x-1 cursor-pointer"
-                      >
-                        <span>Ver Detalles</span>
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-
-                      <button
-                        onClick={() => setOrderToDelete(ord)}
-                        className="p-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-colors cursor-pointer"
-                        title="Eliminar Orden de la base de datos"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           ) : (
@@ -581,8 +981,26 @@ export const OfficeDashboard: React.FC = () => {
                 </p>
               </div>
 
-              {/* Action Button: Auto-Optimize & Generate Routes */}
+              {/* Action Buttons: Auto-Optimize & Route Exports */}
               <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={handleExportRoutesExcel}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center space-x-1.5 cursor-pointer"
+                  title="Exportar hoja de ruta de paradas y visitas a Excel"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>Exportar Excel</span>
+                </button>
+
+                <button
+                  onClick={handleExportRoutesPDF}
+                  className="bg-slate-800 hover:bg-slate-900 text-white px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center space-x-1.5 cursor-pointer"
+                  title="Imprimir / Exportar hoja de ruta de campo en PDF"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Imprimir PDF</span>
+                </button>
+
                 <button
                   onClick={handleAutoOptimizeRoutes}
                   className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center space-x-2 cursor-pointer"
@@ -910,10 +1328,34 @@ export const OfficeDashboard: React.FC = () => {
       {activeTab === 'budgets' && (
         <div className="space-y-4">
           <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
-            <h3 className="font-bold text-slate-900 text-base mb-1">Módulo de Presupuestos y Cotizaciones</h3>
-            <p className="text-xs text-slate-500 mb-4">
-              Recepción de refacciones de campo, cálculo de mano de obra y envío de enlaces de aprobación.
-            </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <div>
+                <h3 className="font-bold text-slate-900 text-base">Módulo de Presupuestos y Cotizaciones</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Recepción de refacciones de campo, cálculo de mano de obra y envío de enlaces de aprobación.
+                </p>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={handleExportBudgetsExcel}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-xs flex items-center space-x-1.5 cursor-pointer transition-all"
+                  title="Exportar presupuestos a Excel"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>Exportar Excel</span>
+                </button>
+
+                <button
+                  onClick={handleExportBudgetsPDF}
+                  className="bg-slate-800 hover:bg-slate-900 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-xs flex items-center space-x-1.5 cursor-pointer transition-all"
+                  title="Imprimir listado de presupuestos en PDF"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Imprimir PDF</span>
+                </button>
+              </div>
+            </div>
 
             <div className="space-y-3">
               {orders
@@ -970,7 +1412,7 @@ export const OfficeDashboard: React.FC = () => {
                     <div className="flex items-center space-x-2 shrink-0 justify-end">
                       <button
                         onClick={() => setBudgetOrder(ord)}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-xs transition-colors flex items-center space-x-1.5"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-xs transition-colors flex items-center space-x-1.5 cursor-pointer"
                       >
                         <FileSpreadsheet className="w-4 h-4" />
                         <span>Cotizar / Editar</span>
@@ -979,7 +1421,7 @@ export const OfficeDashboard: React.FC = () => {
                       {ord.budget && (
                         <button
                           onClick={() => setPdfOrder(ord)}
-                          className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3 py-2 rounded-xl border border-slate-200 transition-colors"
+                          className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3 py-2 rounded-xl border border-slate-200 transition-colors cursor-pointer"
                         >
                           Ver PDF
                         </button>
@@ -992,10 +1434,16 @@ export const OfficeDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* SUBMODULE 4: CATÁLOGOS Y CLIENTES */}
+      {/* SUBMODULE 4: SERVICIOS */}
+      {activeTab === 'services' && <ServicesModule />}
+
+      {/* SUBMODULE 5: CLIENTES */}
+      {activeTab === 'clients' && <ClientsModule />}
+
+      {/* SUBMODULE 6: CATÁLOGOS DE REFACCIONES */}
       {activeTab === 'catalogs' && <ClientsAndCatalog />}
 
-      {/* SUBMODULE 5: REPORTES Y MÉTRICAS */}
+      {/* SUBMODULE 7: REPORTES Y MÉTRICAS */}
       {activeTab === 'reports' && <ReportsAndMetrics />}
 
       {/* MODALS */}

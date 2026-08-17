@@ -7,6 +7,7 @@ import { OwnerDashboard } from './components/OwnerModule/OwnerDashboard';
 import { TechMobileView } from './components/TechModule/TechMobileView';
 import { ClientPortalView } from './components/ClientModule/ClientPortalView';
 import { CreateOrderModal } from './components/OfficeModule/CreateOrderModal';
+import { NotificationToast } from './components/NotificationToast';
 
 function MainContent() {
   const { activeRole, currentUser } = useApp();
@@ -43,6 +44,9 @@ function MainContent() {
         isOpen={isNavCreateOpen}
         onClose={() => setIsNavCreateOpen(false)}
       />
+
+      {/* Global Real-time Notification Banner / Toast */}
+      <NotificationToast />
 
       {/* Clean Subtle Footer */}
       <footer className={`${activeRole !== 'home' ? 'lg:pl-64 pb-20 lg:pb-0' : ''} border-t border-slate-200 bg-white py-3 text-center text-xs text-slate-500 no-print`}>

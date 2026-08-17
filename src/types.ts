@@ -64,6 +64,7 @@ export interface Client {
   creditDays?: number;
   category?: 'VIP' | 'Regular' | 'Corporativo' | 'Residencial';
   departments?: Department[];
+  createdAt?: string;
 }
 
 export interface SparePart {
@@ -74,6 +75,20 @@ export interface SparePart {
   unitPrice: number;
   stock: number;
   status?: 'Activo' | 'Inactivo';
+  createdAt?: string;
+}
+
+export interface BusinessService {
+  id: string;
+  code: string;
+  name: string;
+  category: string;
+  description: string;
+  basePrice: number;
+  estimatedDurationHours?: number;
+  warrantyDays?: number;
+  status: 'Activo' | 'Inactivo';
+  createdAt?: string;
 }
 
 export interface RequestedPart {
@@ -159,6 +174,7 @@ export interface Technician {
   avgResponseTimeHours: number;
   avatarUrl?: string;
   status?: 'Activo' | 'Inactivo';
+  createdAt?: string;
 }
 
 export interface SystemUser {
@@ -171,6 +187,7 @@ export interface SystemUser {
   role: 'owner' | 'office' | 'tech' | 'client';
   status: 'Activo' | 'Inactivo';
   lastLogin?: string;
+  createdAt?: string;
 }
 
 export interface OperatingExpense {
@@ -182,6 +199,7 @@ export interface OperatingExpense {
   registeredBy: string;
   paymentMethod?: string;
   invoiceFolio?: string;
+  createdAt?: string;
 }
 
 export interface Notification {

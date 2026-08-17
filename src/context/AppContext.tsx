@@ -448,6 +448,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (!silent) console.warn('Load technicians notice:', e);
       }
 
+      // Reconcile current logged in tech user if exists
+      if (currentUser && currentUser.role === 'tech') {
+        const cEmail = (currentUser.email || '').trim().toLowerCase();
+        const cKey = cEmail || currentUser.name || currentUser.id;
+        if (!techMap.has(cKey)) {
+          techMap.set(cKey, {
+            id: currentUser.id,
+            name: currentUser.name || 'Técnico de Campo',
+            phone: currentUser.phone || '',
+            email: currentUser.email || '',
+            specialty: 'Técnico de Campo',
+            activeOrdersCount: 0,
+            avgResponseTimeHours: 2.5,
+            status: 'Activo'
+          });
+        }
+      }
+
       const fetchedUsers = Array.from(allUsersMap.values());
       if (fetchedUsers.length > 0) {
         setSystemUsers(fetchedUsers);
@@ -463,6 +481,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (fetchedTechs.length > 0) {
         setTechnicians(fetchedTechs);
         localStorage.setItem('app_technicians', JSON.stringify(fetchedTechs));
+
+        // Background auto-sync to Supabase technicians table if missing
+        if (currentUser?.role === 'tech' && currentUser.email) {
+          const userEm = currentUser.email.trim().toLowerCase();
+          supabase.from('technicians').select('id').or(`email.ilike.${userEm},name.ilike.${currentUser.name}`).then(({ data }) => {
+            if (!data || data.length === 0) {
+              supabase.from('technicians').insert([{
+                name: currentUser.name,
+                email: currentUser.email,
+                phone: currentUser.phone || '',
+                specialty: 'Técnico de Campo',
+                status: 'Disponible'
+              }]).then(() => {});
+            }
+          });
+        }
       }
     } catch (e) {
       if (!silent) console.warn('Supabase employees sync notice:', e);
@@ -2593,14 +2627,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           .ilike('email', userEmail);
 
         // Update 'technicians' if applicable
-        if (user.role === 'tech' || userData.role === 'tech') {
-          await supabase
-            .from('technicians')
-            .update({
-              name: userData.name ?? user.name,
-              phone: userData.phone ?? user.phone
-            })
-            .ilike('email', userEmail);
+        const effectiveRole = userData.role ?? user.role;
+        if (effectiveRole === 'tech') {
+          const effectiveName = userData.name ?? user.name ?? 'Técnico';
+          const effectivePhone = userData.phone ?? user.phone ?? '';
+
+          try {
+            // Check if technician exists by email or name
+            const { data: existingTech } = await supabase
+              .from('technicians')
+              .select('id')
+              .or(`email.ilike.${userEmail},name.ilike.${effectiveName}`);
+
+            if (existingTech && existingTech.length > 0) {
+              await supabase
+                .from('technicians')
+                .update({
+                  name: effectiveName,
+                  email: userEmail,
+                  phone: effectivePhone,
+                  specialty: 'Técnico de Campo',
+                  status: 'Disponible'
+                })
+                .eq('id', existingTech[0].id);
+            } else {
+              await supabase.from('technicians').insert([{
+                name: effectiveName,
+                email: userEmail,
+                phone: effectivePhone,
+                specialty: 'Técnico de Campo',
+                status: 'Disponible'
+              }]);
+            }
+          } catch (tErr) {
+            console.warn('Silent technician sync notice on user update:', tErr);
+          }
         }
 
         // Update 'system_users'

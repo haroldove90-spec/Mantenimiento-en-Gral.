@@ -12,17 +12,21 @@ export const NotificationToast: React.FC = () => {
     if (notifications.length === 0) return;
     const latest = notifications[0];
     if (!latest.read) {
-      // Check if matches active role or user
+      // Check if matches active role or user permissions
+      const uRole = currentUser?.role || (activeRole !== 'home' ? activeRole : undefined);
       const isForCurrentRole =
         activeRole === 'home' ||
         latest.targetRole === activeRole ||
-        (currentUser?.role && latest.targetRole === currentUser.role);
+        (uRole === 'owner') || // Admin/Owner receives all notifications
+        (uRole === 'office' && (latest.targetRole === 'office' || latest.targetRole === 'owner')) ||
+        (uRole === 'tech' && latest.targetRole === 'tech') ||
+        (uRole === 'client' && latest.targetRole === 'client');
 
       if (isForCurrentRole) {
         setActiveToast(latest);
         const timer = setTimeout(() => {
           setActiveToast(prev => (prev?.id === latest.id ? null : prev));
-        }, 6000);
+        }, 7000);
         return () => clearTimeout(timer);
       }
     }

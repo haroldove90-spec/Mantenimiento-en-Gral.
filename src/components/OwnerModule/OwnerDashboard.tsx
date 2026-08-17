@@ -1576,7 +1576,18 @@ CREATE TABLE IF NOT EXISTS public.operating_expenses (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 10. HABILITAR ROW LEVEL SECURITY (RLS) Y POLÍTICAS PERMISIVAS
+-- 10. TABLA DE NOTIFICACIONES EN TIEMPO REAL
+CREATE TABLE IF NOT EXISTS public.notifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    target_role TEXT NOT NULL DEFAULT 'office',
+    order_folio TEXT,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    read BOOLEAN DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 11. HABILITAR ROW LEVEL SECURITY (RLS) Y POLÍTICAS PERMISIVAS
 ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.departments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_users ENABLE ROW LEVEL SECURITY;
@@ -1585,6 +1596,7 @@ ALTER TABLE public.service_orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.spare_parts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.services ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.operating_expenses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN
     DROP POLICY IF EXISTS "Public Access clients" ON public.clients;
@@ -1610,6 +1622,9 @@ DO $$ BEGIN
 
     DROP POLICY IF EXISTS "Public Access operating_expenses" ON public.operating_expenses;
     CREATE POLICY "Public Access operating_expenses" ON public.operating_expenses FOR ALL USING (true) WITH CHECK (true);
+
+    DROP POLICY IF EXISTS "Public Access notifications" ON public.notifications;
+    CREATE POLICY "Public Access notifications" ON public.notifications FOR ALL USING (true) WITH CHECK (true);
 END $$;`}
               </pre>
             </div>

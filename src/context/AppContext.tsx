@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import {
   RoleType,
@@ -127,39 +127,96 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [currentUser, setCurrentUser] = useState<SystemUser | null>(() => {
+    try {
+      const saved = localStorage.getItem('app_current_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
   const [activeRole, setActiveRole] = useState<RoleType>(() => {
-    const saved = localStorage.getItem('app_active_role');
-    return (saved as RoleType) || 'home';
+    try {
+      const savedRole = localStorage.getItem('app_active_role') as RoleType | null;
+      const savedUserStr = localStorage.getItem('app_current_user');
+      const savedUser = savedUserStr ? JSON.parse(savedUserStr) : null;
+
+      // 1. If user previously selected a specific module, restore it
+      if (savedRole && savedRole !== 'home') {
+        return savedRole;
+      }
+      // 2. If user is logged in with a role, keep them in their role module
+      if (savedUser?.role) {
+        return savedUser.role as RoleType;
+      }
+      return (savedRole as RoleType) || 'home';
+    } catch {
+      return 'home';
+    }
   });
+
   const [officeSubTab, setOfficeSubTab] = useState<'orders' | 'routes' | 'budgets' | 'clients' | 'catalogs' | 'reports'>(() => {
-    const saved = localStorage.getItem('app_office_subtab');
-    return (saved as any) || 'orders';
+    try {
+      const saved = localStorage.getItem('app_office_subtab');
+      return (saved as any) || 'orders';
+    } catch {
+      return 'orders';
+    }
   });
-  const [ownerSubTab, setOwnerSubTab] = useState<'analytics' | 'financials' | 'employees' | 'users' | 'clients'>(() => {
-    const saved = localStorage.getItem('app_owner_subtab');
-    return (saved as any) || 'analytics';
+
+  const [ownerSubTab, setOwnerSubTab] = useState<'analytics' | 'financials' | 'employees' | 'users' | 'clients' | 'services'>(() => {
+    try {
+      const saved = localStorage.getItem('app_owner_subtab');
+      return (saved as any) || 'analytics';
+    } catch {
+      return 'analytics';
+    }
   });
-  const [selectedClientOrderFolio, setSelectedClientOrderFolio] = useState<string | null>('OS-1004');
+
+  const [selectedClientOrderFolio, setSelectedClientOrderFolio] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('app_client_selected_folio') || 'OS-1004';
+    } catch {
+      return 'OS-1004';
+    }
+  });
 
   // LocalStorage initialization with fallbacks
   const [orders, setOrders] = useState<ServiceOrder[]>(() => {
-    const saved = localStorage.getItem('app_service_orders');
-    return saved ? JSON.parse(saved) : INITIAL_ORDERS;
+    try {
+      const saved = localStorage.getItem('app_service_orders');
+      return saved ? JSON.parse(saved) : INITIAL_ORDERS;
+    } catch {
+      return INITIAL_ORDERS;
+    }
   });
 
   const [clients, setClients] = useState<Client[]>(() => {
-    const saved = localStorage.getItem('app_clients');
-    return saved ? JSON.parse(saved) : INITIAL_CLIENTS;
+    try {
+      const saved = localStorage.getItem('app_clients');
+      return saved ? JSON.parse(saved) : INITIAL_CLIENTS;
+    } catch {
+      return INITIAL_CLIENTS;
+    }
   });
 
   const [spareParts, setSpareParts] = useState<SparePart[]>(() => {
-    const saved = localStorage.getItem('app_spare_parts');
-    return saved ? JSON.parse(saved) : INITIAL_SPARE_PARTS;
+    try {
+      const saved = localStorage.getItem('app_spare_parts');
+      return saved ? JSON.parse(saved) : INITIAL_SPARE_PARTS;
+    } catch {
+      return INITIAL_SPARE_PARTS;
+    }
   });
 
   const [services, setServices] = useState<BusinessService[]>(() => {
-    const saved = localStorage.getItem('app_business_services');
-    return saved ? JSON.parse(saved) : INITIAL_SERVICES;
+    try {
+      const saved = localStorage.getItem('app_business_services');
+      return saved ? JSON.parse(saved) : INITIAL_SERVICES;
+    } catch {
+      return INITIAL_SERVICES;
+    }
   });
 
   const [technicians, setTechnicians] = useState<Technician[]>(() => {
@@ -176,40 +233,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>(() => {
-    const saved = localStorage.getItem('app_system_users');
-    return saved ? JSON.parse(saved) : INITIAL_USERS;
-  });
-
-  const [currentUser, setCurrentUser] = useState<SystemUser | null>(() => {
-    const saved = localStorage.getItem('app_current_user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('app_system_users');
+      return saved ? JSON.parse(saved) : INITIAL_USERS;
+    } catch {
+      return INITIAL_USERS;
+    }
   });
 
   const [expenses, setExpenses] = useState<OperatingExpense[]>(() => {
-    const saved = localStorage.getItem('app_operating_expenses');
-    return saved ? JSON.parse(saved) : INITIAL_EXPENSES;
+    try {
+      const saved = localStorage.getItem('app_operating_expenses');
+      return saved ? JSON.parse(saved) : INITIAL_EXPENSES;
+    } catch {
+      return INITIAL_EXPENSES;
+    }
   });
 
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: 'notif-1',
-      timestamp: 'Hace 5 min',
-      targetRole: 'office',
-      orderFolio: 'OS-1002',
-      title: 'Refacciones Solicitadas',
-      message: 'El téc. Ana Mendoza solicitó 2 refacciones para la orden OS-1002.',
-      read: false
-    },
-    {
-      id: 'notif-2',
-      timestamp: 'Hace 20 min',
-      targetRole: 'tech',
-      orderFolio: 'OS-1005',
-      title: 'Presupuesto Aprobado',
-      message: 'El cliente autorizó el presupuesto para OS-1005. ¡Ruta programada para reparación!',
-      read: false
+  const [notifications, setNotifications] = useState<Notification[]>(() => {
+    try {
+      const saved = localStorage.getItem('app_notifications');
+      return saved ? JSON.parse(saved) : [
+        {
+          id: 'notif-1',
+          timestamp: 'Hace 5 min',
+          targetRole: 'office',
+          orderFolio: 'OS-1002',
+          title: 'Refacciones Solicitadas',
+          message: 'El téc. Ana Mendoza solicitó 2 refacciones para la orden OS-1002.',
+          read: false
+        },
+        {
+          id: 'notif-2',
+          timestamp: 'Hace 20 min',
+          targetRole: 'tech',
+          orderFolio: 'OS-1005',
+          title: 'Presupuesto Aprobado',
+          message: 'El cliente autorizó el presupuesto para OS-1005. ¡Ruta programada para reparación!',
+          read: false
+        }
+      ];
+    } catch {
+      return [];
     }
-  ]);
+  });
+
+  const realtimeChannelRef = useRef<any>(null);
 
   // Sync state to localStorage
   useEffect(() => {
@@ -223,6 +292,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem('app_owner_subtab', ownerSubTab);
   }, [ownerSubTab]);
+
+  useEffect(() => {
+    if (selectedClientOrderFolio) {
+      localStorage.setItem('app_client_selected_folio', selectedClientOrderFolio);
+    }
+  }, [selectedClientOrderFolio]);
 
   useEffect(() => {
     localStorage.setItem('app_service_orders', JSON.stringify(orders));
@@ -247,6 +322,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem('app_system_users', JSON.stringify(systemUsers));
   }, [systemUsers]);
+
+  useEffect(() => {
+    localStorage.setItem('app_notifications', JSON.stringify(notifications.slice(0, 50)));
+  }, [notifications]);
 
   useEffect(() => {
     if (currentUser) {
@@ -582,17 +661,66 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (e) {
       if (!silent) console.warn('Supabase expenses sync notice:', e);
     }
+
+    // 6. Fetch Recent Notifications (from 'notifications')
+    try {
+      const { data: notifData, error: notifErr } = await supabase
+        .from('notifications')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(30);
+
+      if (!notifErr && notifData && Array.isArray(notifData) && notifData.length > 0) {
+        const mappedNotifs: Notification[] = notifData.map((n: any) => ({
+          id: n.id || `notif-${Date.now()}-${Math.random()}`,
+          timestamp: n.created_at
+            ? new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : 'Reciente',
+          targetRole: normalizeRole(n.target_role),
+          orderFolio: n.order_folio || '',
+          title: n.title || 'Aviso del Sistema',
+          message: n.message || '',
+          read: Boolean(n.read)
+        }));
+
+        setNotifications(prev => {
+          const existingIds = new Set(prev.map(p => p.id));
+          const newItems = mappedNotifs.filter(m => !existingIds.has(m.id));
+          if (newItems.length > 0) {
+            return [...newItems, ...prev].slice(0, 40);
+          }
+          return prev;
+        });
+      }
+    } catch (e) {
+      // Table may not exist yet
+    }
   };
 
   // Synchronize on mount + Realtime channels + Continuous Polling across computers
   useEffect(() => {
     fetchSupabaseData();
 
-    // Supabase Realtime Channels
+    // Supabase Realtime Channel for DB changes & Live WebSocket Broadcast
     let channel: any = null;
     try {
       channel = supabase
-        .channel('app-db-sync')
+        .channel('sij-live-sync-and-notifs', {
+          config: {
+            broadcast: { self: false } // Only receive events from other clients
+          }
+        })
+        // Realtime cross-device broadcast for Instant Notifications without refresh
+        .on('broadcast', { event: 'sij-broadcast-notification' }, ({ payload }: any) => {
+          if (!payload || !payload.title) return;
+          setNotifications(prev => {
+            if (prev.some(p => p.id === payload.id || (p.title === payload.title && p.orderFolio === payload.orderFolio && p.message === payload.message))) {
+              return prev;
+            }
+            playNotificationSound();
+            return [payload, ...prev];
+          });
+        })
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'service_orders' },
@@ -628,7 +756,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             fetchSupabaseData(true);
           }
         )
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'notifications' },
+          (payload: any) => {
+            const row = payload.new;
+            if (!row) return;
+            const incoming: Notification = {
+              id: row.id || `notif-${Date.now()}`,
+              timestamp: 'Justo ahora',
+              targetRole: normalizeRole(row.target_role),
+              orderFolio: row.order_folio || '',
+              title: row.title || 'Aviso',
+              message: row.message || '',
+              read: false
+            };
+            setNotifications(prev => {
+              if (prev.some(p => p.id === incoming.id || (p.title === incoming.title && p.orderFolio === incoming.orderFolio && p.message === incoming.message))) {
+                return prev;
+              }
+              playNotificationSound();
+              return [incoming, ...prev];
+            });
+          }
+        )
         .subscribe();
+
+      realtimeChannelRef.current = channel;
     } catch (err) {
       console.warn('Realtime subscription error:', err);
     }
@@ -642,6 +796,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (channel) {
         supabase.removeChannel(channel);
       }
+      realtimeChannelRef.current = null;
       clearInterval(pollInterval);
     };
   }, []);
@@ -680,12 +835,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addNotification = (notif: Omit<Notification, 'id' | 'timestamp' | 'read'>) => {
     const newN: Notification = {
       ...notif,
-      id: `notif-${Date.now()}`,
+      id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       timestamp: 'Justo ahora',
       read: false
     };
+
+    // 1. Local state update & sound
     setNotifications(prev => [newN, ...prev]);
     playNotificationSound();
+
+    // 2. Realtime WebSocket Broadcast to all other open browsers/devices instantly
+    try {
+      if (realtimeChannelRef.current) {
+        realtimeChannelRef.current.send({
+          type: 'broadcast',
+          event: 'sij-broadcast-notification',
+          payload: newN
+        });
+      }
+    } catch (e) {
+      console.warn('Broadcast send notice:', e);
+    }
+
+    // 3. Persist to Supabase notifications table
+    (async () => {
+      try {
+        await supabase.from('notifications').insert([{
+          target_role: newN.targetRole,
+          order_folio: newN.orderFolio || null,
+          title: newN.title,
+          message: newN.message,
+          read: false,
+          created_at: new Date().toISOString()
+        }]);
+      } catch (err) {
+        // Silent if table not yet configured
+      }
+    })();
   };
 
   const createOrder = ({

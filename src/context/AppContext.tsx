@@ -256,78 +256,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [currentUser]);
 
-  // Sync data from Supabase on load
-  useEffect(() => {
-    const fetchSupabaseData = async () => {
-      // 1. Fetch Employees & Technicians (from 'employees', 'technicians', and 'system_users')
+  // Sync data from Supabase on load, on realtime events, and with live polling
+  const fetchSupabaseData = async (silent = false) => {
+    // 1. Fetch Employees & Technicians (from 'employees', 'technicians', and 'system_users')
+    try {
+      let allUsersMap = new Map<string, SystemUser>();
+      let techMap = new Map<string, Technician>();
+
+      // A. Load from 'employees'
       try {
-        let allUsersMap = new Map<string, SystemUser>();
-        let techMap = new Map<string, Technician>();
+        const { data: empData, error: empErr } = await supabase.from('employees').select('*');
+        if (!empErr && empData && Array.isArray(empData)) {
+          empData.forEach((u: any) => {
+            const email = (u.email || '').trim().toLowerCase();
+            const role = normalizeRole(u.role);
+            const userId = u.id || `usr-${Math.random()}`;
+            if (email) {
+              allUsersMap.set(email, {
+                id: userId,
+                name: u.name || 'Empleado',
+                username: u.username || email.split('@')[0],
+                email: u.email || '',
+                password: u.pin || '',
+                phone: u.phone || '',
+                role,
+                status: u.is_active === false ? 'Inactivo' : 'Activo',
+                lastLogin: 'Reciente',
+                createdAt: u.created_at || new Date().toISOString()
+              });
 
-        // A. Load from 'employees'
-        try {
-          const { data: empData, error: empErr } = await supabase.from('employees').select('*');
-          if (!empErr && empData && Array.isArray(empData)) {
-            empData.forEach((u: any) => {
-              const email = (u.email || '').trim().toLowerCase();
-              const role = normalizeRole(u.role);
-              const userId = u.id || `usr-${Math.random()}`;
-              if (email) {
-                allUsersMap.set(email, {
-                  id: userId,
-                  name: u.name || 'Empleado',
-                  username: u.username || email.split('@')[0],
-                  email: u.email || '',
-                  password: u.pin || '',
-                  phone: u.phone || '',
-                  role,
-                  status: u.is_active === false ? 'Inactivo' : 'Activo',
-                  lastLogin: 'Reciente',
-                  createdAt: u.created_at || new Date().toISOString()
-                });
-
-                if (role === 'tech') {
-                  techMap.set(email, {
-                    id: userId,
-                    name: u.name || 'Técnico',
-                    phone: u.phone || '',
-                    email: u.email || '',
-                    specialty: 'Técnico de Campo',
-                    activeOrdersCount: 0,
-                    avgResponseTimeHours: 2.5,
-                    status: u.is_active === false ? 'Inactivo' : 'Activo'
-                  });
-                }
-              }
-            });
-          }
-        } catch (e) {
-          console.warn('Load employees notice:', e);
-        }
-
-        // B. Load from 'system_users' to merge any user not yet in 'employees'
-        try {
-          const { data: sysData, error: sysErr } = await supabase.from('system_users').select('*');
-          if (!sysErr && sysData && Array.isArray(sysData)) {
-            sysData.forEach((u: any) => {
-              const email = (u.email || '').trim().toLowerCase();
-              const role = normalizeRole(u.role);
-              const userId = u.id || `usr-${Math.random()}`;
-              if (email && !allUsersMap.has(email)) {
-                allUsersMap.set(email, {
-                  id: userId,
-                  name: u.name || 'Usuario',
-                  username: u.username || email.split('@')[0],
-                  email: u.email || '',
-                  password: u.password || '',
-                  phone: u.phone || '',
-                  role,
-                  status: u.status || 'Activo',
-                  lastLogin: u.last_login ? new Date(u.last_login).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Reciente',
-                  createdAt: u.created_at || new Date().toISOString()
-                });
-              }
-              if (role === 'tech' && email && !techMap.has(email)) {
+              if (role === 'tech') {
                 techMap.set(email, {
                   id: userId,
                   name: u.name || 'Técnico',
@@ -336,64 +294,106 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   specialty: 'Técnico de Campo',
                   activeOrdersCount: 0,
                   avgResponseTimeHours: 2.5,
-                  status: u.status === 'Inactivo' ? 'Inactivo' : 'Activo'
+                  status: u.is_active === false ? 'Inactivo' : 'Activo'
                 });
               }
-            });
-          }
-        } catch (e) {
-          console.warn('Load system_users notice:', e);
-        }
-
-        // C. Load from 'technicians' table directly
-        try {
-          const { data: techTableData, error: techErr } = await supabase.from('technicians').select('*');
-          if (!techErr && techTableData && Array.isArray(techTableData)) {
-            techTableData.forEach((t: any) => {
-              const email = (t.email || '').trim().toLowerCase();
-              const key = email || t.name || t.id;
-              if (key && !techMap.has(key)) {
-                techMap.set(key, {
-                  id: t.id,
-                  name: t.name || 'Técnico',
-                  phone: t.phone || '',
-                  email: t.email || '',
-                  specialty: t.specialty || 'Técnico de Campo',
-                  activeOrdersCount: 0,
-                  avgResponseTimeHours: 2.5,
-                  status: t.status === 'Inactivo' ? 'Inactivo' : 'Activo'
-                });
-              }
-            });
-          }
-        } catch (e) {
-          console.warn('Load technicians notice:', e);
-        }
-
-        const fetchedUsers = Array.from(allUsersMap.values());
-        if (fetchedUsers.length > 0) {
-          setSystemUsers(fetchedUsers);
-          localStorage.setItem('app_system_users', JSON.stringify(fetchedUsers));
-        }
-
-        const fetchedTechs = Array.from(techMap.values()).filter(t => 
-          t && t.name && 
-          !['tech-1', 'tech-2', 'tech-3'].includes(t.id) &&
-          !['carlos.tech@mantenimiento.com', 'ana.tech@mantenimiento.com', 'roberto.tech@mantenimiento.com'].includes(t.email)
-        );
-
-        if (fetchedTechs.length > 0) {
-          setTechnicians(fetchedTechs);
-          localStorage.setItem('app_technicians', JSON.stringify(fetchedTechs));
+            }
+          });
         }
       } catch (e) {
-        console.warn('Supabase employees sync notice:', e);
+        if (!silent) console.warn('Load employees notice:', e);
       }
 
-      // 2. Fetch Service Orders (from 'service_orders')
+      // B. Load from 'system_users' to merge any user not yet in 'employees'
       try {
-        const { data: oData, error: oErr } = await supabase.from('service_orders').select('*');
-        const mappedOrders: ServiceOrder[] = (!oErr && oData && Array.isArray(oData)) ? oData.map((o: any) => ({
+        const { data: sysData, error: sysErr } = await supabase.from('system_users').select('*');
+        if (!sysErr && sysData && Array.isArray(sysData)) {
+          sysData.forEach((u: any) => {
+            const email = (u.email || '').trim().toLowerCase();
+            const role = normalizeRole(u.role);
+            const userId = u.id || `usr-${Math.random()}`;
+            if (email && !allUsersMap.has(email)) {
+              allUsersMap.set(email, {
+                id: userId,
+                name: u.name || 'Usuario',
+                username: u.username || email.split('@')[0],
+                email: u.email || '',
+                password: u.password || '',
+                phone: u.phone || '',
+                role,
+                status: u.status || 'Activo',
+                lastLogin: u.last_login ? new Date(u.last_login).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Reciente',
+                createdAt: u.created_at || new Date().toISOString()
+              });
+            }
+            if (role === 'tech' && email && !techMap.has(email)) {
+              techMap.set(email, {
+                id: userId,
+                name: u.name || 'Técnico',
+                phone: u.phone || '',
+                email: u.email || '',
+                specialty: 'Técnico de Campo',
+                activeOrdersCount: 0,
+                avgResponseTimeHours: 2.5,
+                status: u.status === 'Inactivo' ? 'Inactivo' : 'Activo'
+              });
+            }
+          });
+        }
+      } catch (e) {
+        if (!silent) console.warn('Load system_users notice:', e);
+      }
+
+      // C. Load from 'technicians' table directly
+      try {
+        const { data: techTableData, error: techErr } = await supabase.from('technicians').select('*');
+        if (!techErr && techTableData && Array.isArray(techTableData)) {
+          techTableData.forEach((t: any) => {
+            const email = (t.email || '').trim().toLowerCase();
+            const key = email || t.name || t.id;
+            if (key && !techMap.has(key)) {
+              techMap.set(key, {
+                id: t.id,
+                name: t.name || 'Técnico',
+                phone: t.phone || '',
+                email: t.email || '',
+                specialty: t.specialty || 'Técnico de Campo',
+                activeOrdersCount: 0,
+                avgResponseTimeHours: 2.5,
+                status: t.status === 'Inactivo' ? 'Inactivo' : 'Activo'
+              });
+            }
+          });
+        }
+      } catch (e) {
+        if (!silent) console.warn('Load technicians notice:', e);
+      }
+
+      const fetchedUsers = Array.from(allUsersMap.values());
+      if (fetchedUsers.length > 0) {
+        setSystemUsers(fetchedUsers);
+        localStorage.setItem('app_system_users', JSON.stringify(fetchedUsers));
+      }
+
+      const fetchedTechs = Array.from(techMap.values()).filter(t => 
+        t && t.name && 
+        !['tech-1', 'tech-2', 'tech-3'].includes(t.id) &&
+        !['carlos.tech@mantenimiento.com', 'ana.tech@mantenimiento.com', 'roberto.tech@mantenimiento.com'].includes(t.email)
+      );
+
+      if (fetchedTechs.length > 0) {
+        setTechnicians(fetchedTechs);
+        localStorage.setItem('app_technicians', JSON.stringify(fetchedTechs));
+      }
+    } catch (e) {
+      if (!silent) console.warn('Supabase employees sync notice:', e);
+    }
+
+    // 2. Fetch Service Orders (from 'service_orders')
+    try {
+      const { data: oData, error: oErr } = await supabase.from('service_orders').select('*').order('created_at', { ascending: false });
+      if (!oErr && oData && Array.isArray(oData)) {
+        const mappedOrders: ServiceOrder[] = oData.map((o: any) => ({
           id: o.id,
           folio: o.folio || `OS-${Math.floor(1000 + Math.random() * 9000)}`,
           clientId: o.client_id || '',
@@ -431,201 +431,219 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   note: `Folio: ${o.folio || ''}`
                 }
               ]
-        })) : [];
+        }));
 
         setOrders(prev => {
-          const existingFolios = new Set(mappedOrders.map(o => o.folio));
-          const localRealOrders = prev.filter(o => o && o.folio);
-          const localOnly = localRealOrders.filter(o => !existingFolios.has(o.folio));
-
-          // Auto-sync any local-only orders (like OS-1001) up to Supabase immediately!
-          if (localOnly.length > 0) {
-            localOnly.forEach(async (lo) => {
-              try {
-                const nowIso = new Date().toISOString();
-                const ordPayload: any = {
-                  folio: lo.folio,
-                  client_name: lo.clientName,
-                  department_name: lo.departmentName || 'Matriz Principal',
-                  equipment_type: lo.equipmentType || 'General',
-                  description: lo.description || '',
-                  priority: lo.priority || 'Media',
-                  status: lo.status || 'Pendiente de Visita',
-                  technician_name: lo.technicianName || null,
-                  scheduled_date: lo.scheduledDate || nowIso.split('T')[0],
-                  route_order: lo.routeOrder || 1,
-                  diagnostic_notes: lo.diagnosticNotes || '',
-                  diagnostic_photos: lo.diagnosticPhotos || [],
-                  requested_parts: lo.requestedParts || [],
-                  solution_notes: lo.solutionNotes || '',
-                  solution_photos: lo.solutionPhotos || [],
-                  collected_amount: lo.collectedAmount || 0,
-                  payment_method: lo.paymentMethod || null,
-                  is_warranty: Boolean(lo.isWarranty),
-                  warranty_reason: lo.warrantyNotes || null,
-                  budget: lo.budget || null,
-                  signature_data: lo.clientSignature || null,
-                  timeline: lo.timeline || [],
-                  created_at: nowIso
-                };
-                if (isUuid(lo.clientId)) ordPayload.client_id = lo.clientId;
-                if (isUuid(lo.departmentId)) ordPayload.department_id = lo.departmentId;
-                if (isUuid(lo.technicianId)) ordPayload.technician_id = lo.technicianId;
-
-                await supabase.from('service_orders').upsert([ordPayload], { onConflict: 'folio' });
-              } catch (err) {
-                console.warn('Auto-backfill order to Supabase notice:', err);
-              }
-            });
-          }
-
-          const combined = [...mappedOrders, ...localOnly];
+          const dbFolios = new Set(mappedOrders.map(o => o.folio));
+          // Keep newly generated local orders that have not yet arrived in DB
+          const unsavedLocal = prev.filter(o => o && o.folio && !dbFolios.has(o.folio) && o.id.startsWith('ord-'));
+          const combined = [...mappedOrders, ...unsavedLocal];
           localStorage.setItem('app_service_orders', JSON.stringify(combined));
           return combined;
         });
-      } catch (e) {
-        console.warn('Supabase service_orders sync notice:', e);
       }
+    } catch (e) {
+      if (!silent) console.warn('Supabase service_orders sync notice:', e);
+    }
 
-      // 3. Fetch Clients (from 'clients')
-      try {
-        const { data: cData, error: cErr } = await supabase.from('clients').select('*');
-        if (!cErr && cData && Array.isArray(cData) && cData.length > 0) {
-          const mappedClients: Client[] = cData.map((c: any) => ({
-            id: c.id,
-            name: c.name || 'Cliente',
-            taxId: c.tax_id || c.taxId || 'RFC-GEN',
-            email: c.contact_email || c.email || '',
-            phone: c.phone || '',
-            whatsapp: c.whatsapp || '',
-            address: c.address || c.delivery_address || c.fiscal_address || '',
-            model: c.equipment_model || c.model || '',
-            fault: c.reported_fault || c.fault || '',
-            status: c.is_active === false || c.status === 'Inactivo' ? 'Inactivo' : 'Activo',
-            createdAt: c.created_at || new Date().toISOString(),
-            departments: Array.isArray(c.departments) ? c.departments : [
-              {
-                id: `dept-${c.id}-1`,
-                name: 'Matriz Principal',
-                contactName: c.name,
-                phone: c.phone || '',
-                address: c.address || ''
-              }
-            ]
-          }));
-          setClients(prev => {
-            const existingIds = new Set(mappedClients.map(c => c.id));
-            const localOnly = prev.filter(c => !existingIds.has(c.id));
-            const combined = [...mappedClients, ...localOnly];
-            localStorage.setItem('app_clients', JSON.stringify(combined));
-            return combined;
-          });
-        }
-      } catch (e) {
-        console.warn('Supabase clients sync notice:', e);
+    // 3. Fetch Clients (from 'clients')
+    try {
+      const { data: cData, error: cErr } = await supabase.from('clients').select('*');
+      if (!cErr && cData && Array.isArray(cData) && cData.length > 0) {
+        const mappedClients: Client[] = cData.map((c: any) => ({
+          id: c.id,
+          name: c.name || 'Cliente',
+          taxId: c.tax_id || c.taxId || 'RFC-GEN',
+          email: c.contact_email || c.email || '',
+          phone: c.phone || '',
+          whatsapp: c.whatsapp || '',
+          address: c.address || c.delivery_address || c.fiscal_address || '',
+          model: c.equipment_model || c.model || '',
+          fault: c.reported_fault || c.fault || '',
+          status: c.is_active === false || c.status === 'Inactivo' ? 'Inactivo' : 'Activo',
+          createdAt: c.created_at || new Date().toISOString(),
+          departments: Array.isArray(c.departments) ? c.departments : [
+            {
+              id: `dept-${c.id}-1`,
+              name: 'Matriz Principal',
+              contactName: c.name,
+              phone: c.phone || '',
+              address: c.address || ''
+            }
+          ]
+        }));
+        setClients(prev => {
+          const existingIds = new Set(mappedClients.map(c => c.id));
+          const localOnly = prev.filter(c => !existingIds.has(c.id));
+          const combined = [...mappedClients, ...localOnly];
+          localStorage.setItem('app_clients', JSON.stringify(combined));
+          return combined;
+        });
       }
+    } catch (e) {
+      if (!silent) console.warn('Supabase clients sync notice:', e);
+    }
 
-      // 4. Fetch Spare Parts (from 'spare_parts')
-      try {
-        const { data: pData, error: pErr } = await supabase.from('spare_parts').select('*');
-        if (!pErr && pData && Array.isArray(pData) && pData.length > 0) {
-          const mappedParts: SparePart[] = pData.map((p: any) => ({
-            id: p.id,
-            code: p.code || 'REF-GEN',
-            name: p.name || 'Refacción',
-            category: p.category || 'General',
-            unitPrice: Number(p.price ?? p.unit_price ?? p.unitPrice ?? 0),
-            stock: Number(p.stock ?? 0),
-            status: p.is_active === false || p.status === 'Inactivo' ? 'Inactivo' : 'Activo',
-            createdAt: p.created_at || new Date().toISOString()
-          }));
-          setSpareParts(prev => {
-            const existingCodes = new Set(mappedParts.map(p => p.code));
-            const localOnly = prev.filter(p => !existingCodes.has(p.code));
-            const combined = [...mappedParts, ...localOnly];
-            localStorage.setItem('app_spare_parts', JSON.stringify(combined));
-            return combined;
-          });
-        }
-      } catch (e) {
-        console.warn('Supabase spare_parts sync notice:', e);
+    // 4. Fetch Spare Parts (from 'spare_parts')
+    try {
+      const { data: pData, error: pErr } = await supabase.from('spare_parts').select('*');
+      if (!pErr && pData && Array.isArray(pData) && pData.length > 0) {
+        const mappedParts: SparePart[] = pData.map((p: any) => ({
+          id: p.id,
+          code: p.code || 'REF-GEN',
+          name: p.name || 'Refacción',
+          category: p.category || 'General',
+          unitPrice: Number(p.price ?? p.unit_price ?? p.unitPrice ?? 0),
+          stock: Number(p.stock ?? 0),
+          status: p.is_active === false || p.status === 'Inactivo' ? 'Inactivo' : 'Activo',
+          createdAt: p.created_at || new Date().toISOString()
+        }));
+        setSpareParts(prev => {
+          const existingCodes = new Set(mappedParts.map(p => p.code));
+          const localOnly = prev.filter(p => !existingCodes.has(p.code));
+          const combined = [...mappedParts, ...localOnly];
+          localStorage.setItem('app_spare_parts', JSON.stringify(combined));
+          return combined;
+        });
       }
+    } catch (e) {
+      if (!silent) console.warn('Supabase spare_parts sync notice:', e);
+    }
 
-      // 4.1 Fetch Services (from 'services')
-      try {
-        const { data: sData, error: sErr } = await supabase.from('services').select('*');
-        if (!sErr && sData && Array.isArray(sData) && sData.length > 0) {
-          const mappedServices: BusinessService[] = sData.map((s: any) => ({
-            id: s.id,
-            code: s.code || 'SRV-001',
-            name: s.name || 'Servicio',
-            category: s.category || 'Mantenimiento',
-            description: s.description || '',
-            basePrice: Number(s.base_price ?? s.price ?? s.basePrice ?? 0),
-            estimatedDurationHours: Number(s.estimated_duration_hours ?? s.duration ?? s.estimatedDurationHours ?? 1),
-            warrantyDays: Number(s.warranty_days ?? s.warrantyDays ?? 30),
-            status: s.is_active === false || s.status === 'Inactivo' ? 'Inactivo' : 'Activo',
-            createdAt: s.created_at || new Date().toISOString()
-          }));
-          setServices(prev => {
-            const existingCodes = new Set(mappedServices.map(s => s.code));
-            const localOnly = prev.filter(s => !existingCodes.has(s.code));
-            const combined = [...mappedServices, ...localOnly];
-            localStorage.setItem('app_business_services', JSON.stringify(combined));
-            return combined;
-          });
-        }
-      } catch (e) {
-        console.warn('Supabase services sync notice:', e);
+    // 4.1 Fetch Services (from 'services')
+    try {
+      const { data: sData, error: sErr } = await supabase.from('services').select('*');
+      if (!sErr && sData && Array.isArray(sData) && sData.length > 0) {
+        const mappedServices: BusinessService[] = sData.map((s: any) => ({
+          id: s.id,
+          code: s.code || 'SRV-001',
+          name: s.name || 'Servicio',
+          category: s.category || 'Mantenimiento',
+          description: s.description || '',
+          basePrice: Number(s.base_price ?? s.price ?? s.basePrice ?? 0),
+          estimatedDurationHours: Number(s.estimated_duration_hours ?? s.duration ?? s.estimatedDurationHours ?? 1),
+          warrantyDays: Number(s.warranty_days ?? s.warrantyDays ?? 30),
+          status: s.is_active === false || s.status === 'Inactivo' ? 'Inactivo' : 'Activo',
+          createdAt: s.created_at || new Date().toISOString()
+        }));
+        setServices(prev => {
+          const existingCodes = new Set(mappedServices.map(s => s.code));
+          const localOnly = prev.filter(s => !existingCodes.has(s.code));
+          const combined = [...mappedServices, ...localOnly];
+          localStorage.setItem('app_business_services', JSON.stringify(combined));
+          return combined;
+        });
       }
+    } catch (e) {
+      if (!silent) console.warn('Supabase services sync notice:', e);
+    }
 
-      // 5. Fetch Expenses (from 'expenses' or 'operating_expenses')
-      try {
-        let mappedExpenses: OperatingExpense[] = [];
-        const { data: expData, error: expErr } = await supabase.from('expenses').select('*');
-        if (!expErr && expData && expData.length > 0) {
-          mappedExpenses = expData.map((e: any) => ({
+    // 5. Fetch Expenses (from 'expenses' or 'operating_expenses')
+    try {
+      let mappedExpenses: OperatingExpense[] = [];
+      const { data: expData, error: expErr } = await supabase.from('expenses').select('*');
+      if (!expErr && expData && expData.length > 0) {
+        mappedExpenses = expData.map((e: any) => ({
+          id: e.id,
+          category: (e.category as any) || 'Otros',
+          description: e.description || 'Gasto',
+          amount: Number(e.amount ?? 0),
+          date: e.date || new Date().toISOString().split('T')[0],
+          paymentMethod: 'Transferencia',
+          registeredBy: 'Administración',
+          createdAt: e.created_at || e.date || new Date().toISOString()
+        }));
+      } else {
+        const { data: eData, error: eErr } = await supabase.from('operating_expenses').select('*');
+        if (!eErr && eData && eData.length > 0) {
+          mappedExpenses = eData.map((e: any) => ({
             id: e.id,
             category: (e.category as any) || 'Otros',
-            description: e.description || 'Gasto',
+            description: e.description || 'Gasto Operativo',
             amount: Number(e.amount ?? 0),
             date: e.date || new Date().toISOString().split('T')[0],
-            paymentMethod: 'Transferencia',
-            registeredBy: 'Administración',
+            paymentMethod: e.payment_method || 'Transferencia',
+            registeredBy: e.registered_by || 'Administración',
+            invoiceFolio: e.invoice_folio || '',
             createdAt: e.created_at || e.date || new Date().toISOString()
           }));
-        } else {
-          const { data: eData, error: eErr } = await supabase.from('operating_expenses').select('*');
-          if (!eErr && eData && eData.length > 0) {
-            mappedExpenses = eData.map((e: any) => ({
-              id: e.id,
-              category: (e.category as any) || 'Otros',
-              description: e.description || 'Gasto Operativo',
-              amount: Number(e.amount ?? 0),
-              date: e.date || new Date().toISOString().split('T')[0],
-              paymentMethod: e.payment_method || 'Transferencia',
-              registeredBy: e.registered_by || 'Administración',
-              invoiceFolio: e.invoice_folio || '',
-              createdAt: e.created_at || e.date || new Date().toISOString()
-            }));
-          }
         }
-
-        if (mappedExpenses.length > 0) {
-          setExpenses(prev => {
-            const existingIds = new Set(mappedExpenses.map(e => e.id));
-            const localOnly = prev.filter(e => !existingIds.has(e.id));
-            const combined = [...mappedExpenses, ...localOnly];
-            localStorage.setItem('app_operating_expenses', JSON.stringify(combined));
-            return combined;
-          });
-        }
-      } catch (e) {
-        console.warn('Supabase expenses sync notice:', e);
       }
-    };
 
+      if (mappedExpenses.length > 0) {
+        setExpenses(prev => {
+          const existingIds = new Set(mappedExpenses.map(e => e.id));
+          const localOnly = prev.filter(e => !existingIds.has(e.id));
+          const combined = [...mappedExpenses, ...localOnly];
+          localStorage.setItem('app_operating_expenses', JSON.stringify(combined));
+          return combined;
+        });
+      }
+    } catch (e) {
+      if (!silent) console.warn('Supabase expenses sync notice:', e);
+    }
+  };
+
+  // Synchronize on mount + Realtime channels + Continuous Polling across computers
+  useEffect(() => {
     fetchSupabaseData();
+
+    // Supabase Realtime Channels
+    let channel: any = null;
+    try {
+      channel = supabase
+        .channel('app-db-sync')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'service_orders' },
+          () => {
+            fetchSupabaseData(true);
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'technicians' },
+          () => {
+            fetchSupabaseData(true);
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'employees' },
+          () => {
+            fetchSupabaseData(true);
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'system_users' },
+          () => {
+            fetchSupabaseData(true);
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'clients' },
+          () => {
+            fetchSupabaseData(true);
+          }
+        )
+        .subscribe();
+    } catch (err) {
+      console.warn('Realtime subscription error:', err);
+    }
+
+    // High-reliability live polling every 5 seconds
+    const pollInterval = setInterval(() => {
+      fetchSupabaseData(true);
+    }, 5000);
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+      clearInterval(pollInterval);
+    };
   }, []);
 
   useEffect(() => {
@@ -779,7 +797,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           description: newOrder.description,
           priority: newOrder.priority,
           status: newOrder.status,
-          technician_name: tech?.name || null,
+          technician_name: tech?.name || newOrder.technicianName || null,
+          technician_id: tech?.id || null,
           scheduled_date: newOrder.scheduledDate,
           is_warranty: false,
           diagnostic_photos: [],
@@ -795,26 +814,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (isUuid(departmentId)) {
           orderPayload.department_id = departmentId;
         }
-        if (tech?.id && isUuid(tech.id)) {
-          orderPayload.technician_id = tech.id;
-        }
 
         const { data, error } = await supabase.from('service_orders').insert([orderPayload]).select();
         if (error) {
           console.warn('Supabase extended insert error, attempting core insert:', error.message);
-          // Try core columns insert
+          // Try core columns insert with technician info
           const corePayload: any = {
             folio: newOrder.folio,
+            client_name: finalClientName,
             equipment_type: newOrder.equipmentType,
             description: newOrder.description,
             priority: newOrder.priority,
             status: newOrder.status,
+            technician_name: tech?.name || newOrder.technicianName || null,
             scheduled_date: newOrder.scheduledDate,
             created_at: nowIso
           };
           if (isUuid(clientId)) corePayload.client_id = clientId;
           if (isUuid(departmentId)) corePayload.department_id = departmentId;
-          if (tech?.id && isUuid(tech.id)) corePayload.technician_id = tech.id;
+          if (tech?.id) corePayload.technician_id = tech.id;
 
           const { data: coreData, error: coreErr } = await supabase.from('service_orders').insert([corePayload]).select();
           if (coreErr) {

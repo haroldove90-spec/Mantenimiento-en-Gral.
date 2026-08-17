@@ -50,12 +50,23 @@ export const TechMobileView: React.FC = () => {
   const [statusNote, setStatusNote] = useState<string>('');
   const [statusFeedbackMsg, setStatusFeedbackMsg] = useState<string | null>(null);
 
-  // Sync active technician when list changes
+  // Sync active technician when list changes or user logs in
   useEffect(() => {
+    if (currentUser?.role === 'tech') {
+      const matchLoggedIn = technicians.find(
+        t => t.id === currentUser.id ||
+             (t.email && currentUser.email && t.email.toLowerCase() === currentUser.email.toLowerCase()) ||
+             (t.name && currentUser.name && (t.name.toLowerCase() === currentUser.name.toLowerCase() || t.name.toLowerCase().includes(currentUser.name.toLowerCase()) || currentUser.name.toLowerCase().includes(t.name.toLowerCase())))
+      );
+      if (matchLoggedIn) {
+        setActiveTechId(matchLoggedIn.id);
+        return;
+      }
+    }
     if ((!activeTechId || !technicians.some(t => t.id === activeTechId)) && technicians.length > 0) {
       setActiveTechId(technicians[0].id);
     }
-  }, [technicians, activeTechId]);
+  }, [technicians, activeTechId, currentUser]);
 
   const currentTech = technicians.find(t => t.id === activeTechId) || technicians[0];
 
@@ -63,10 +74,43 @@ export const TechMobileView: React.FC = () => {
   const [diagOrder, setDiagOrder] = useState<ServiceOrder | null>(null);
   const [execOrder, setExecOrder] = useState<ServiceOrder | null>(null);
 
-  // Assigned orders for selected technician
-  const assignedOrders = orders.filter(
-    o => activeTechId ? (o.technicianId === activeTechId || (currentTech && o.technicianName === currentTech.name)) : true
-  );
+  // Assigned orders for selected technician (resilient cross-device matching)
+  const assignedOrders = orders.filter(o => {
+    // If no technician registered or no selection, show orders
+    if (!activeTechId && technicians.length === 0) return true;
+
+    // 1. Direct ID match
+    const matchId = Boolean(
+      activeTechId && (o.technicianId === activeTechId || (currentTech && o.technicianId === currentTech.id))
+    );
+
+    // 2. Name match (case-insensitive & trimmed)
+    const techNameClean = (currentTech?.name || '').trim().toLowerCase();
+    const orderTechClean = (o.technicianName || '').trim().toLowerCase();
+
+    const matchName = Boolean(
+      techNameClean && orderTechClean && (
+        techNameClean === orderTechClean ||
+        techNameClean.includes(orderTechClean) ||
+        orderTechClean.includes(techNameClean)
+      )
+    );
+
+    // 3. Current logged-in user match
+    const userNameClean = (currentUser?.name || '').trim().toLowerCase();
+    const userClean = (currentUser?.username || '').trim().toLowerCase();
+    const matchUser = Boolean(
+      currentUser?.role === 'tech' && orderTechClean && (
+        (userNameClean && (userNameClean === orderTechClean || userNameClean.includes(orderTechClean) || orderTechClean.includes(userNameClean))) ||
+        (userClean && orderTechClean.includes(userClean))
+      )
+    );
+
+    // 4. Single technician fallback: if only 1 tech is in the system, show orders
+    const isSingleTech = technicians.length <= 1;
+
+    return matchId || matchName || matchUser || isSingleTech;
+  });
 
   // Filter by lifecycle category
   const filteredByStatus = assignedOrders.filter(o => {

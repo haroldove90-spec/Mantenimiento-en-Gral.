@@ -127,45 +127,48 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
     } else {
       // LOGIN MODE
       if (!email.trim() || !password.trim()) {
-        setMessage({ type: 'error', text: 'Ingresa tu usuario/correo y contraseña.' });
+        setMessage({ type: 'error', text: 'Ingresa tu usuario o correo electrónico y contraseña.' });
         return;
       }
 
       setIsSubmitting(true);
-      setMessage({ type: 'warning', text: 'Verificando credenciales con Supabase...' });
-      const input = email.trim().toLowerCase();
+      setMessage({ type: 'warning', text: 'Verificando credenciales con la base de datos...' });
+      const rawInput = email.trim();
+      const inputLower = rawInput.toLowerCase();
       const inputPass = password.trim();
+      const isEmail = rawInput.includes('@');
 
       let foundUser: SystemUser | null = null;
       let authUserSuccess = false;
 
-      // 1. Try Supabase Auth first (if user was created via Supabase Auth)
-      try {
-        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-          email: input,
-          password: inputPass
-        });
-        if (!authError && authData?.user) {
-          authUserSuccess = true;
+      // 1. If it's an email format, try Supabase Auth signIn
+      if (isEmail) {
+        try {
+          const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+            email: inputLower,
+            password: inputPass
+          });
+          if (!authError && authData?.user) {
+            authUserSuccess = true;
+          }
+        } catch (authErr) {
+          console.warn('Supabase Auth check skipped:', authErr);
         }
-      } catch (authErr) {
-        console.warn('Supabase Auth check skipped:', authErr);
       }
 
-      // 2. Query Supabase system_users table directly
+      // 2. Query Supabase 'system_users' table by username, email, or name
       try {
-        // Query by email
-        const { data: emailData, error: emailErr } = await supabase
+        const { data: sysUsersData, error: sysErr } = await supabase
           .from('system_users')
           .select('*')
-          .ilike('email', input)
+          .or(`email.ilike.${inputLower},username.ilike.${inputLower},name.ilike.${rawInput}`)
           .limit(1);
 
-        if (!emailErr && emailData && emailData.length > 0) {
-          const dbU = emailData[0];
+        if (!sysErr && sysUsersData && sysUsersData.length > 0) {
+          const dbU = sysUsersData[0];
           foundUser = {
             id: dbU.id,
-            name: dbU.name || dbU.email.split('@')[0],
+            name: dbU.name || dbU.username || dbU.email.split('@')[0],
             username: dbU.username || dbU.email.split('@')[0],
             email: dbU.email,
             password: dbU.password || '',
@@ -174,40 +177,74 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
             status: dbU.status || 'Activo',
             lastLogin: 'Ahora mismo'
           };
-        } else {
-          // Query by username
-          const { data: usernameData } = await supabase
-            .from('system_users')
+        }
+      } catch (err) {
+        console.warn('Error querying system_users in Supabase:', err);
+      }
+
+      // 3. If not found, check Supabase 'employees' table
+      if (!foundUser) {
+        try {
+          const { data: empData, error: empErr } = await supabase
+            .from('employees')
             .select('*')
-            .ilike('username', input)
+            .or(`email.ilike.${inputLower},username.ilike.${inputLower},name.ilike.${rawInput}`)
             .limit(1);
 
-          if (usernameData && usernameData.length > 0) {
-            const dbU = usernameData[0];
+          if (!empErr && empData && empData.length > 0) {
+            const emp = empData[0];
             foundUser = {
-              id: dbU.id,
-              name: dbU.name || dbU.username,
-              username: dbU.username,
-              email: dbU.email,
-              password: dbU.password || '',
-              phone: dbU.phone || '',
-              role: normalizeRole(dbU.role),
-              status: dbU.status || 'Activo',
+              id: emp.id,
+              name: emp.name || emp.username || emp.email?.split('@')[0] || 'Empleado',
+              username: emp.username || emp.email?.split('@')[0] || rawInput,
+              email: emp.email || `${rawInput}@sistema.com`,
+              password: emp.pin || emp.password || '',
+              phone: emp.phone || '',
+              role: normalizeRole(emp.role),
+              status: emp.is_active === false ? 'Inactivo' : 'Activo',
               lastLogin: 'Ahora mismo'
             };
           }
+        } catch (err) {
+          console.warn('Error querying employees in Supabase:', err);
         }
-      } catch (err) {
-        console.error('Error buscando usuario en Supabase system_users:', err);
       }
 
-      // 3. Fallback: check local systemUsers state
+      // 4. If not found, check Supabase 'technicians' table
+      if (!foundUser) {
+        try {
+          const { data: techData, error: techErr } = await supabase
+            .from('technicians')
+            .select('*')
+            .or(`email.ilike.${inputLower},name.ilike.${rawInput}`)
+            .limit(1);
+
+          if (!techErr && techData && techData.length > 0) {
+            const tech = techData[0];
+            foundUser = {
+              id: tech.id,
+              name: tech.name || 'Técnico',
+              username: tech.name?.toLowerCase().replace(/\s+/g, '') || rawInput,
+              email: tech.email || `${rawInput}@tecnico.com`,
+              password: tech.password || tech.pin || '',
+              phone: tech.phone || '',
+              role: 'tech',
+              status: tech.status === 'Inactivo' ? 'Inactivo' : 'Activo',
+              lastLogin: 'Ahora mismo'
+            };
+          }
+        } catch (err) {
+          console.warn('Error querying technicians in Supabase:', err);
+        }
+      }
+
+      // 5. Fallback: check local systemUsers state
       if (!foundUser) {
         foundUser = systemUsers.find(
           u =>
-            (u.email && u.email.trim().toLowerCase() === input) ||
-            (u.username && u.username.trim().toLowerCase() === input) ||
-            (u.name && u.name.trim().toLowerCase() === input)
+            (u.email && u.email.trim().toLowerCase() === inputLower) ||
+            (u.username && u.username.trim().toLowerCase() === inputLower) ||
+            (u.name && u.name.trim().toLowerCase() === inputLower)
         ) || null;
       }
 
@@ -219,9 +256,9 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
           // User exists in Supabase Auth, let's create their system user record
           const newUser: SystemUser = {
             id: `usr-${Date.now()}`,
-            name: input.split('@')[0],
-            username: input.split('@')[0],
-            email: input,
+            name: rawInput.split('@')[0],
+            username: rawInput.split('@')[0],
+            email: isEmail ? rawInput : `${rawInput}@sistema.com`,
             password: inputPass,
             phone: '',
             role: normalizeRole(targetRole),
@@ -242,7 +279,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
 
         setMessage({
           type: 'error',
-          text: '❌ Usuario no encontrado en la base de datos de Supabase. Regístrate o verifica tu correo / usuario.'
+          text: '❌ Usuario o correo no encontrado en la base de datos. Verifica tu nombre de usuario / correo o regístrate.'
         });
         return;
       }
@@ -411,17 +448,17 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
             </>
           )}
 
-          {/* 3. Correo Electrónico */}
+          {/* 3. Correo Electrónico o Usuario */}
           <div>
             <label className="font-bold text-slate-700 block mb-1">
-              {mode === 'register' ? 'Correo Electrónico *' : 'Correo o Nombre de Usuario *'}
+              {mode === 'register' ? 'Correo Electrónico *' : 'Nombre de Usuario o Correo Electrónico *'}
             </label>
             <input
               type="text"
               required
               value={email}
               onChange={e => setEmail(e.target.value)}
-              placeholder={mode === 'register' ? 'ejemplo@empresa.com' : 'Ingresa tu usuario o correo'}
+              placeholder={mode === 'register' ? 'ejemplo@empresa.com' : 'Ej. admin, haroldo90 o usuario@empresa.com'}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-800 font-semibold focus:outline-hidden focus:ring-2 focus:ring-sij-blue/30 focus:border-sij-blue transition-all"
             />
           </div>

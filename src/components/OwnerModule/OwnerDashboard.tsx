@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useApp } from '../../context/AppContext';
+import React, { useState, useMemo } from 'react';
+import { useApp, deduplicateTechnicians } from '../../context/AppContext';
 import { SystemUser, OperatingExpense, RoleType } from '../../types';
 import { ConfirmDeleteModal } from '../ConfirmDeleteModal';
 import { ClientsModule } from '../OfficeModule/ClientsModule';
@@ -164,7 +164,7 @@ export const OwnerDashboard: React.FC = () => {
   const netIncome = monthSales - totalExpenses;
 
   // Collection by Technician
-  const techCollectionStats = technicians.map(tech => {
+  const techCollectionStats = deduplicateTechnicians(technicians).map(tech => {
     const techClosed = closedOrders.filter(o => o.technicianId === tech.id);
     const totalCollected = techClosed.reduce((sum, o) => sum + (o.collectedAmount || 0), 0);
     const cashTotal = techClosed.filter(o => o.paymentMethod === 'Efectivo').reduce((sum, o) => sum + (o.collectedAmount || 0), 0);

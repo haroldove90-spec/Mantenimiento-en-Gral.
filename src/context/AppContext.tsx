@@ -124,6 +124,83 @@ interface AppContextType {
   resetToDemoData: () => void;
 }
 
+const isUuid = (str?: string): boolean => {
+  if (!str) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+};
+
+const safeUuid = (str?: string): string | null => {
+  return isUuid(str) ? (str as string) : null;
+};
+
+export const deduplicateTechnicians = (techs: Technician[]): Technician[] => {
+  if (!Array.isArray(techs)) return [];
+  const result: Technician[] = [];
+  const byKey = new Map<string, Technician>();
+
+  for (const t of techs) {
+    if (!t || !t.name || !t.name.trim()) continue;
+    // Exclude mock / sample emails and ids
+    if (['tech-1', 'tech-2', 'tech-3'].includes(t.id)) continue;
+    if (['carlos.tech@mantenimiento.com', 'ana.tech@mantenimiento.com', 'roberto.tech@mantenimiento.com'].includes(t.email)) continue;
+
+    const normName = t.name.trim().toLowerCase();
+    const normEmail = (t.email || '').trim().toLowerCase();
+
+    // Check if matching technician already exists by email, name, or id
+    let matchedKey: string | null = null;
+    if (normEmail && byKey.has(normEmail)) {
+      matchedKey = normEmail;
+    } else if (normName && byKey.has(normName)) {
+      matchedKey = normName;
+    } else if (t.id && byKey.has(t.id)) {
+      matchedKey = t.id;
+    }
+
+    if (matchedKey) {
+      const existing = byKey.get(matchedKey)!;
+      // Prefer Supabase UUID over synthetic id
+      const isCurrentUuid = isUuid(t.id);
+      const isExistingUuid = isUuid(existing.id);
+      const finalId = isCurrentUuid ? t.id : (isExistingUuid ? existing.id : (existing.id || t.id));
+
+      const merged: Technician = {
+        ...existing,
+        id: finalId,
+        name: existing.name || t.name,
+        email: existing.email || t.email || '',
+        phone: existing.phone || t.phone || '',
+        specialty: existing.specialty || t.specialty || 'Técnico de Campo',
+        status: (t.status === 'Inactivo' || existing.status === 'Inactivo') ? 'Inactivo' : 'Activo'
+      };
+
+      byKey.set(matchedKey, merged);
+      if (normName) byKey.set(normName, merged);
+      if (normEmail) byKey.set(normEmail, merged);
+      if (merged.id) byKey.set(merged.id, merged);
+    } else {
+      const primaryKey = normName;
+      byKey.set(primaryKey, t);
+      if (normEmail) byKey.set(normEmail, t);
+      if (t.id) byKey.set(t.id, t);
+    }
+  }
+
+  const seenNames = new Set<string>();
+  const seenIds = new Set<string>();
+  for (const t of byKey.values()) {
+    const normName = (t.name || '').trim().toLowerCase();
+    if (!normName) continue;
+    if (seenNames.has(normName)) continue;
+    if (t.id && seenIds.has(t.id)) continue;
+    seenNames.add(normName);
+    if (t.id) seenIds.add(t.id);
+    result.push(t);
+  }
+
+  return result;
+};
+
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -225,7 +302,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.filter(t => t && t.id && !['tech-1', 'tech-2', 'tech-3'].includes(t.id) && !['carlos.tech@mantenimiento.com', 'ana.tech@mantenimiento.com', 'roberto.tech@mantenimiento.com'].includes(t.email));
+          return deduplicateTechnicians(parsed);
         }
       } catch {}
     }
@@ -342,6 +419,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       let allUsersMap = new Map<string, SystemUser>();
       let techMap = new Map<string, Technician>();
 
+      const rawTechCandidates: Technician[] = [];
+
       // A. Load from 'employees'
       try {
         const { data: empData, error: empErr } = await supabase.from('employees').select('*');
@@ -365,7 +444,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               });
 
               if (role === 'tech') {
-                techMap.set(email, {
+                rawTechCandidates.push({
                   id: userId,
                   name: u.name || 'Técnico',
                   phone: u.phone || '',
@@ -405,8 +484,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 createdAt: u.created_at || new Date().toISOString()
               });
             }
-            if (role === 'tech' && email && !techMap.has(email)) {
-              techMap.set(email, {
+            if (role === 'tech') {
+              rawTechCandidates.push({
                 id: userId,
                 name: u.name || 'Técnico',
                 phone: u.phone || '',
@@ -428,20 +507,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const { data: techTableData, error: techErr } = await supabase.from('technicians').select('*');
         if (!techErr && techTableData && Array.isArray(techTableData)) {
           techTableData.forEach((t: any) => {
-            const email = (t.email || '').trim().toLowerCase();
-            const key = email || t.name || t.id;
-            if (key && !techMap.has(key)) {
-              techMap.set(key, {
-                id: t.id,
-                name: t.name || 'Técnico',
-                phone: t.phone || '',
-                email: t.email || '',
-                specialty: t.specialty || 'Técnico de Campo',
-                activeOrdersCount: 0,
-                avgResponseTimeHours: 2.5,
-                status: t.status === 'Inactivo' ? 'Inactivo' : 'Activo'
-              });
-            }
+            rawTechCandidates.push({
+              id: t.id,
+              name: t.name || 'Técnico',
+              phone: t.phone || '',
+              email: t.email || '',
+              specialty: t.specialty || 'Técnico de Campo',
+              activeOrdersCount: 0,
+              avgResponseTimeHours: 2.5,
+              status: t.status === 'Inactivo' ? 'Inactivo' : 'Activo'
+            });
           });
         }
       } catch (e) {
@@ -450,20 +525,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       // Reconcile current logged in tech user if exists
       if (currentUser && currentUser.role === 'tech') {
-        const cEmail = (currentUser.email || '').trim().toLowerCase();
-        const cKey = cEmail || currentUser.name || currentUser.id;
-        if (!techMap.has(cKey)) {
-          techMap.set(cKey, {
-            id: currentUser.id,
-            name: currentUser.name || 'Técnico de Campo',
-            phone: currentUser.phone || '',
-            email: currentUser.email || '',
-            specialty: 'Técnico de Campo',
-            activeOrdersCount: 0,
-            avgResponseTimeHours: 2.5,
-            status: 'Activo'
-          });
-        }
+        rawTechCandidates.push({
+          id: currentUser.id,
+          name: currentUser.name || 'Técnico de Campo',
+          phone: currentUser.phone || '',
+          email: currentUser.email || '',
+          specialty: 'Técnico de Campo',
+          activeOrdersCount: 0,
+          avgResponseTimeHours: 2.5,
+          status: 'Activo'
+        });
       }
 
       const fetchedUsers = Array.from(allUsersMap.values());
@@ -472,11 +543,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         localStorage.setItem('app_system_users', JSON.stringify(fetchedUsers));
       }
 
-      const fetchedTechs = Array.from(techMap.values()).filter(t => 
-        t && t.name && 
-        !['tech-1', 'tech-2', 'tech-3'].includes(t.id) &&
-        !['carlos.tech@mantenimiento.com', 'ana.tech@mantenimiento.com', 'roberto.tech@mantenimiento.com'].includes(t.email)
-      );
+      const fetchedTechs = deduplicateTechnicians(rawTechCandidates);
 
       if (fetchedTechs.length > 0) {
         setTechnicians(fetchedTechs);

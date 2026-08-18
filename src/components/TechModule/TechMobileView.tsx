@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useApp } from '../../context/AppContext';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useApp, deduplicateTechnicians } from '../../context/AppContext';
 import { ServiceOrder, OrderStatus } from '../../types';
 import { InspectionDiagnosticsModal } from './InspectionDiagnosticsModal';
 import { ExecutionAndCloseModal } from './ExecutionAndCloseModal';
@@ -256,7 +256,7 @@ export const TechMobileView: React.FC = () => {
               className="bg-slate-50 border border-slate-300 text-slate-900 text-xs font-bold rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-hidden cursor-pointer"
             >
               <option value="all">🌐 Ver Todas las Órdenes ({orders.length})</option>
-              {technicians.map(t => {
+              {deduplicateTechnicians(technicians).map(t => {
                 const count = orders.filter(
                   o => o.technicianId === t.id || (o.technicianName && o.technicianName.toLowerCase() === t.name.toLowerCase())
                 ).length;

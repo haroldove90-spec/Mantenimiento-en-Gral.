@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useApp } from '../../context/AppContext';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useApp, deduplicateTechnicians } from '../../context/AppContext';
 import { PriorityType } from '../../types';
 import {
   X,
@@ -547,7 +547,7 @@ export const CreateOrderModal: React.FC<{ isOpen: boolean; onClose: () => void }
                     className="w-full bg-slate-50 border border-slate-300 text-slate-800 text-xs sm:text-sm rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-hidden transition-all font-medium"
                   >
                     <option value="">-- Sin asignar por ahora --</option>
-                    {technicians.map(t => (
+                    {deduplicateTechnicians(technicians).map(t => (
                       <option key={t.id} value={t.id}>
                         👨‍🔧 {t.name} ({t.specialty})
                       </option>

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useApp } from '../../context/AppContext';
+import React, { useState, useMemo } from 'react';
+import { useApp, deduplicateTechnicians } from '../../context/AppContext';
 import { OrderStatus, ServiceOrder } from '../../types';
 import { CreateOrderModal } from './CreateOrderModal';
 import { BudgetGeneratorModal } from './BudgetGeneratorModal';
@@ -78,6 +78,8 @@ export const OfficeDashboard: React.FC = () => {
     deleteOrder,
     syncAllDataToSupabase
   } = useApp();
+
+  const uniqueTechnicians = useMemo(() => deduplicateTechnicians(technicians), [technicians]);
 
   const activeTab = officeSubTab;
   const setActiveTab = setOfficeSubTab;
@@ -764,7 +766,7 @@ export const OfficeDashboard: React.FC = () => {
                             <option value="" disabled>
                               {ord.technicianName ? 'Cambiar / Reasignar Técnico...' : '+ Asignar Técnico de Campo...'}
                             </option>
-                            {technicians.map(t => (
+                            {uniqueTechnicians.map(t => (
                               <option key={t.id} value={t.id}>
                                 👨‍🔧 {t.name} ({t.specialty || 'General'})
                               </option>
@@ -1052,7 +1054,7 @@ export const OfficeDashboard: React.FC = () => {
                 >
                   <option value="ALL">🌐 Todos los Técnicos ({activeUnclosedOrders.length} folios)</option>
                   <option value="UNASSIGNED">⚠️ Órdenes Sin Asignar ({orders.filter(o => !o.technicianId && o.status !== 'Cobrado/Cerrado').length})</option>
-                  {technicians.map(t => {
+                  {uniqueTechnicians.map(t => {
                     const techCount = activeUnclosedOrders.filter(o => o.technicianId === t.id).length;
                     return (
                       <option key={t.id} value={t.id}>
@@ -1205,7 +1207,7 @@ export const OfficeDashboard: React.FC = () => {
                   const address = dept?.address || client?.address || client?.deliveryAddress || client?.fiscalAddress || 'Ubicación General';
                   const contactName = dept?.contactName || client?.name || 'Contacto en Sitio';
                   const contactPhone = dept?.phone || client?.phone || client?.whatsapp || '';
-                  const assignedTech = technicians.find(t => t.id === ord.technicianId);
+                  const assignedTech = uniqueTechnicians.find(t => t.id === ord.technicianId);
                   const currentPos = ord.routeOrder || idx + 1;
 
                   return (
@@ -1277,7 +1279,7 @@ export const OfficeDashboard: React.FC = () => {
                           className="bg-slate-50 border border-slate-200 text-slate-700 text-[11px] font-medium rounded-lg p-1 mt-1 focus:outline-hidden cursor-pointer"
                         >
                           <option value="" disabled>Cambiar Técnico...</option>
-                          {technicians.map(t => (
+                          {uniqueTechnicians.map(t => (
                             <option key={t.id} value={t.id}>{t.name} ({t.specialty})</option>
                           ))}
                         </select>

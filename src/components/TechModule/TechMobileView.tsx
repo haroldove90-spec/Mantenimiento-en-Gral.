@@ -325,19 +325,6 @@ export const TechMobileView: React.FC = () => {
               Por Fecha
             </button>
           </div>
-
-          <button
-            onClick={() => {
-              if (window.confirm('⚠️ ¿Deseas eliminar las órdenes y registros de muestra del sistema?')) {
-                clearSampleData();
-              }
-            }}
-            className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer shrink-0"
-            title="Borrar órdenes y datos de muestra"
-          >
-            <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-            <span>Borrar Datos de Muestra</span>
-          </button>
         </div>
 
       </div>

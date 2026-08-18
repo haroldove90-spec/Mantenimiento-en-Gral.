@@ -50,8 +50,14 @@ export const ClientPortalView: React.FC = () => {
 
   if (!currentOrder) {
     return (
-      <div className="max-w-3xl mx-auto px-4 py-12 text-center text-slate-500">
-        No se encontró la orden solicitada.
+      <div className="max-w-2xl mx-auto px-4 py-16 text-center space-y-4 animate-in fade-in">
+        <div className="w-16 h-16 bg-purple-100 text-purple-600 rounded-3xl mx-auto flex items-center justify-center shadow-inner">
+          <UserCheck className="w-8 h-8" />
+        </div>
+        <h3 className="text-xl font-bold text-slate-800">Portal de Seguimiento para Clientes</h3>
+        <p className="text-sm text-slate-500 max-w-md mx-auto">
+          No hay órdenes de servicio activas asociadas a este folio en este momento. Las cotizaciones y órdenes creadas por la administración aparecerán aquí automáticamente.
+        </p>
       </div>
     );
   }

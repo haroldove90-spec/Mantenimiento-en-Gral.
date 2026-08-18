@@ -2308,42 +2308,111 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const userEmail = (userData.email || '').trim().toLowerCase();
     const userUsername = (userData.username || '').trim().toLowerCase() || userEmail.split('@')[0];
     const nowIso = new Date().toISOString();
+    const userRole = normalizeRole(userData.role);
 
-    // 1. Save or Update in Supabase 'employees' table
+    // 0. Supabase Auth registration
+    if (userEmail.includes('@') && userData.password) {
+      try {
+        await supabase.auth.signUp({
+          email: userEmail,
+          password: userData.password,
+          options: {
+            data: {
+              name: userData.name || userUsername,
+              username: userUsername,
+              role: userRole
+            }
+          }
+        });
+      } catch (authErr) {
+        console.warn('Supabase Auth signUp skipped/handled:', authErr);
+      }
+    }
+
+    // 1. Save or Update in Supabase 'system_users' table
     try {
-      const { data: existingEmp } = await supabase.from('employees').select('id').ilike('email', userEmail);
-      const empPayload: any = {
-        name: userData.name || 'Empleado',
+      const { data: existingSys } = await supabase.from('system_users').select('id').ilike('email', userEmail);
+      const sysPayload = {
+        name: userData.name || 'Usuario',
         username: userUsername,
         email: userEmail,
-        role: userData.role || 'tech',
+        password: userData.password || '',
         phone: userData.phone || '',
-        pin: userData.password || '1234',
-        is_active: userData.status !== 'Inactivo',
+        role: userRole,
+        status: userData.status || 'Activo',
         created_at: nowIso
       };
 
-      if (existingEmp && existingEmp.length > 0) {
-        await supabase.from('employees').update(empPayload).ilike('email', userEmail);
+      if (existingSys && existingSys.length > 0) {
+        await supabase.from('system_users').update(sysPayload).ilike('email', userEmail);
       } else {
-        const { error: insErr } = await supabase.from('employees').insert([empPayload]);
-        if (insErr) {
-          // Retry with core columns if some columns don't exist in custom table schema
-          await supabase.from('employees').insert([{
-            name: userData.name || 'Empleado',
-            username: userUsername,
-            email: userEmail,
-            role: userData.role || 'tech',
-            created_at: nowIso
-          }]);
-        }
+        await supabase.from('system_users').insert([sysPayload]);
       }
     } catch (err: any) {
-      console.warn('Employees insert/update notice:', err);
+      console.warn('System users insert/update notice:', err);
     }
 
-    // 2. If role is 'tech', also save / update in Supabase 'technicians' table
-    if (userData.role === 'tech') {
+    // 2. Save or Update in Supabase 'employees' table (if administrative or tech)
+    if (userRole !== 'client') {
+      try {
+        const { data: existingEmp } = await supabase.from('employees').select('id').ilike('email', userEmail);
+        const empPayload: any = {
+          name: userData.name || 'Empleado',
+          username: userUsername,
+          email: userEmail,
+          role: userRole,
+          phone: userData.phone || '',
+          pin: userData.password || '1234',
+          is_active: userData.status !== 'Inactivo',
+          created_at: nowIso
+        };
+
+        if (existingEmp && existingEmp.length > 0) {
+          await supabase.from('employees').update(empPayload).ilike('email', userEmail);
+        } else {
+          const { error: insErr } = await supabase.from('employees').insert([empPayload]);
+          if (insErr) {
+            await supabase.from('employees').insert([{
+              name: userData.name || 'Empleado',
+              username: userUsername,
+              email: userEmail,
+              role: userRole,
+              created_at: nowIso
+            }]);
+          }
+        }
+      } catch (err: any) {
+        console.warn('Employees insert/update notice:', err);
+      }
+    }
+
+    // 3. If role is 'client', save or update in Supabase 'clients' table
+    if (userRole === 'client') {
+      try {
+        const { data: existingClient } = await supabase.from('clients').select('id').ilike('contact_email', userEmail);
+        const clientPayload = {
+          name: userData.name || userUsername,
+          contact_name: userData.name || userUsername,
+          contact_email: userEmail,
+          email: userEmail,
+          phone: userData.phone || '',
+          tax_id: 'XAXX010101000',
+          address: 'Domicilio Registrado',
+          is_active: userData.status !== 'Inactivo',
+          created_at: nowIso
+        };
+        if (existingClient && existingClient.length > 0) {
+          await supabase.from('clients').update(clientPayload).ilike('contact_email', userEmail);
+        } else {
+          await supabase.from('clients').insert([clientPayload]);
+        }
+      } catch (cErr) {
+        console.warn('Clients sync notice:', cErr);
+      }
+    }
+
+    // 4. If role is 'tech', also save / update in Supabase 'technicians' table
+    if (userRole === 'tech') {
       try {
         const { data: existingTech } = await supabase.from('technicians').select('id').ilike('email', userEmail);
         const techPayload: any = {
@@ -2360,7 +2429,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } else {
           const { error: techInsErr } = await supabase.from('technicians').insert([techPayload]);
           if (techInsErr) {
-            // Fallback for minimal technicians table
             await supabase.from('technicians').insert([{
               name: userData.name || 'Técnico',
               phone: userData.phone || '',
@@ -2374,39 +2442,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
-    // 3. Save / Update in Supabase 'system_users' table
-    try {
-      const { data: existingSys } = await supabase.from('system_users').select('id').ilike('email', userEmail);
-      const sysPayload = {
-        name: userData.name || 'Usuario',
-        username: userUsername,
-        email: userEmail,
-        password: userData.password || '',
-        phone: userData.phone || '',
-        role: userData.role || 'tech',
-        status: userData.status || 'Activo',
-        created_at: nowIso
-      };
-
-      if (existingSys && existingSys.length > 0) {
-        await supabase.from('system_users').update(sysPayload).ilike('email', userEmail);
-      } else {
-        await supabase.from('system_users').insert([sysPayload]);
-      }
-    } catch (err: any) {
-      console.warn('System users insert/update notice:', err);
-    }
-
-    // 4. Update local state
+    // 5. Update local state
     const newId = `usr-${Date.now()}`;
     const newUser: SystemUser = {
       id: newId,
-      name: userData.name || 'Empleado',
+      name: userData.name || 'Usuario',
       username: userUsername,
       email: userEmail,
       password: userData.password || '',
       phone: userData.phone || '',
-      role: userData.role || 'tech',
+      role: userRole,
       status: userData.status || 'Activo',
       lastLogin: 'Ahora mismo',
       createdAt: nowIso

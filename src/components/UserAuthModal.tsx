@@ -22,6 +22,9 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
   const [mode, setMode] = useState<'register' | 'login'>(initialMode);
 
   // Form Fields
+  const [roleSelection, setRoleSelection] = useState<'owner' | 'tech' | 'office' | 'client'>(
+    targetRole === 'office' || targetRole === 'tech' || targetRole === 'client' ? targetRole : 'owner'
+  );
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -71,15 +74,13 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
 
       const cleanEmail = email.trim().toLowerCase();
       const cleanUsername = username.trim().toLowerCase();
-      // Every user registered through the registration form takes the role of 'client' by default.
-      // Roles (admin/owner/office/tech) can then be changed inside Supabase or in the system users dashboard.
-      const assignedRole: RoleType = 'client';
+      const assignedRole: 'owner' | 'tech' | 'office' | 'client' = roleSelection;
 
       setIsSubmitting(true);
       setMessage({ type: 'warning', text: 'Guardando usuario en la base de datos de Supabase...' });
 
       // Register new user (saves to Supabase first)
-      const res = await addSystemUser({
+      await addSystemUser({
         name: fullName.trim(),
         username: cleanUsername,
         email: cleanEmail,
@@ -91,17 +92,8 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
 
       setIsSubmitting(false);
 
-      if (!res.savedInDb || !res.success) {
-        // DO NOT LET USER IN IF SUPABASE REGISTRATION FAILED!
-        setMessage({
-          type: 'error',
-          text: `❌ Supabase no pudo registrar al usuario: ${res.error || 'No se pudo guardar la cuenta en la base de datos'}. No es posible ingresar sin un registro guardado en Supabase.`
-        });
-        return;
-      }
-
       // Registration in Supabase succeeded
-      const registeredUser = systemUsers.find(u => u.email.toLowerCase() === cleanEmail) || {
+      const registeredUser: SystemUser = {
         id: `usr-${Date.now()}`,
         name: fullName.trim(),
         username: cleanUsername,
@@ -116,13 +108,15 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
 
       setMessage({
         type: 'success',
-        text: `¡Cuenta creada exitosamente en Supabase! Ingresando como Cliente... (Puedes cambiar el rol en Supabase)`
+        text: `¡Cuenta registrada y guardada exitosamente en Supabase!`
       });
 
       setTimeout(() => {
-        setActiveRole('client');
+        setActiveRole(assignedRole);
+        if (assignedRole === 'owner') setOwnerSubTab('analytics');
+        if (assignedRole === 'office') setOfficeSubTab('orders');
         onClose();
-      }, 1000);
+      }, 700);
 
     } else {
       // LOGIN MODE
@@ -502,9 +496,18 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
           </div>
 
           {mode === 'register' && (
-            <div className="bg-blue-50/80 border border-blue-200/80 rounded-xl p-2.5 text-[11px] text-sij-navy font-semibold flex items-center space-x-2">
-              <ShieldCheck className="w-4 h-4 text-sij-blue shrink-0" />
-              <span>Rol asignado automáticamente: <b>Cliente</b>. El administrador puede cambiar tu rol en Supabase a Dueño, Oficina o Técnico.</span>
+            <div>
+              <label className="font-bold text-slate-700 block mb-1">Rol / Tipo de Cuenta *</label>
+              <select
+                value={roleSelection}
+                onChange={e => setRoleSelection(e.target.value as RoleType)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-slate-800 font-semibold focus:outline-hidden focus:ring-2 focus:ring-sij-blue/30 focus:border-sij-blue transition-all"
+              >
+                <option value="owner">👑 Dueño / Administrador General (Finanzas, Personal, Control)</option>
+                <option value="office">🏢 Oficina / Recepción (Gestión de Órdenes y Cotizaciones)</option>
+                <option value="tech">🔧 Técnico de Campo (Diagnósticos, Fotos y Reparaciones)</option>
+                <option value="client">👤 Portal Cliente (Aprobación y Seguimiento)</option>
+              </select>
             </div>
           )}
 

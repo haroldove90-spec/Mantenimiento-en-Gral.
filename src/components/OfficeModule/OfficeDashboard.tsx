@@ -81,7 +81,15 @@ export const OfficeDashboard: React.FC = () => {
     syncAllDataToSupabase
   } = useApp();
 
-  const uniqueTechnicians = useMemo(() => deduplicateTechnicians(technicians), [technicians]);
+  const uniqueTechnicians = useMemo(
+    () =>
+      deduplicateTechnicians(technicians).filter(
+        t =>
+          t.status !== 'Inactivo' &&
+          !['tecnico 1', 'tecnico 2', 'técnico 1', 'técnico 2'].includes(t.name.toLowerCase().trim())
+      ),
+    [technicians]
+  );
 
   const activeTab = officeSubTab;
   const setActiveTab = setOfficeSubTab;
@@ -969,7 +977,7 @@ export const OfficeDashboard: React.FC = () => {
                                 <option value="" disabled>
                                   {ord.technicianName ? ord.technicianName : '+ Asignar...'}
                                 </option>
-                                {technicians.map(t => (
+                                {uniqueTechnicians.map(t => (
                                   <option key={t.id} value={t.id}>
                                     {t.name}
                                   </option>
@@ -1188,7 +1196,7 @@ export const OfficeDashboard: React.FC = () => {
                         className="bg-slate-50 border border-slate-300 text-slate-800 text-[11px] font-medium rounded-lg p-1 flex-1 focus:outline-hidden"
                       >
                         <option value="" disabled>Asignar a técnico...</option>
-                        {technicians.map(t => (
+                        {uniqueTechnicians.map(t => (
                           <option key={t.id} value={t.id}>{t.name}</option>
                         ))}
                       </select>
@@ -1679,7 +1687,7 @@ export const OfficeDashboard: React.FC = () => {
                   <option value="" disabled>
                     {detailOrder.technicianName ? 'Cambiar / Reasignar a otro Técnico...' : '+ Seleccionar Técnico Responsable...'}
                   </option>
-                  {technicians.map(t => (
+                  {uniqueTechnicians.map(t => (
                     <option key={t.id} value={t.id}>
                       👨‍🔧 {t.name} — {t.specialty || 'Técnico de Campo'} ({t.status || 'Disponible'})
                     </option>

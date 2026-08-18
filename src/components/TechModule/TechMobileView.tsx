@@ -183,9 +183,31 @@ export const TechMobileView: React.FC = () => {
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
-  const techNotifs = notifications.filter(
-    n => n.targetRole === 'tech' || n.targetRole === 'office'
-  );
+  const techNotifs = notifications.filter(n => {
+    if (n.targetRole !== 'tech') return false;
+
+    if (activeTechId !== 'all') {
+      const targetTech = currentTech || technicians.find(t => t.id === activeTechId);
+      const targetId = targetTech ? targetTech.id : activeTechId;
+      const targetName = targetTech ? targetTech.name.trim().toLowerCase() : '';
+
+      if (!n.targetTechnicianId && !n.targetTechnicianName) return true;
+      if (n.targetTechnicianId && n.targetTechnicianId === targetId) return true;
+      if (targetName && n.targetTechnicianName && n.targetTechnicianName.trim().toLowerCase() === targetName) return true;
+      return false;
+    }
+
+    if (currentUser?.role === 'tech' && loggedInTech) {
+      const myId = loggedInTech.id;
+      const myName = loggedInTech.name.trim().toLowerCase();
+      if (!n.targetTechnicianId && !n.targetTechnicianName) return true;
+      if (n.targetTechnicianId && n.targetTechnicianId === myId) return true;
+      if (myName && n.targetTechnicianName && n.targetTechnicianName.trim().toLowerCase() === myName) return true;
+      return false;
+    }
+
+    return true;
+  });
 
   // Helper to categorize status into the 3 core pillars: Pendiente, En Proceso, Terminado
   const getStatusGroup = (status: OrderStatus): 'pending' | 'in_progress' | 'completed' => {
@@ -294,16 +316,22 @@ export const TechMobileView: React.FC = () => {
               className="bg-slate-50 border border-slate-300 text-slate-900 text-xs font-bold rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-hidden cursor-pointer"
             >
               <option value="all">🌐 Ver Todas las Órdenes ({orders.length})</option>
-              {deduplicateTechnicians(technicians).map(t => {
-                const count = orders.filter(
-                  o => o.technicianId === t.id || (o.technicianName && o.technicianName.toLowerCase() === t.name.toLowerCase())
-                ).length;
-                return (
-                  <option key={t.id} value={t.id}>
-                    👨‍🔧 {t.name} ({count} asignadas)
-                  </option>
-                );
-              })}
+              {deduplicateTechnicians(technicians)
+                .filter(
+                  t =>
+                    t.status !== 'Inactivo' &&
+                    !['tecnico 1', 'tecnico 2', 'técnico 1', 'técnico 2'].includes(t.name.toLowerCase().trim())
+                )
+                .map(t => {
+                  const count = orders.filter(
+                    o => o.technicianId === t.id || (o.technicianName && o.technicianName.toLowerCase() === t.name.toLowerCase())
+                  ).length;
+                  return (
+                    <option key={t.id} value={t.id}>
+                      👨‍🔧 {t.name} ({count} asignadas)
+                    </option>
+                  );
+                })}
             </select>
           </div>
 
@@ -440,7 +468,14 @@ export const TechMobileView: React.FC = () => {
                   <span>🌐 Ver Todas las Órdenes ({orders.length})</span>
                 </button>
 
-                {technicians.filter(t => t.id !== activeTechId).map(t => {
+                {technicians
+                  .filter(
+                    t =>
+                      t.id !== activeTechId &&
+                      t.status !== 'Inactivo' &&
+                      !['tecnico 1', 'tecnico 2', 'técnico 1', 'técnico 2'].includes(t.name.toLowerCase().trim())
+                  )
+                  .map(t => {
                   const tOrdersCount = orders.filter(o => o.technicianId === t.id || (o.technicianName && o.technicianName.toLowerCase() === t.name.toLowerCase())).length;
                   if (tOrdersCount === 0) return null;
                   return (

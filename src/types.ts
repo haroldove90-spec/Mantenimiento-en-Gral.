@@ -210,4 +210,7 @@ export interface Notification {
   title: string;
   message: string;
   read: boolean;
+  targetTechnicianId?: string;
+  targetTechnicianName?: string;
+  targetClientId?: string;
 }

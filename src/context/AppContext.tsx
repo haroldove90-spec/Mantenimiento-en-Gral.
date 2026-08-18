@@ -514,10 +514,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const fetchSupabaseData = async (silent = false) => {
     // 1. Fetch Employees & Technicians (from 'employees', 'technicians', and 'system_users')
     try {
-      let allUsersMap = new Map<string, SystemUser>();
-      let techMap = new Map<string, Technician>();
+      // Purge deleted sample demo technicians from Supabase if present
+      (async () => {
+        try {
+          const namesToClean = ['tecnico 1', 'tecnico 2', 'técnico 1', 'técnico 2'];
+          for (const nm of namesToClean) {
+            await supabase.from('technicians').delete().ilike('name', nm);
+            await supabase.from('employees').delete().ilike('name', nm);
+            await supabase.from('system_users').delete().ilike('name', nm);
+          }
+        } catch {}
+      })();
 
+      let allUsersMap = new Map<string, SystemUser>();
       const rawTechCandidates: Technician[] = [];
+      const forbiddenDemoNames = new Set(['tecnico 1', 'tecnico 2', 'técnico 1', 'técnico 2']);
 
       // A. Load from 'employees'
       try {
@@ -525,13 +536,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (!empErr && empData && Array.isArray(empData)) {
           empData.forEach((u: any) => {
             const email = (u.email || '').trim().toLowerCase();
+            const name = (u.name || '').trim();
             const role = normalizeRole(u.role);
             const userId = u.id || `usr-${Math.random()}`;
-            if (email) {
-              allUsersMap.set(email, {
+
+            if (forbiddenDemoNames.has(name.toLowerCase())) {
+              return; // Skip deleted demo technician
+            }
+
+            if (email || name) {
+              const userKey = email || name.toLowerCase();
+              allUsersMap.set(userKey, {
                 id: userId,
                 name: u.name || 'Empleado',
-                username: u.username || email.split('@')[0],
+                username: u.username || email.split('@')[0] || name.toLowerCase(),
                 email: u.email || '',
                 password: u.pin || '',
                 phone: u.phone || '',
@@ -541,7 +559,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 createdAt: u.created_at || new Date().toISOString()
               });
 
-              if (role === 'tech') {
+              if (role === 'tech' && u.is_active !== false) {
                 rawTechCandidates.push({
                   id: userId,
                   name: u.name || 'Técnico',
@@ -550,7 +568,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   specialty: 'Técnico de Campo',
                   activeOrdersCount: 0,
                   avgResponseTimeHours: 2.5,
-                  status: u.is_active === false ? 'Inactivo' : 'Activo'
+                  status: 'Activo'
                 });
               }
             }
@@ -566,13 +584,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (!sysErr && sysData && Array.isArray(sysData)) {
           sysData.forEach((u: any) => {
             const email = (u.email || '').trim().toLowerCase();
+            const name = (u.name || '').trim();
             const role = normalizeRole(u.role);
             const userId = u.id || `usr-${Math.random()}`;
-            if (email && !allUsersMap.has(email)) {
-              allUsersMap.set(email, {
+
+            if (forbiddenDemoNames.has(name.toLowerCase())) {
+              return; // Skip deleted demo technician
+            }
+
+            const userKey = email || name.toLowerCase();
+            if (userKey && !allUsersMap.has(userKey)) {
+              allUsersMap.set(userKey, {
                 id: userId,
                 name: u.name || 'Usuario',
-                username: u.username || email.split('@')[0],
+                username: u.username || email.split('@')[0] || name.toLowerCase(),
                 email: u.email || '',
                 password: u.password || '',
                 phone: u.phone || '',
@@ -582,7 +607,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 createdAt: u.created_at || new Date().toISOString()
               });
             }
-            if (role === 'tech') {
+            if (role === 'tech' && u.status !== 'Inactivo') {
               rawTechCandidates.push({
                 id: userId,
                 name: u.name || 'Técnico',
@@ -591,7 +616,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 specialty: 'Técnico de Campo',
                 activeOrdersCount: 0,
                 avgResponseTimeHours: 2.5,
-                status: u.status === 'Inactivo' ? 'Inactivo' : 'Activo'
+                status: 'Activo'
               });
             }
           });
@@ -606,14 +631,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (!techErr && techTableData && Array.isArray(techTableData)) {
           techTableData.forEach((t: any) => {
             const tEmail = (t.email || '').trim().toLowerCase();
-            const tName = (t.name || '').trim().toLowerCase();
+            const tName = (t.name || '').trim();
+
+            if (forbiddenDemoNames.has(tName.toLowerCase())) {
+              return; // Skip deleted demo technician
+            }
             
             // Check if this technician was changed to office/owner in allUsersMap
             let assignedNonTechRole = false;
             for (const usr of allUsersMap.values()) {
               const uEmail = (usr.email || '').trim().toLowerCase();
               const uName = (usr.name || '').trim().toLowerCase();
-              if ((tEmail && uEmail === tEmail) || (tName && uName === tName)) {
+              if ((tEmail && uEmail === tEmail) || (tName && uName === tName.toLowerCase())) {
                 if (usr.role !== 'tech') {
                   assignedNonTechRole = true;
                   break;
@@ -621,7 +650,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               }
             }
 
-            if (!assignedNonTechRole) {
+            if (!assignedNonTechRole && t.status !== 'Inactivo') {
               rawTechCandidates.push({
                 id: t.id,
                 name: t.name || 'Técnico',
@@ -630,7 +659,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 specialty: t.specialty || 'Técnico de Campo',
                 activeOrdersCount: 0,
                 avgResponseTimeHours: 2.5,
-                status: t.status === 'Inactivo' ? 'Inactivo' : 'Activo'
+                status: 'Activo'
               });
             }
           });
@@ -639,7 +668,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (!silent) console.warn('Load technicians notice:', e);
       }
 
-      const fetchedUsers = Array.from(allUsersMap.values());
+      const fetchedUsers = Array.from(allUsersMap.values()).filter(u => !forbiddenDemoNames.has(u.name.toLowerCase()));
       if (fetchedUsers.length > 0) {
         setSystemUsers(fetchedUsers);
         localStorage.setItem('app_system_users', JSON.stringify(fetchedUsers));
@@ -675,7 +704,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       // Reconcile current logged in tech user ONLY if their current role is tech
-      if (currentUser && currentUser.role === 'tech') {
+      if (currentUser && currentUser.role === 'tech' && !forbiddenDemoNames.has(currentUser.name.toLowerCase())) {
         rawTechCandidates.push({
           id: currentUser.id,
           name: currentUser.name || 'Técnico de Campo',
@@ -688,7 +717,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
       }
 
-      const fetchedTechs = deduplicateTechnicians(rawTechCandidates);
+      const fetchedTechs = deduplicateTechnicians(
+        rawTechCandidates.filter(t => !forbiddenDemoNames.has(t.name.toLowerCase()) && t.status !== 'Inactivo')
+      );
       setTechnicians(fetchedTechs);
       localStorage.setItem('app_technicians', JSON.stringify(fetchedTechs));
 
@@ -924,7 +955,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           orderFolio: n.order_folio || '',
           title: n.title || 'Aviso del Sistema',
           message: n.message || '',
-          read: Boolean(n.read)
+          read: Boolean(n.read),
+          targetTechnicianId: n.target_technician_id || undefined,
+          targetTechnicianName: n.target_technician_name || undefined,
+          targetClientId: n.target_client_id || undefined
         }));
 
         setNotifications(prev => {
@@ -1013,7 +1047,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               orderFolio: row.order_folio || '',
               title: row.title || 'Aviso',
               message: row.message || '',
-              read: false
+              read: false,
+              targetTechnicianId: row.target_technician_id || undefined,
+              targetTechnicianName: row.target_technician_name || undefined,
+              targetClientId: row.target_client_id || undefined
             };
             setNotifications(prev => {
               if (prev.some(p => p.id === incoming.id || (p.title === incoming.title && p.orderFolio === incoming.orderFolio && p.message === incoming.message))) {
@@ -1215,6 +1252,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           title: newN.title,
           message: newN.message,
           read: false,
+          target_technician_id: newN.targetTechnicianId || null,
+          target_technician_name: newN.targetTechnicianName || null,
+          target_client_id: newN.targetClientId || null,
           created_at: new Date().toISOString()
         }]);
       } catch (err) {
@@ -1309,9 +1349,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         note: `Técnico: ${tech.name}`
       });
 
-      // Direct notification to technician
+      // Direct notification ONLY to the assigned technician
       addNotification({
         targetRole: 'tech',
+        targetTechnicianId: tech.id,
+        targetTechnicianName: tech.name,
         orderFolio: folio,
         title: 'Nueva Visita Asignada',
         message: `Asignado servicio ${folio} para ${newOrder.clientName} (${newOrder.equipmentType}). Programado para ${newOrder.scheduledDate}.`
@@ -1389,6 +1431,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (targetOrder) {
       const folio = targetOrder.folio;
       const clientName = targetOrder.clientName;
+      const clientId = targetOrder.clientId;
+      const techId = targetOrder.technicianId;
+      const techName = targetOrder.technicianName;
 
       // 1. Notificación a Oficina
       addNotification({
@@ -1406,21 +1451,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         message: `Orden ${folio} (${clientName}) pasó a estado "${newStatus}". Autor: ${author}.`
       });
 
-      // 3. Notificación a Portal del Cliente
+      // 3. Notificación a Portal del Cliente (targeted strictly to this client)
       addNotification({
         targetRole: 'client',
+        targetClientId: clientId,
         orderFolio: folio,
         title: `Tu Servicio ${folio}: ${newStatus}`,
         message: `El estado de tu orden ${folio} ahora es: ${newStatus}.${note ? ` Detalle: ${note}` : ''}`
       });
 
-      // 4. Notificación al Técnico de Campo
-      addNotification({
-        targetRole: 'tech',
-        orderFolio: folio,
-        title: `Orden ${folio} actualizada`,
-        message: `Estatus sincronizado correctamente a "${newStatus}".`
-      });
+      // 4. Notificación al Técnico de Campo (targeted strictly to the assigned technician)
+      if (techId || techName) {
+        addNotification({
+          targetRole: 'tech',
+          targetTechnicianId: techId,
+          targetTechnicianName: techName,
+          orderFolio: folio,
+          title: `Orden ${folio} actualizada`,
+          message: `Estatus sincronizado correctamente a "${newStatus}".`
+        });
+      }
 
       // Sincronización asíncrona con Supabase
       (async () => {
@@ -1487,9 +1537,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const finalClientName = targetOrd?.clientName || targetClientName || 'Cliente';
     const finalEquipment = targetOrd?.equipmentType || targetEquip || 'General';
 
-    // 1. Send High-Priority Realtime Notification to Technician
+    // 1. Send High-Priority Realtime Notification ONLY to Assigned Technician
     addNotification({
       targetRole: 'tech',
+      targetTechnicianId: tech.id,
+      targetTechnicianName: tech.name,
       orderFolio: finalFolio,
       title: '📋 Nueva Orden Asignada a tu Ruta',
       message: `Se te ha asignado la orden ${finalFolio} (${finalClientName}) para ${finalEquipment}.`
@@ -1578,9 +1630,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     const ord = orders.find(o => o.id === orderId);
-    if (ord && ord.technicianId) {
+    if (ord && (ord.technicianId || ord.technicianName)) {
       addNotification({
         targetRole: 'tech',
+        targetTechnicianId: ord.technicianId,
+        targetTechnicianName: ord.technicianName,
         orderFolio: ord.folio,
         title: 'Revisión por Garantía',
         message: `El folio ${ord.folio} fue reabierto por garantía: "${warrantyNotes}". Requiere atención.`
@@ -1757,6 +1811,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (ord) {
       addNotification({
         targetRole: 'client',
+        targetClientId: ord.clientId,
         orderFolio: ord.folio,
         title: 'Cotización Lista para Autorización',
         message: `Tu presupuesto para ${ord.folio} está disponible para autorizar.`
@@ -1819,9 +1874,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         message: `El cliente de ${ord.folio} autorizó el presupuesto. Estatus: En Reparación.`
       });
 
-      if (ord.technicianId) {
+      if (ord.technicianId || ord.technicianName) {
         addNotification({
           targetRole: 'tech',
+          targetTechnicianId: ord.technicianId,
+          targetTechnicianName: ord.technicianName,
           orderFolio: ord.folio,
           title: 'Presupuesto Aprobado por Cliente',
           message: `Luz verde para ${ord.folio}. Oficina ha liberado este servicio para reparación en tu ruta.`
@@ -1875,6 +1932,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         title: 'Presupuesto Rechazado',
         message: `El cliente de ${ord.folio} no aceptó la cotización.`
       });
+
+      if (ord.technicianId || ord.technicianName) {
+        addNotification({
+          targetRole: 'tech',
+          targetTechnicianId: ord.technicianId,
+          targetTechnicianName: ord.technicianName,
+          orderFolio: ord.folio,
+          title: 'Presupuesto No Aceptado',
+          message: `El cliente de ${ord.folio} no autorizó la cotización.`
+        });
+      }
 
       (async () => {
         await updateSupabaseOrder(orderId, {
@@ -2388,16 +2456,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteTechnician = async (id: string) => {
     const techToDelete = technicians.find(t => t.id === id);
-    setTechnicians(prev => prev.filter(t => t.id !== id));
-    if (techToDelete) {
-      try {
-        await supabase
-          .from('technicians')
-          .delete()
-          .or(`id.eq.${id},name.eq.${techToDelete.name}`);
-      } catch (e) {
-        console.warn('Error borrando técnico en Supabase:', e);
+    const targetName = techToDelete?.name?.trim();
+    const targetEmail = techToDelete?.email?.trim().toLowerCase();
+
+    // 1. Immediately remove from React state (technicians and systemUsers)
+    const updatedTechs = technicians.filter(
+      t =>
+        t.id !== id &&
+        (!targetName || t.name.trim().toLowerCase() !== targetName.toLowerCase()) &&
+        (!targetEmail || t.email?.trim().toLowerCase() !== targetEmail)
+    );
+    setTechnicians(updatedTechs);
+    localStorage.setItem('app_technicians', JSON.stringify(updatedTechs));
+
+    const updatedUsers = systemUsers.filter(
+      u =>
+        u.id !== id &&
+        (!targetName || u.name.trim().toLowerCase() !== targetName.toLowerCase()) &&
+        (!targetEmail || u.email?.trim().toLowerCase() !== targetEmail)
+    );
+    setSystemUsers(updatedUsers);
+    localStorage.setItem('app_system_users', JSON.stringify(updatedUsers));
+
+    // 2. Cascade delete in Supabase tables
+    try {
+      if (isUuid(id)) {
+        await supabase.from('technicians').delete().eq('id', id);
+        await supabase.from('employees').delete().eq('id', id);
+        await supabase.from('system_users').delete().eq('id', id);
       }
+      if (targetEmail) {
+        await supabase.from('technicians').delete().ilike('email', targetEmail);
+        await supabase.from('employees').delete().ilike('email', targetEmail);
+        await supabase.from('system_users').delete().ilike('email', targetEmail);
+      }
+      if (targetName) {
+        await supabase.from('technicians').delete().ilike('name', targetName);
+        await supabase.from('employees').delete().ilike('name', targetName);
+        await supabase.from('system_users').delete().ilike('name', targetName);
+      }
+    } catch (e) {
+      console.warn('Error borrando técnico en Supabase:', e);
     }
   };
 
@@ -3027,21 +3126,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteSystemUser = async (id: string) => {
     const userToDelete = systemUsers.find(u => u.id === id);
-    const updatedUsers = systemUsers.filter(u => u.id !== id);
+    const targetName = userToDelete?.name?.trim();
+    const targetEmail = userToDelete?.email?.trim().toLowerCase();
+
+    const updatedUsers = systemUsers.filter(
+      u =>
+        u.id !== id &&
+        (!targetName || u.name.trim().toLowerCase() !== targetName.toLowerCase()) &&
+        (!targetEmail || u.email?.trim().toLowerCase() !== targetEmail)
+    );
     setSystemUsers(updatedUsers);
     localStorage.setItem('app_system_users', JSON.stringify(updatedUsers));
 
-    if (userToDelete) {
-      try {
-        const userEmail = (userToDelete.email || '').trim().toLowerCase();
-        if (userEmail) {
-          await supabase.from('employees').delete().ilike('email', userEmail);
-          await supabase.from('technicians').delete().ilike('email', userEmail);
-          await supabase.from('system_users').delete().ilike('email', userEmail);
-        }
-      } catch (err) {
-        console.warn('Error borrando usuario en Supabase:', err);
+    // Also remove from technicians
+    const updatedTechs = technicians.filter(
+      t =>
+        t.id !== id &&
+        (!targetName || t.name.trim().toLowerCase() !== targetName.toLowerCase()) &&
+        (!targetEmail || t.email?.trim().toLowerCase() !== targetEmail)
+    );
+    setTechnicians(updatedTechs);
+    localStorage.setItem('app_technicians', JSON.stringify(updatedTechs));
+
+    try {
+      if (isUuid(id)) {
+        await supabase.from('employees').delete().eq('id', id);
+        await supabase.from('technicians').delete().eq('id', id);
+        await supabase.from('system_users').delete().eq('id', id);
       }
+      if (targetEmail) {
+        await supabase.from('employees').delete().ilike('email', targetEmail);
+        await supabase.from('technicians').delete().ilike('email', targetEmail);
+        await supabase.from('system_users').delete().ilike('email', targetEmail);
+      }
+      if (targetName) {
+        await supabase.from('employees').delete().ilike('name', targetName);
+        await supabase.from('technicians').delete().ilike('name', targetName);
+        await supabase.from('system_users').delete().ilike('name', targetName);
+      }
+    } catch (err) {
+      console.warn('Error borrando usuario en Supabase:', err);
     }
   };
 

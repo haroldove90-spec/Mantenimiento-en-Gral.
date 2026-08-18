@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useApp } from '../../context/AppContext';
+import { useApp, deduplicateTechnicians } from '../../context/AppContext';
 import { BarChart3, Clock, CheckCircle2, Building, Wrench, Calendar, TrendingUp, Trash2, AlertTriangle } from 'lucide-react';
 import { ConfirmDeleteModal } from '../ConfirmDeleteModal';
 import { ServiceOrder, Technician } from '../../types';
@@ -7,6 +7,10 @@ import { ServiceOrder, Technician } from '../../types';
 export const ReportsAndMetrics: React.FC = () => {
   const { orders, clients, technicians, deleteOrder, deleteTechnician, toggleTechStatus } = useApp();
   const [selectedClientId, setSelectedClientId] = useState<string>('all');
+
+  const activeTechnicians = deduplicateTechnicians(technicians).filter(
+    t => !['tecnico 1', 'tecnico 2', 'técnico 1', 'técnico 2'].includes(t.name.toLowerCase().trim())
+  );
 
   // Delete modal state
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -69,17 +73,17 @@ export const ReportsAndMetrics: React.FC = () => {
         <div className="flex items-center justify-between mb-3">
           <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1.5">
             <Wrench className="w-4 h-4 text-purple-600" />
-            <span>Tiempos Promedio de Atención y Carga por Técnico ({technicians.length})</span>
+            <span>Tiempos Promedio de Atención y Carga por Técnico ({activeTechnicians.length})</span>
           </h4>
         </div>
 
-        {technicians.length === 0 ? (
+        {activeTechnicians.length === 0 ? (
           <div className="bg-white border border-dashed border-slate-300 rounded-2xl p-8 text-center text-slate-400 text-xs font-medium">
             No hay técnicos registrados. Agrega nuevos técnicos desde el módulo de administración.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {technicians.map(tech => {
+            {activeTechnicians.map(tech => {
               const techOrders = orders.filter(o => o.technicianId === tech.id);
               const completedTechOrders = techOrders.filter(o => o.status === 'Finalizada');
 

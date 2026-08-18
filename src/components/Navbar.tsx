@@ -36,15 +36,35 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
     notifications,
     markNotificationRead,
     logout,
-    clearSampleData,
-    resetToDemoData
+    resetToDemoData,
+    selectedClientOrderFolio
   } = useApp();
 
   const [showNotifMenu, setShowNotifMenu] = useState(false);
 
-  const roleNotifs = notifications.filter(
-    n => activeRole === 'home' || n.targetRole === activeRole
-  );
+  const roleNotifs = notifications.filter(n => {
+    if (activeRole === 'home') return false;
+    if (activeRole === 'owner') return n.targetRole === 'owner' || n.targetRole === 'office';
+    if (activeRole === 'office') return n.targetRole === 'office';
+    if (activeRole === 'tech') {
+      if (n.targetRole !== 'tech') return false;
+      const curId = currentUser?.id || (typeof localStorage !== 'undefined' ? localStorage.getItem('sij_tech_active_filter') : null);
+      const curName = currentUser?.name?.trim().toLowerCase();
+      if (!n.targetTechnicianId && !n.targetTechnicianName) return true;
+      if (curId && n.targetTechnicianId === curId) return true;
+      if (curName && n.targetTechnicianName && n.targetTechnicianName.toLowerCase() === curName) return true;
+      return false;
+    }
+    if (activeRole === 'client') {
+      if (n.targetRole !== 'client') return false;
+      const activeFolio = (selectedClientOrderFolio || '').trim().toLowerCase();
+      const notifFolio = (n.orderFolio || '').trim().toLowerCase();
+      if (activeFolio && notifFolio && activeFolio === notifFolio) return true;
+      if (currentUser?.id && n.targetClientId === currentUser.id) return true;
+      return false;
+    }
+    return n.targetRole === activeRole;
+  });
   const unreadCount = roleNotifs.filter(n => !n.read).length;
 
   const getRoleName = () => {

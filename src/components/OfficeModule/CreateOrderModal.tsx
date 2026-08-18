@@ -568,11 +568,17 @@ export const CreateOrderModal: React.FC<{ isOpen: boolean; onClose: () => void }
                     className="w-full bg-slate-50 border border-slate-300 text-slate-800 text-xs sm:text-sm rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-hidden transition-all font-medium"
                   >
                     <option value="">-- Sin asignar por ahora --</option>
-                    {deduplicateTechnicians(technicians).map(t => (
-                      <option key={t.id} value={t.id}>
-                        👨‍🔧 {t.name} ({t.specialty})
-                      </option>
-                    ))}
+                    {deduplicateTechnicians(technicians)
+                      .filter(
+                        t =>
+                          t.status !== 'Inactivo' &&
+                          !['tecnico 1', 'tecnico 2', 'técnico 1', 'técnico 2'].includes(t.name.toLowerCase().trim())
+                      )
+                      .map(t => (
+                        <option key={t.id} value={t.id}>
+                          👨‍🔧 {t.name} ({t.specialty || 'Técnico de Campo'})
+                        </option>
+                      ))}
                   </select>
                 </div>
               </div>

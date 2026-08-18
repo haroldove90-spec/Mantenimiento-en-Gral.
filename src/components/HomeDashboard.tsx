@@ -5,7 +5,7 @@ import { Building2, Wrench, UserCheck, ArrowRight, Crown, Smartphone, Info, Tras
 import { UserAuthModal } from './UserAuthModal';
 
 export const HomeDashboard: React.FC = () => {
-  const { setActiveRole, setOwnerSubTab, setOfficeSubTab, clearSampleData, resetToDemoData, currentUser, setCurrentUser } = useApp();
+  const { setActiveRole, setOwnerSubTab, setOfficeSubTab, clearSampleData, resetToDemoData, currentUser, setCurrentUser, logout } = useApp();
 
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState(false);
@@ -83,9 +83,7 @@ export const HomeDashboard: React.FC = () => {
   };
 
   const handleLogout = () => {
-    setCurrentUser(null);
-    setActiveRole('home');
-    localStorage.removeItem('app_current_user');
+    logout();
   };
 
   return (

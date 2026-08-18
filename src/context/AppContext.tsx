@@ -119,6 +119,9 @@ interface AppContextType {
   // Notifications
   markNotificationRead: (id: string) => void;
 
+  // Session / Auth
+  logout: () => Promise<void>;
+
   // Data Purge / Reset
   clearSampleData: () => void;
   resetToDemoData: () => void;
@@ -3053,6 +3056,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
+  const logout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.warn('Supabase signOut notice:', e);
+    }
+    setCurrentUser(null);
+    setActiveRole('home');
+    localStorage.removeItem('app_current_user');
+    localStorage.setItem('app_active_role', 'home');
+  };
+
   const clearSampleData = async () => {
     localStorage.setItem('app_service_orders', JSON.stringify([]));
     localStorage.setItem('app_clients', JSON.stringify([]));
@@ -3179,6 +3194,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateExpense,
         deleteExpense,
         markNotificationRead,
+        logout,
         clearSampleData,
         resetToDemoData
       }}

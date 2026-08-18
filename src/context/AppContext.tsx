@@ -263,7 +263,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [orders, setOrders] = useState<ServiceOrder[]>(() => {
     try {
       const saved = localStorage.getItem('app_service_orders');
-      return saved ? JSON.parse(saved) : [];
+      if (!saved) return [];
+      const parsed = JSON.parse(saved);
+      if (!Array.isArray(parsed)) return [];
+      const sampleFolios = new Set(['SAMPLE-1', 'SAMPLE-2', 'SAMPLE-3', 'OS-1001', 'OS-1002', 'OS-1003', 'OS-1004']);
+      return parsed.filter(o => o && o.folio && !o.folio.startsWith('SAMPLE-') && !sampleFolios.has(o.folio));
     } catch {
       return [];
     }
@@ -614,51 +618,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }));
 
         setOrders(prev => {
+          const sampleFolios = new Set(['SAMPLE-1', 'SAMPLE-2', 'SAMPLE-3', 'OS-1001', 'OS-1002', 'OS-1003', 'OS-1004']);
           const dbFolios = new Set(mappedOrders.map(o => o.folio));
-          // If local orders exist that haven't reached Supabase yet, push them to Supabase
-          const unsavedLocal = prev.filter(o => o && o.folio && !dbFolios.has(o.folio) && !o.folio.startsWith('SAMPLE-'));
-          
-          if (unsavedLocal.length > 0) {
-            (async () => {
-              for (const uOrd of unsavedLocal) {
-                try {
-                  const uploadPayload: any = {
-                    folio: uOrd.folio,
-                    client_name: uOrd.clientName,
-                    department_name: uOrd.departmentName,
-                    equipment_type: uOrd.equipmentType,
-                    description: uOrd.description,
-                    priority: uOrd.priority,
-                    status: uOrd.status,
-                    technician_name: uOrd.technicianName || null,
-                    scheduled_date: uOrd.scheduledDate,
-                    route_order: uOrd.routeOrder || 1,
-                    diagnostic_notes: uOrd.diagnosticNotes || '',
-                    diagnostic_photos: uOrd.diagnosticPhotos || [],
-                    requested_parts: uOrd.requestedParts || [],
-                    solution_notes: uOrd.solutionNotes || '',
-                    solution_photos: uOrd.solutionPhotos || [],
-                    collected_amount: uOrd.collectedAmount || 0,
-                    payment_method: uOrd.paymentMethod || null,
-                    is_warranty: Boolean(uOrd.isWarranty),
-                    warranty_reason: uOrd.warrantyNotes || null,
-                    budget: uOrd.budget || null,
-                    signature_data: uOrd.clientSignature || null,
-                    timeline: uOrd.timeline || []
-                  };
-                  if (isUuid(uOrd.technicianId)) uploadPayload.technician_id = uOrd.technicianId;
-                  if (isUuid(uOrd.clientId)) uploadPayload.client_id = uOrd.clientId;
-                  if (isUuid(uOrd.departmentId)) uploadPayload.department_id = uOrd.departmentId;
-
-                  await supabase.from('service_orders').insert([uploadPayload]);
-                } catch (err) {
-                  console.warn('Auto-upload local order error:', err);
-                }
-              }
-            })();
-          }
-
-          const combined = [...mappedOrders, ...unsavedLocal];
+          const unsavedLocal = prev.filter(o => o && o.folio && !dbFolios.has(o.folio) && !o.folio.startsWith('SAMPLE-') && !sampleFolios.has(o.folio));
+          const combined = mappedOrders.length > 0 ? [...mappedOrders, ...unsavedLocal] : (unsavedLocal.length > 0 ? unsavedLocal : []);
           localStorage.setItem('app_service_orders', JSON.stringify(combined));
           return combined;
         });
@@ -1001,6 +964,69 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // Resilient helper to insert an order in Supabase without schema or column mismatches
+  const insertSupabaseOrder = async (order: ServiceOrder): Promise<{ data: any; error: any }> => {
+    try {
+      if (!order || !order.folio) return { data: null, error: null };
+      // Ignore sample folios
+      if (order.folio.startsWith('SAMPLE-') || ['OS-1001', 'OS-1002', 'OS-1003', 'OS-1004'].includes(order.folio)) {
+        return { data: null, error: null };
+      }
+
+      const fullPayload: any = {
+        folio: order.folio,
+        client_name: order.clientName || 'Cliente',
+        equipment_type: order.equipmentType || 'General',
+        description: order.description || '',
+        priority: order.priority || 'Media',
+        status: order.status || 'Pendiente de Visita',
+        technician_name: order.technicianName || null,
+        scheduled_date: order.scheduledDate || new Date().toISOString().split('T')[0],
+        route_order: order.routeOrder || 1,
+        diagnostic_notes: order.diagnosticNotes || '',
+        diagnostic_photos: Array.isArray(order.diagnosticPhotos) ? order.diagnosticPhotos : [],
+        requested_parts: Array.isArray(order.requestedParts) ? order.requestedParts : [],
+        solution_notes: order.solutionNotes || '',
+        solution_photos: Array.isArray(order.solutionPhotos) ? order.solutionPhotos : [],
+        collected_amount: Number(order.collectedAmount || 0),
+        payment_method: order.paymentMethod || null,
+        is_warranty: Boolean(order.isWarranty),
+        warranty_reason: order.warrantyNotes || null,
+        budget: order.budget || null,
+        timeline: Array.isArray(order.timeline) ? order.timeline : []
+      };
+
+      if (isUuid(order.technicianId)) fullPayload.technician_id = order.technicianId;
+      if (isUuid(order.clientId)) fullPayload.client_id = order.clientId;
+      if (isUuid(order.departmentId)) fullPayload.department_id = order.departmentId;
+
+      const { data, error } = await supabase.from('service_orders').insert([fullPayload]).select();
+      if (!error && data && data.length > 0) {
+        return { data, error: null };
+      }
+
+      // Retry with minimal safe columns if extended columns are rejected
+      const corePayload: any = {
+        folio: order.folio,
+        client_name: order.clientName || 'Cliente',
+        equipment_type: order.equipmentType || 'General',
+        description: order.description || '',
+        priority: order.priority || 'Media',
+        status: order.status || 'Pendiente de Visita',
+        technician_name: order.technicianName || null,
+        scheduled_date: order.scheduledDate || new Date().toISOString().split('T')[0]
+      };
+      if (isUuid(order.technicianId)) corePayload.technician_id = order.technicianId;
+      if (isUuid(order.clientId)) corePayload.client_id = order.clientId;
+
+      const { data: coreData, error: coreErr } = await supabase.from('service_orders').insert([corePayload]).select();
+      return { data: coreData, error: coreErr };
+    } catch (e) {
+      console.warn('insertSupabaseOrder warning:', e);
+      return { data: null, error: e };
+    }
+  };
+
   // Resilient helper to delete an order from Supabase
   const deleteSupabaseOrder = async (orderIdOrFolio: string, fallbackFolio?: string) => {
     try {
@@ -1168,53 +1194,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Synchronize to Supabase service_orders
     (async () => {
       try {
-        const orderPayload: any = {
-          folio: newOrder.folio,
-          client_name: finalClientName,
-          client_email: client?.email || '',
-          department_name: finalDeptName,
-          equipment_type: newOrder.equipmentType,
-          description: newOrder.description,
-          priority: newOrder.priority,
-          status: newOrder.status,
-          technician_name: tech?.name || newOrder.technicianName || null,
-          scheduled_date: newOrder.scheduledDate,
-          is_warranty: false,
-          diagnostic_photos: [],
-          requested_parts: [],
-          solution_photos: [],
-          timeline: newOrder.timeline,
-          created_at: nowIso
-        };
-
-        if (isUuid(clientId)) orderPayload.client_id = clientId;
-        if (isUuid(departmentId)) orderPayload.department_id = departmentId;
-        if (isUuid(tech?.id)) orderPayload.technician_id = tech.id;
-
-        const { data, error } = await supabase.from('service_orders').insert([orderPayload]).select();
-        if (error) {
-          console.warn('Supabase extended insert error, attempting core insert:', error.message);
-          const corePayload: any = {
-            folio: newOrder.folio,
-            client_name: finalClientName,
-            equipment_type: newOrder.equipmentType,
-            description: newOrder.description,
-            priority: newOrder.priority,
-            status: newOrder.status,
-            technician_name: tech?.name || newOrder.technicianName || null,
-            scheduled_date: newOrder.scheduledDate,
-            created_at: nowIso
-          };
-          if (isUuid(clientId)) corePayload.client_id = clientId;
-          if (isUuid(departmentId)) corePayload.department_id = departmentId;
-          if (isUuid(tech?.id)) corePayload.technician_id = tech.id;
-
-          const { data: coreData } = await supabase.from('service_orders').insert([corePayload]).select();
-          if (coreData && coreData[0]?.id) {
-            setOrders(current => current.map(o => o.id === newOrder.id ? { ...o, id: coreData[0].id } : o));
-          }
-        } else if (data && data[0]?.id) {
-          const dbId = data[0].id;
+        const res = await insertSupabaseOrder(newOrder);
+        if (res.data && res.data[0]?.id) {
+          const dbId = res.data[0].id;
           setOrders(current => current.map(o => o.id === newOrder.id ? { ...o, id: dbId } : o));
         }
       } catch (err) {
@@ -2585,39 +2567,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // 2. Sync Service Orders to 'service_orders'
       for (const ord of orders) {
         try {
-          const ordPayload: any = {
-            folio: ord.folio,
-            client_name: ord.clientName,
-            department_name: ord.departmentName,
-            equipment_type: ord.equipmentType,
-            description: ord.description,
-            priority: ord.priority,
-            status: ord.status,
-            technician_name: ord.technicianName || null,
-            scheduled_date: ord.scheduledDate,
-            route_order: ord.routeOrder || 1,
-            diagnostic_notes: ord.diagnosticNotes || '',
-            diagnostic_photos: ord.diagnosticPhotos || [],
-            requested_parts: ord.requestedParts || [],
-            solution_notes: ord.solutionNotes || '',
-            solution_photos: ord.solutionPhotos || [],
-            collected_amount: ord.collectedAmount || 0,
-            payment_method: ord.paymentMethod || null,
-            is_warranty: Boolean(ord.isWarranty),
-            warranty_reason: ord.warrantyNotes || null,
-            budget: ord.budget || null,
-            signature_data: ord.clientSignature || null,
-            timeline: ord.timeline || []
-          };
-          if (isUuid(ord.technicianId)) ordPayload.technician_id = ord.technicianId;
-          if (isUuid(ord.clientId)) ordPayload.client_id = ord.clientId;
-          if (isUuid(ord.departmentId)) ordPayload.department_id = ord.departmentId;
-
+          if (!ord || !ord.folio || ord.folio.startsWith('SAMPLE-') || ['OS-1001', 'OS-1002', 'OS-1003', 'OS-1004'].includes(ord.folio)) {
+            continue;
+          }
           const { data: existingOrd } = await supabase.from('service_orders').select('id').eq('folio', ord.folio);
           if (existingOrd && existingOrd.length > 0) {
-            await supabase.from('service_orders').update(ordPayload).eq('id', existingOrd[0].id);
+            const ordPayload: any = {
+              client_name: ord.clientName,
+              equipment_type: ord.equipmentType,
+              description: ord.description,
+              priority: ord.priority,
+              status: ord.status,
+              technician_name: ord.technicianName || null,
+              scheduled_date: ord.scheduledDate,
+              route_order: ord.routeOrder || 1,
+              diagnostic_notes: ord.diagnosticNotes || '',
+              diagnostic_photos: ord.diagnosticPhotos || [],
+              requested_parts: ord.requestedParts || [],
+              solution_notes: ord.solutionNotes || '',
+              solution_photos: ord.solutionPhotos || [],
+              collected_amount: ord.collectedAmount || 0,
+              payment_method: ord.paymentMethod || null,
+              is_warranty: Boolean(ord.isWarranty),
+              warranty_reason: ord.warrantyNotes || null,
+              budget: ord.budget || null,
+              timeline: ord.timeline || []
+            };
+            if (isUuid(ord.technicianId)) ordPayload.technician_id = ord.technicianId;
+            if (isUuid(ord.clientId)) ordPayload.client_id = ord.clientId;
+            if (isUuid(ord.departmentId)) ordPayload.department_id = ord.departmentId;
+
+            await updateSupabaseOrder(existingOrd[0].id, ordPayload, ord.folio);
           } else {
-            await supabase.from('service_orders').insert([ordPayload]);
+            await insertSupabaseOrder(ord);
           }
           counts.orders++;
         } catch (e) {

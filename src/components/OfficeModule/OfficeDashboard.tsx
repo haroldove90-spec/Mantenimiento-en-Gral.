@@ -9,6 +9,7 @@ import { ClientsModule } from './ClientsModule';
 import { ServicesModule } from './ServicesModule';
 import { ReportsAndMetrics } from './ReportsAndMetrics';
 import { ConfirmDeleteModal } from '../ConfirmDeleteModal';
+import { SendCredentialsWhatsAppModal } from '../SendCredentialsWhatsAppModal';
 import { exportToExcel, exportToPDF, exportSingleOrderPDF } from '../../lib/exportUtils';
 import {
   Building2,
@@ -48,7 +49,8 @@ import {
   CheckSquare,
   Square,
   Download,
-  RefreshCw
+  RefreshCw,
+  MessageSquare
 } from 'lucide-react';
 
 const STAGES: OrderStatus[] = [
@@ -86,6 +88,17 @@ export const OfficeDashboard: React.FC = () => {
 
   const [viewType, setViewType] = useState<'kanban' | 'list'>('list');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // WhatsApp Credentials & Access Modal state
+  const [whatsAppModalData, setWhatsAppModalData] = useState<{
+    type: 'client' | 'tech';
+    recipientName: string;
+    recipientPhone?: string;
+    recipientEmail?: string;
+    recipientPassword?: string;
+    folio?: string;
+    title?: string;
+  } | null>(null);
   
   // Multi-Selection for Orders
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
@@ -785,11 +798,31 @@ export const OfficeDashboard: React.FC = () => {
 
                       {/* Card Footer Actions */}
                       <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100">
-                        {/* Quick single export icons */}
+                        {/* Quick single export icons & WhatsApp */}
                         <div className="flex items-center space-x-1.5">
                           <button
+                            onClick={() => {
+                              const cl = clients.find(c => c.id === ord.clientId || c.name === ord.clientName);
+                              setWhatsAppModalData({
+                                type: 'client',
+                                recipientName: ord.clientName,
+                                recipientPhone: cl?.whatsapp || cl?.phone,
+                                recipientEmail: cl?.email || ord.clientEmail,
+                                recipientPassword: '1234 (o tu contraseña)',
+                                folio: ord.folio,
+                                title: `Compartir Acceso y Folio ${ord.folio} por WhatsApp`
+                              });
+                            }}
+                            className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold cursor-pointer transition-colors flex items-center space-x-1"
+                            title="Enviar credenciales y link de acceso directo de esta orden por WhatsApp"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">WhatsApp</span>
+                          </button>
+
+                          <button
                             onClick={() => handleExportSingleOrderExcel(ord)}
-                            className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold cursor-pointer transition-colors"
+                            className="p-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold cursor-pointer transition-colors"
                             title="Descargar Ficha en Excel"
                           >
                             <FileSpreadsheet className="w-3.5 h-3.5" />
@@ -1727,6 +1760,21 @@ export const OfficeDashboard: React.FC = () => {
         itemDescription={orderToDelete ? `la orden con Folio "${orderToDelete.folio}" (${orderToDelete.clientName})` : 'este registro'}
         itemType="orden de servicio"
       />
+
+      {/* WhatsApp Credentials Sender Modal */}
+      {whatsAppModalData && (
+        <SendCredentialsWhatsAppModal
+          isOpen={true}
+          onClose={() => setWhatsAppModalData(null)}
+          type={whatsAppModalData.type}
+          recipientName={whatsAppModalData.recipientName}
+          recipientPhone={whatsAppModalData.recipientPhone}
+          recipientEmail={whatsAppModalData.recipientEmail}
+          recipientPassword={whatsAppModalData.recipientPassword}
+          folio={whatsAppModalData.folio}
+          title={whatsAppModalData.title}
+        />
+      )}
 
     </div>
   );

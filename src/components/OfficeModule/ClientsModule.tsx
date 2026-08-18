@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Client, Department } from '../../types';
 import { ConfirmDeleteModal } from '../ConfirmDeleteModal';
+import { SendCredentialsWhatsAppModal } from '../SendCredentialsWhatsAppModal';
 import { exportToExcel, exportToPDF } from '../../lib/exportUtils';
 import {
   Users,
@@ -28,11 +29,23 @@ import {
   Layers,
   Sparkles,
   RotateCcw,
-  Calendar
+  Calendar,
+  MessageSquare,
+  Share2
 } from 'lucide-react';
 
 export const ClientsModule: React.FC = () => {
   const { clients, addClient, updateClient, deleteClient, toggleClientStatus } = useApp();
+
+  // WhatsApp Credentials Modal state
+  const [whatsAppModalData, setWhatsAppModalData] = useState<{
+    type: 'client' | 'tech';
+    recipientName: string;
+    recipientPhone?: string;
+    recipientEmail?: string;
+    recipientPassword?: string;
+    folio?: string;
+  } | null>(null);
 
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -244,6 +257,15 @@ export const ClientsModule: React.FC = () => {
           departments: finalDepartments
         });
         showFeedback('success', `¡Cliente "${name.trim()}" registrado y sincronizado con éxito!`);
+        
+        // Automatically open WhatsApp credentials dispatcher
+        setWhatsAppModalData({
+          type: 'client',
+          recipientName: name.trim(),
+          recipientPhone: whatsapp.trim() || phone.trim(),
+          recipientEmail: email.trim(),
+          recipientPassword: '1234 (o su contraseña)'
+        });
       }
       setIsModalOpen(false);
     } catch (err: any) {
@@ -691,8 +713,23 @@ export const ClientsModule: React.FC = () => {
                     </button>
                   </div>
 
-                  {/* Edit / Status / Delete */}
+                  {/* Edit / WhatsApp / Status / Delete */}
                   <div className="flex items-center space-x-1">
+                    <button
+                      onClick={() => {
+                        setWhatsAppModalData({
+                          type: 'client',
+                          recipientName: client.name,
+                          recipientPhone: client.whatsapp || client.phone,
+                          recipientEmail: client.email,
+                          recipientPassword: '1234 (o su contraseña)'
+                        });
+                      }}
+                      className="p-1.5 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                      title="Enviar credenciales y link de acceso por WhatsApp"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                    </button>
                     <button
                       onClick={() => openModal(client)}
                       className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
@@ -1028,6 +1065,20 @@ export const ClientsModule: React.FC = () => {
           }}
           title="¿Eliminar Cliente?"
           message={`¿Estás seguro de que deseas eliminar a "${itemToDelete.name}"? Esta acción no se puede deshacer.`}
+        />
+      )}
+
+      {/* WhatsApp Credentials Sender Modal */}
+      {whatsAppModalData && (
+        <SendCredentialsWhatsAppModal
+          isOpen={true}
+          onClose={() => setWhatsAppModalData(null)}
+          type={whatsAppModalData.type}
+          recipientName={whatsAppModalData.recipientName}
+          recipientPhone={whatsAppModalData.recipientPhone}
+          recipientEmail={whatsAppModalData.recipientEmail}
+          recipientPassword={whatsAppModalData.recipientPassword}
+          folio={whatsAppModalData.folio}
         />
       )}
     </div>

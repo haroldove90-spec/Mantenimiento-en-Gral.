@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp, deduplicateTechnicians } from '../../context/AppContext';
 import { PriorityType } from '../../types';
+import { SendCredentialsWhatsAppModal } from '../SendCredentialsWhatsAppModal';
 import {
   X,
   PlusCircle,
@@ -14,7 +15,8 @@ import {
   Sparkles,
   CheckCircle2,
   Calendar,
-  UserPlus
+  UserPlus,
+  MessageSquare
 } from 'lucide-react';
 
 export const CreateOrderModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
@@ -53,6 +55,14 @@ export const CreateOrderModal: React.FC<{ isOpen: boolean; onClose: () => void }
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [whatsAppModalData, setWhatsAppModalData] = useState<{
+    type: 'client' | 'tech';
+    recipientName: string;
+    recipientPhone?: string;
+    recipientEmail?: string;
+    recipientPassword?: string;
+    folio?: string;
+  } | null>(null);
 
   // Sync client state when clients prop changes or modal opens
   useEffect(() => {
@@ -165,20 +175,30 @@ export const CreateOrderModal: React.FC<{ isOpen: boolean; onClose: () => void }
 
       setSuccessMessage(`¡Orden ${newOrder.folio} generada con éxito para ${finalClientName}!`);
 
+      // Prepare target phone and email for WhatsApp credentials modal
+      const targetPhone = clientMode === 'new' ? newClientPhone : currentClient?.phone || currentClient?.whatsapp;
+      const targetEmail = clientMode === 'new' ? newClientEmail : currentClient?.email;
+
+      setWhatsAppModalData({
+        type: 'client',
+        recipientName: finalClientName,
+        recipientPhone: targetPhone,
+        recipientEmail: targetEmail,
+        recipientPassword: '1234 (o su contraseña)',
+        folio: newOrder.folio
+      });
+
       // Reset form fields
-      setTimeout(() => {
-        setDescription('');
-        setNewClientName('');
-        setNewClientPhone('');
-        setNewClientEmail('');
-        setNewClientAddress('');
-        setNewClientContact('');
-        setNewClientDept('Matriz Principal');
-        setPriority('Media');
-        setTechnicianId('');
-        setIsSubmitting(false);
-        onClose();
-      }, 1000);
+      setDescription('');
+      setNewClientName('');
+      setNewClientPhone('');
+      setNewClientEmail('');
+      setNewClientAddress('');
+      setNewClientContact('');
+      setNewClientDept('Matriz Principal');
+      setPriority('Media');
+      setTechnicianId('');
+      setIsSubmitting(false);
 
     } catch (err: any) {
       console.error('Error al generar orden:', err);
@@ -188,8 +208,9 @@ export const CreateOrderModal: React.FC<{ isOpen: boolean; onClose: () => void }
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
-      <div className="bg-white border border-slate-200 rounded-2xl max-w-xl w-full max-h-[94vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-auto">
+    <>
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
+        <div className="bg-white border border-slate-200 rounded-2xl max-w-xl w-full max-h-[94vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-auto">
         
         {/* Header - Fixed */}
         <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-100 shrink-0 bg-white">
@@ -584,6 +605,24 @@ export const CreateOrderModal: React.FC<{ isOpen: boolean; onClose: () => void }
         </form>
       </div>
     </div>
+
+    {/* WhatsApp Credentials Sender Modal */}
+    {whatsAppModalData && (
+      <SendCredentialsWhatsAppModal
+        isOpen={true}
+        onClose={() => {
+          setWhatsAppModalData(null);
+          onClose();
+        }}
+        type={whatsAppModalData.type}
+        recipientName={whatsAppModalData.recipientName}
+        recipientPhone={whatsAppModalData.recipientPhone}
+        recipientEmail={whatsAppModalData.recipientEmail}
+        recipientPassword={whatsAppModalData.recipientPassword}
+        folio={whatsAppModalData.folio}
+      />
+    )}
+  </>
   );
 };
 

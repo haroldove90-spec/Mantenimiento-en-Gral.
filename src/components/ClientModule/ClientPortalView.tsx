@@ -18,16 +18,26 @@ import {
 } from 'lucide-react';
 
 export const ClientPortalView: React.FC = () => {
-  const { orders, approveBudget, rejectBudget, clearSampleData } = useApp();
+  const {
+    orders,
+    approveBudget,
+    rejectBudget,
+    clearSampleData,
+    selectedClientOrderFolio,
+    setSelectedClientOrderFolio
+  } = useApp();
 
-  const [selectedFolio, setSelectedFolio] = useState<string>('OS-1004');
+  const selectedFolio = selectedClientOrderFolio || orders[0]?.folio || '';
+  const setSelectedFolio = (f: string) => setSelectedClientOrderFolio(f);
+
   const [rejectComment, setRejectComment] = useState('');
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const currentOrder = orders.find(
-    o => (o.folio || '').toLowerCase() === (selectedFolio || '').toLowerCase()
-  ) || orders[0];
+  const currentOrder =
+    orders.find(
+      o => (o.folio || '').toLowerCase() === (selectedFolio || '').toLowerCase()
+    ) || orders[0];
 
   const budget = currentOrder?.budget;
 

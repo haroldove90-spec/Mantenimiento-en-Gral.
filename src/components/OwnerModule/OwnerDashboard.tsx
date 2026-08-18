@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useApp, deduplicateTechnicians } from '../../context/AppContext';
 import { SystemUser, OperatingExpense, RoleType } from '../../types';
 import { ConfirmDeleteModal } from '../ConfirmDeleteModal';
+import { SendCredentialsWhatsAppModal } from '../SendCredentialsWhatsAppModal';
 import { ClientsModule } from '../OfficeModule/ClientsModule';
 import { ServicesModule } from '../OfficeModule/ServicesModule';
 import { exportToExcel, exportToPDF } from '../../lib/exportUtils';
@@ -38,6 +39,8 @@ import {
   CheckSquare,
   Square,
   Search,
+  MessageSquare,
+  Share2,
   KeyRound
 } from 'lucide-react';
 
@@ -61,6 +64,17 @@ export const OwnerDashboard: React.FC = () => {
     ownerSubTab,
     setOwnerSubTab
   } = useApp();
+
+  // WhatsApp Credentials Modal state
+  const [whatsAppModalData, setWhatsAppModalData] = useState<{
+    type: 'client' | 'tech';
+    recipientName: string;
+    recipientPhone?: string;
+    recipientEmail?: string;
+    recipientUsername?: string;
+    recipientPassword?: string;
+    specialty?: string;
+  } | null>(null);
 
   const activeTab = ownerSubTab === 'users' ? 'employees' : ownerSubTab;
   const setActiveTab = setOwnerSubTab;
@@ -261,6 +275,17 @@ export const OwnerDashboard: React.FC = () => {
         phone: userPhone,
         role: userRole,
         status: 'Activo'
+      });
+
+      // Automatically trigger WhatsApp credentials modal
+      setWhatsAppModalData({
+        type: userRole === 'tech' ? 'tech' : 'client',
+        recipientName: userName,
+        recipientUsername: userUsername || userEmail.split('@')[0],
+        recipientEmail: userEmail,
+        recipientPhone: userPhone,
+        recipientPassword: userPassword || 'Temp1234!',
+        specialty: userRole === 'tech' ? 'Técnico de Campo' : userRole === 'office' ? 'Oficina Administrativa' : 'Administrador'
       });
     }
 
@@ -1150,6 +1175,25 @@ export const OwnerDashboard: React.FC = () => {
                     <div className="flex items-center space-x-1">
                       <button
                         onClick={() => {
+                          setWhatsAppModalData({
+                            type: usr.role === 'tech' ? 'tech' : 'client',
+                            recipientName: usr.name,
+                            recipientUsername: usr.username,
+                            recipientEmail: usr.email,
+                            recipientPhone: usr.phone,
+                            recipientPassword: usr.password || 'Temp1234!',
+                            specialty: usr.role === 'tech' ? 'Técnico de Campo' : usr.role === 'office' ? 'Oficina Administrativa' : 'Administrador'
+                          });
+                        }}
+                        className="text-emerald-600 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 font-bold p-1.5 rounded-lg flex items-center space-x-1 cursor-pointer transition-colors"
+                        title="Enviar credenciales y link de acceso por WhatsApp"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">WhatsApp</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
                           setEditingUser(usr);
                           setUserName(usr.name);
                           setUserUsername(usr.username || '');
@@ -1700,6 +1744,21 @@ DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.service_orders,
           }}
           title={itemToDelete.type === 'user' ? '¿Eliminar Empleado?' : '¿Eliminar Gasto?'}
           message={`¿Estás seguro de que deseas eliminar permanentemente ${itemToDelete.description}?`}
+        />
+      )}
+
+      {/* ================= MODAL: WHATSAPP CREDENTIALS DISPATCHER ================= */}
+      {whatsAppModalData && (
+        <SendCredentialsWhatsAppModal
+          isOpen={true}
+          onClose={() => setWhatsAppModalData(null)}
+          type={whatsAppModalData.type}
+          recipientName={whatsAppModalData.recipientName}
+          recipientUsername={whatsAppModalData.recipientUsername}
+          recipientEmail={whatsAppModalData.recipientEmail}
+          recipientPhone={whatsAppModalData.recipientPhone}
+          recipientPassword={whatsAppModalData.recipientPassword}
+          specialty={whatsAppModalData.specialty}
         />
       )}
     </div>

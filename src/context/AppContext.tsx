@@ -218,15 +218,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [activeRole, setActiveRole] = useState<RoleType>(() => {
     try {
+      if (typeof window !== 'undefined') {
+        const path = window.location.pathname.toLowerCase();
+        const search = new URLSearchParams(window.location.search);
+        const hash = window.location.hash.toLowerCase();
+
+        // 1. Direct path or query param matching for direct links
+        if (path.includes('/cliente') || search.get('portal') === 'client' || search.get('role') === 'client' || hash.includes('cliente')) {
+          return 'client';
+        }
+        if (path.includes('/tecnico') || search.get('portal') === 'tech' || search.get('role') === 'tech' || hash.includes('tecnico')) {
+          return 'tech';
+        }
+        if (path.includes('/oficina') || search.get('portal') === 'office' || search.get('role') === 'office' || hash.includes('oficina')) {
+          return 'office';
+        }
+        if (path.includes('/admin') || path.includes('/dueno') || search.get('portal') === 'owner' || search.get('role') === 'owner' || hash.includes('admin')) {
+          return 'owner';
+        }
+      }
+
       const savedRole = localStorage.getItem('app_active_role') as RoleType | null;
       const savedUserStr = localStorage.getItem('app_current_user');
       const savedUser = savedUserStr ? JSON.parse(savedUserStr) : null;
 
-      // 1. If user previously selected a specific module, restore it
+      // 2. If user previously selected a specific module, restore it
       if (savedRole && savedRole !== 'home') {
         return savedRole;
       }
-      // 2. If user is logged in with a role, keep them in their role module
+      // 3. If user is logged in with a role, keep them in their role module
       if (savedUser?.role) {
         return savedUser.role as RoleType;
       }
@@ -256,9 +276,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [selectedClientOrderFolio, setSelectedClientOrderFolio] = useState<string | null>(() => {
     try {
-      return localStorage.getItem('app_client_selected_folio') || 'OS-1004';
+      if (typeof window !== 'undefined') {
+        const search = new URLSearchParams(window.location.search);
+        const urlFolio = search.get('folio') || search.get('f') || search.get('order');
+        if (urlFolio) return urlFolio;
+      }
+      return localStorage.getItem('app_client_selected_folio') || 'OS-1001';
     } catch {
-      return 'OS-1004';
+      return 'OS-1001';
     }
   });
 
@@ -417,6 +442,73 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.removeItem('app_current_user');
     }
   }, [currentUser]);
+
+  // Synchronize browser URL bar and handle browser Back/Forward & deep linking
+  useEffect(() => {
+    try {
+      if (typeof window === 'undefined') return;
+      const search = new URLSearchParams(window.location.search);
+      let targetPath = '/';
+
+      if (activeRole === 'client') {
+        targetPath = '/clientes';
+        if (selectedClientOrderFolio) {
+          search.set('folio', selectedClientOrderFolio);
+        }
+      } else if (activeRole === 'tech') {
+        targetPath = '/tecnicos';
+        search.delete('folio');
+      } else if (activeRole === 'office') {
+        targetPath = '/oficina';
+        search.delete('folio');
+      } else if (activeRole === 'owner') {
+        targetPath = '/admin';
+        search.delete('folio');
+      } else {
+        targetPath = '/';
+        search.delete('folio');
+      }
+
+      const qStr = search.toString();
+      const newRelativePathQuery = `${targetPath}${qStr ? `?${qStr}` : ''}`;
+      const currentRelativePathQuery = `${window.location.pathname}${window.location.search}`;
+
+      if (currentRelativePathQuery !== newRelativePathQuery) {
+        window.history.replaceState(null, '', newRelativePathQuery);
+      }
+    } catch (err) {
+      console.warn('URL sync error:', err);
+    }
+  }, [activeRole, selectedClientOrderFolio]);
+
+  // Listen to popstate (browser back/forward)
+  useEffect(() => {
+    const handlePopState = () => {
+      try {
+        const path = window.location.pathname.toLowerCase();
+        const search = new URLSearchParams(window.location.search);
+        const folio = search.get('folio') || search.get('f') || search.get('order');
+
+        if (path.includes('/cliente') || search.get('portal') === 'client' || search.get('role') === 'client') {
+          setActiveRole('client');
+          if (folio) setSelectedClientOrderFolio(folio);
+        } else if (path.includes('/tecnico') || search.get('portal') === 'tech' || search.get('role') === 'tech') {
+          setActiveRole('tech');
+        } else if (path.includes('/oficina') || search.get('portal') === 'office' || search.get('role') === 'office') {
+          setActiveRole('office');
+        } else if (path.includes('/admin') || path.includes('/dueno') || search.get('portal') === 'owner' || search.get('role') === 'owner') {
+          setActiveRole('owner');
+        } else if (path === '/' || path === '') {
+          setActiveRole('home');
+        }
+      } catch (err) {
+        console.warn('Popstate handling error:', err);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Sync data from Supabase on load, on realtime events, and with live polling
   const fetchSupabaseData = async (silent = false) => {

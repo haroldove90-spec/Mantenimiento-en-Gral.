@@ -182,40 +182,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
 
-  // LocalStorage initialization with fallbacks
+  // LocalStorage initialization with empty fallbacks (so sample data never reappears across browsers)
   const [orders, setOrders] = useState<ServiceOrder[]>(() => {
     try {
       const saved = localStorage.getItem('app_service_orders');
-      return saved ? JSON.parse(saved) : INITIAL_ORDERS;
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return INITIAL_ORDERS;
+      return [];
     }
   });
 
   const [clients, setClients] = useState<Client[]>(() => {
     try {
       const saved = localStorage.getItem('app_clients');
-      return saved ? JSON.parse(saved) : INITIAL_CLIENTS;
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return INITIAL_CLIENTS;
+      return [];
     }
   });
 
   const [spareParts, setSpareParts] = useState<SparePart[]>(() => {
     try {
       const saved = localStorage.getItem('app_spare_parts');
-      return saved ? JSON.parse(saved) : INITIAL_SPARE_PARTS;
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return INITIAL_SPARE_PARTS;
+      return [];
     }
   });
 
   const [services, setServices] = useState<BusinessService[]>(() => {
     try {
       const saved = localStorage.getItem('app_business_services');
-      return saved ? JSON.parse(saved) : INITIAL_SERVICES;
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return INITIAL_SERVICES;
+      return [];
     }
   });
 
@@ -548,8 +548,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         setOrders(prev => {
           const dbFolios = new Set(mappedOrders.map(o => o.folio));
-          // Keep newly generated local orders that have not yet arrived in DB
-          const unsavedLocal = prev.filter(o => o && o.folio && !dbFolios.has(o.folio) && o.id.startsWith('ord-'));
+          // If local orders exist that haven't reached Supabase yet, push them to Supabase
+          const unsavedLocal = prev.filter(o => o && o.folio && !dbFolios.has(o.folio) && !o.folio.startsWith('SAMPLE-'));
+          
+          if (unsavedLocal.length > 0) {
+            (async () => {
+              for (const uOrd of unsavedLocal) {
+                try {
+                  const uploadPayload: any = {
+                    folio: uOrd.folio,
+                    client_name: uOrd.clientName,
+                    department_name: uOrd.departmentName,
+                    equipment_type: uOrd.equipmentType,
+                    description: uOrd.description,
+                    priority: uOrd.priority,
+                    status: uOrd.status,
+                    technician_name: uOrd.technicianName || null,
+                    scheduled_date: uOrd.scheduledDate,
+                    route_order: uOrd.routeOrder || 1,
+                    diagnostic_notes: uOrd.diagnosticNotes || '',
+                    diagnostic_photos: uOrd.diagnosticPhotos || [],
+                    requested_parts: uOrd.requestedParts || [],
+                    solution_notes: uOrd.solutionNotes || '',
+                    solution_photos: uOrd.solutionPhotos || [],
+                    collected_amount: uOrd.collectedAmount || 0,
+                    payment_method: uOrd.paymentMethod || null,
+                    is_warranty: Boolean(uOrd.isWarranty),
+                    warranty_reason: uOrd.warrantyNotes || null,
+                    budget: uOrd.budget || null,
+                    signature_data: uOrd.clientSignature || null,
+                    timeline: uOrd.timeline || []
+                  };
+                  if (isUuid(uOrd.technicianId)) uploadPayload.technician_id = uOrd.technicianId;
+                  if (isUuid(uOrd.clientId)) uploadPayload.client_id = uOrd.clientId;
+                  if (isUuid(uOrd.departmentId)) uploadPayload.department_id = uOrd.departmentId;
+
+                  await supabase.from('service_orders').insert([uploadPayload]);
+                } catch (err) {
+                  console.warn('Auto-upload local order error:', err);
+                }
+              }
+            })();
+          }
+
           const combined = [...mappedOrders, ...unsavedLocal];
           localStorage.setItem('app_service_orders', JSON.stringify(combined));
           return combined;
@@ -861,9 +902,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const isUuid = (str?: string) => {
+  const isUuid = (str?: string): boolean => {
     if (!str) return false;
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+  };
+
+  const safeUuid = (str?: string): string | null => {
+    return isUuid(str) ? (str as string) : null;
+  };
+
+  // Resilient helper to update an order in Supabase without throwing UUID cast errors
+  const updateSupabaseOrder = async (orderIdOrFolio: string, payload: any, fallbackFolio?: string) => {
+    try {
+      const cleanPayload: any = { ...payload };
+      if ('client_id' in cleanPayload && !isUuid(cleanPayload.client_id)) delete cleanPayload.client_id;
+      if ('department_id' in cleanPayload && !isUuid(cleanPayload.department_id)) delete cleanPayload.department_id;
+      if ('technician_id' in cleanPayload && !isUuid(cleanPayload.technician_id)) delete cleanPayload.technician_id;
+
+      if (isUuid(orderIdOrFolio)) {
+        const { data, error } = await supabase.from('service_orders').update(cleanPayload).eq('id', orderIdOrFolio).select();
+        if (!error && data && data.length > 0) return { data, error: null };
+      }
+      const folio = fallbackFolio || (orderIdOrFolio && orderIdOrFolio.startsWith('OS-') ? orderIdOrFolio : null);
+      if (folio) {
+        return await supabase.from('service_orders').update(cleanPayload).eq('folio', folio).select();
+      }
+      return { data: null, error: null };
+    } catch (e) {
+      console.warn('updateSupabaseOrder warning:', e);
+      return { data: null, error: e };
+    }
+  };
+
+  // Resilient helper to delete an order from Supabase
+  const deleteSupabaseOrder = async (orderIdOrFolio: string, fallbackFolio?: string) => {
+    try {
+      if (isUuid(orderIdOrFolio)) {
+        return await supabase.from('service_orders').delete().eq('id', orderIdOrFolio);
+      }
+      const folio = fallbackFolio || (orderIdOrFolio && orderIdOrFolio.startsWith('OS-') ? orderIdOrFolio : null);
+      if (folio) {
+        return await supabase.from('service_orders').delete().eq('folio', folio);
+      }
+    } catch (e) {
+      console.warn('deleteSupabaseOrder error:', e);
+    }
   };
 
   const addNotification = (notif: Omit<Notification, 'id' | 'timestamp' | 'read'>) => {
@@ -1028,7 +1111,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           priority: newOrder.priority,
           status: newOrder.status,
           technician_name: tech?.name || newOrder.technicianName || null,
-          technician_id: tech?.id || null,
           scheduled_date: newOrder.scheduledDate,
           is_warranty: false,
           diagnostic_photos: [],
@@ -1038,17 +1120,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           created_at: nowIso
         };
 
-        if (isUuid(clientId)) {
-          orderPayload.client_id = clientId;
-        }
-        if (isUuid(departmentId)) {
-          orderPayload.department_id = departmentId;
-        }
+        if (isUuid(clientId)) orderPayload.client_id = clientId;
+        if (isUuid(departmentId)) orderPayload.department_id = departmentId;
+        if (isUuid(tech?.id)) orderPayload.technician_id = tech.id;
 
         const { data, error } = await supabase.from('service_orders').insert([orderPayload]).select();
         if (error) {
           console.warn('Supabase extended insert error, attempting core insert:', error.message);
-          // Try core columns insert with technician info
           const corePayload: any = {
             folio: newOrder.folio,
             client_name: finalClientName,
@@ -1062,12 +1140,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           };
           if (isUuid(clientId)) corePayload.client_id = clientId;
           if (isUuid(departmentId)) corePayload.department_id = departmentId;
-          if (tech?.id) corePayload.technician_id = tech.id;
+          if (isUuid(tech?.id)) corePayload.technician_id = tech.id;
 
-          const { data: coreData, error: coreErr } = await supabase.from('service_orders').insert([corePayload]).select();
-          if (coreErr) {
-            console.warn('Supabase core insert error:', coreErr.message);
-          } else if (coreData && coreData[0]?.id) {
+          const { data: coreData } = await supabase.from('service_orders').insert([corePayload]).select();
+          if (coreData && coreData[0]?.id) {
             setOrders(current => current.map(o => o.id === newOrder.id ? { ...o, id: coreData[0].id } : o));
           }
         } else if (data && data[0]?.id) {
@@ -1155,24 +1231,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       // Sincronización asíncrona con Supabase
       (async () => {
-        try {
-          const updatePayload: any = {
-            status: newStatus
-          };
-          if (newStatus === 'Cobrado/Cerrado') {
-            updatePayload.completed_at = nowIso;
-          }
-          if ((newStatus === 'En Diagnóstico' || newStatus === 'En Reparación') && !targetOrder.startedAt) {
-            updatePayload.started_at = nowIso;
-          }
-
-          await supabase
-            .from('service_orders')
-            .update(updatePayload)
-            .or(`id.eq.${orderId},folio.eq.${targetOrder.folio}`);
-        } catch (e) {
-          console.warn('Error sincronizando estatus de orden con Supabase:', e);
+        const updatePayload: any = {
+          status: newStatus
+        };
+        if (newStatus === 'Cobrado/Cerrado') {
+          updatePayload.completed_at = nowIso;
         }
+        if ((newStatus === 'En Diagnóstico' || newStatus === 'En Reparación') && !targetOrder.startedAt) {
+          updatePayload.started_at = nowIso;
+        }
+
+        await updateSupabaseOrder(orderId, updatePayload, targetOrder.folio);
       })();
     }
   };
@@ -1251,23 +1320,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 4. Synchronize immediately with Supabase service_orders
     (async () => {
-      try {
-        const updatePayload: any = {
-          technician_name: tech.name,
-          technician_id: tech.id,
-          scheduled_date: scheduledDate || targetOrd?.scheduledDate || new Date().toISOString().split('T')[0],
-          route_order: routeOrder || targetOrd?.routeOrder || 1
-        };
-        if (targetOrd?.timeline) {
-          updatePayload.timeline = [...targetOrd.timeline, newTimelineItem];
-        }
-        await supabase
-          .from('service_orders')
-          .update(updatePayload)
-          .or(`id.eq.${orderId},folio.eq.${finalFolio}`);
-      } catch (e) {
-        console.warn('Error sincronizando asignación de técnico en Supabase:', e);
+      const updatePayload: any = {
+        technician_name: tech.name,
+        scheduled_date: scheduledDate || targetOrd?.scheduledDate || new Date().toISOString().split('T')[0],
+        route_order: routeOrder || targetOrd?.routeOrder || 1
+      };
+      if (isUuid(tech.id)) {
+        updatePayload.technician_id = tech.id;
       }
+      if (targetOrd?.timeline) {
+        updatePayload.timeline = [...targetOrd.timeline, newTimelineItem];
+      }
+      await updateSupabaseOrder(orderId, updatePayload, finalFolio);
     })();
   };
 
@@ -1354,19 +1418,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     );
 
-    try {
-      const ord = orders.find(o => o.id === orderId);
-      if (ord) {
-        await supabase
-          .from('service_orders')
-          .update({
-            status: 'En Diagnóstico',
-            started_at: nowStr
-          })
-          .or(`id.eq.${orderId},folio.eq.${ord.folio}`);
-      }
-    } catch (e) {
-      console.warn('Error al sincronizar inicio de inspección en Supabase:', e);
+    const ord = orders.find(o => o.id === orderId);
+    if (ord) {
+      await updateSupabaseOrder(orderId, {
+        status: 'En Diagnóstico',
+        started_at: nowStr
+      }, ord.folio);
     }
   };
 
@@ -1420,19 +1477,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
 
       // Synchronize directly with Supabase service_orders
-      try {
-        await supabase
-          .from('service_orders')
-          .update({
-            diagnostic_notes: notes,
-            diagnostic_photos: photos,
-            requested_parts: requestedParts,
-            status: 'Presupuesto Pendiente'
-          })
-          .or(`id.eq.${orderId},folio.eq.${ord.folio}`);
-      } catch (err) {
-        console.warn('Error al sincronizar diagnóstico con Supabase:', err);
-      }
+      await updateSupabaseOrder(orderId, {
+        diagnostic_notes: notes,
+        diagnostic_photos: photos,
+        requested_parts: requestedParts,
+        status: 'Presupuesto Pendiente'
+      }, ord.folio);
     }
   };
 
@@ -1474,14 +1524,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const ord = orders.find(o => o.id === orderId);
     if (ord) {
       (async () => {
-        try {
-          await supabase.from('service_orders').update({
-            budget: newBudget,
-            status: 'Presupuesto Pendiente'
-          }).or(`id.eq.${orderId},folio.eq.${ord.folio}`);
-        } catch (e) {
-          console.warn('Error sincronizando presupuesto con Supabase:', e);
-        }
+        await updateSupabaseOrder(orderId, {
+          budget: newBudget,
+          status: 'Presupuesto Pendiente'
+        }, ord.folio);
       })();
     }
   };
@@ -1531,14 +1577,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
 
       (async () => {
-        try {
-          await supabase.from('service_orders').update({
-            status: 'Esperando Aprobación',
-            budget: ord.budget ? { ...ord.budget, status: 'Enviado', sentAt: nowStr } : undefined
-          }).or(`id.eq.${orderId},folio.eq.${ord.folio}`);
-        } catch (e) {
-          console.warn('Error sincronizando envío de presupuesto con Supabase:', e);
-        }
+        await updateSupabaseOrder(orderId, {
+          status: 'Esperando Aprobación',
+          budget: ord.budget ? { ...ord.budget, status: 'Enviado', sentAt: nowStr } : undefined
+        }, ord.folio);
       })();
     }
   };
@@ -1594,14 +1636,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       (async () => {
-        try {
-          await supabase.from('service_orders').update({
-            status: 'En Reparación',
-            budget: ord.budget ? { ...ord.budget, status: 'Aprobado', approvedAt: nowStr } : undefined
-          }).or(`id.eq.${orderId},folio.eq.${ord.folio}`);
-        } catch (e) {
-          console.warn('Error sincronizando aprobación de presupuesto con Supabase:', e);
-        }
+        await updateSupabaseOrder(orderId, {
+          status: 'En Reparación',
+          budget: ord.budget ? { ...ord.budget, status: 'Aprobado', approvedAt: nowStr } : undefined
+        }, ord.folio);
       })();
     }
   };
@@ -1646,14 +1684,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
 
       (async () => {
-        try {
-          await supabase.from('service_orders').update({
-            status: 'Presupuesto Pendiente',
-            budget: ord.budget ? { ...ord.budget, status: 'Rechazado' } : undefined
-          }).or(`id.eq.${orderId},folio.eq.${ord.folio}`);
-        } catch (e) {
-          console.warn('Error sincronizando rechazo de presupuesto con Supabase:', e);
-        }
+        await updateSupabaseOrder(orderId, {
+          status: 'Presupuesto Pendiente',
+          budget: ord.budget ? { ...ord.budget, status: 'Rechazado' } : undefined
+        }, ord.folio);
       })();
     }
   };
@@ -1733,18 +1767,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           total = Math.round(subtotal * (1 + ord.budget.taxRate));
         }
 
-        await supabase
-          .from('service_orders')
-          .update({
-            status: 'Cobrado/Cerrado',
-            completed_at: nowStr,
-            solution_notes: solutionNotes,
-            solution_photos: [...ord.solutionPhotos, ...solutionPhotos],
-            client_signature: signature || ord.clientSignature,
-            payment_method: paymentMethod,
-            collected_amount: total
-          })
-          .or(`id.eq.${orderId},folio.eq.${ord.folio}`);
+        await updateSupabaseOrder(orderId, {
+          status: 'Cobrado/Cerrado',
+          completed_at: nowStr,
+          solution_notes: solutionNotes,
+          solution_photos: [...ord.solutionPhotos, ...solutionPhotos],
+          client_signature: signature || ord.clientSignature,
+          payment_method: paymentMethod,
+          collected_amount: total
+        }, ord.folio);
       } catch (err) {
         console.warn('Error al sincronizar cierre de orden con Supabase:', err);
       }
@@ -1918,24 +1949,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOrders(prev =>
       prev.map(ord => (ord.id === id ? { ...ord, ...orderData } : ord))
     );
-    try {
-      const order = orders.find(o => o.id === id);
-      if (order) {
-        await supabase
-          .from('service_orders')
-          .update({
-            equipment_type: orderData.equipmentType ?? order.equipmentType,
-            description: orderData.description ?? order.description,
-            priority: orderData.priority ?? order.priority,
-            technician_id: orderData.technicianId ?? order.technicianId,
-            technician_name: orderData.technicianName ?? order.technicianName,
-            scheduled_date: orderData.scheduledDate ?? order.scheduledDate,
-            route_order: orderData.routeOrder ?? order.routeOrder
-          })
-          .or(`id.eq.${id},folio.eq.${order.folio}`);
+    const order = orders.find(o => o.id === id);
+    if (order) {
+      const updatePayload: any = {
+        equipment_type: orderData.equipmentType ?? order.equipmentType,
+        description: orderData.description ?? order.description,
+        priority: orderData.priority ?? order.priority,
+        technician_name: orderData.technicianName ?? order.technicianName,
+        scheduled_date: orderData.scheduledDate ?? order.scheduledDate,
+        route_order: orderData.routeOrder ?? order.routeOrder
+      };
+      if (isUuid(orderData.technicianId ?? order.technicianId)) {
+        updatePayload.technician_id = orderData.technicianId ?? order.technicianId;
       }
-    } catch (e) {
-      console.warn('Error actualizando orden en Supabase:', e);
+      await updateSupabaseOrder(id, updatePayload, order.folio);
     }
   };
 
@@ -1943,14 +1970,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const orderToDelete = orders.find(o => o.id === id);
     setOrders(prev => prev.filter(o => o.id !== id));
     if (orderToDelete) {
-      try {
-        await supabase
-          .from('service_orders')
-          .delete()
-          .or(`id.eq.${id},folio.eq.${orderToDelete.folio}`);
-      } catch (e) {
-        console.warn('Error eliminando orden de Supabase:', e);
-      }
+      await deleteSupabaseOrder(id, orderToDelete.folio);
     }
   };
 
@@ -2522,12 +2542,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             signature_data: ord.clientSignature || null,
             timeline: ord.timeline || []
           };
+          if (isUuid(ord.technicianId)) ordPayload.technician_id = ord.technicianId;
+          if (isUuid(ord.clientId)) ordPayload.client_id = ord.clientId;
+          if (isUuid(ord.departmentId)) ordPayload.department_id = ord.departmentId;
 
-          const { error } = await supabase
-            .from('service_orders')
-            .upsert([ordPayload], { onConflict: 'folio' });
-
-          if (!error) counts.orders++;
+          const { data: existingOrd } = await supabase.from('service_orders').select('id').eq('folio', ord.folio);
+          if (existingOrd && existingOrd.length > 0) {
+            await supabase.from('service_orders').update(ordPayload).eq('id', existingOrd[0].id);
+          } else {
+            await supabase.from('service_orders').insert([ordPayload]);
+          }
+          counts.orders++;
         } catch (e) {
           console.warn('Sync order item warning:', e);
         }

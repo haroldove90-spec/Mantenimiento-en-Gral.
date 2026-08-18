@@ -269,8 +269,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (!saved) return [];
       const parsed = JSON.parse(saved);
       if (!Array.isArray(parsed)) return [];
-      const sampleFolios = new Set(['SAMPLE-1', 'SAMPLE-2', 'SAMPLE-3', 'OS-1001', 'OS-1002', 'OS-1003', 'OS-1004']);
-      return parsed.filter(o => o && o.folio && !o.folio.startsWith('SAMPLE-') && !sampleFolios.has(o.folio));
+      return parsed.filter(o => o && o.folio && !o.folio.startsWith('SAMPLE-'));
     } catch {
       return [];
     }
@@ -667,10 +666,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }));
 
         setOrders(prev => {
-          const sampleFolios = new Set(['SAMPLE-1', 'SAMPLE-2', 'SAMPLE-3', 'OS-1001', 'OS-1002', 'OS-1003', 'OS-1004']);
           const dbFolios = new Set(mappedOrders.map(o => o.folio));
-          const unsavedLocal = prev.filter(o => o && o.folio && !dbFolios.has(o.folio) && !o.folio.startsWith('SAMPLE-') && !sampleFolios.has(o.folio));
-          const combined = mappedOrders.length > 0 ? [...mappedOrders, ...unsavedLocal] : (unsavedLocal.length > 0 ? unsavedLocal : []);
+          const unsavedLocal = prev.filter(o => o && o.folio && !dbFolios.has(o.folio) && !o.folio.startsWith('SAMPLE-'));
+          const combined = mappedOrders.length > 0 ? [...mappedOrders, ...unsavedLocal] : unsavedLocal;
           localStorage.setItem('app_service_orders', JSON.stringify(combined));
           return combined;
         });
@@ -1017,8 +1015,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const insertSupabaseOrder = async (order: ServiceOrder): Promise<{ data: any; error: any }> => {
     try {
       if (!order || !order.folio) return { data: null, error: null };
-      // Ignore sample folios
-      if (order.folio.startsWith('SAMPLE-') || ['OS-1001', 'OS-1002', 'OS-1003', 'OS-1004'].includes(order.folio)) {
+      // Ignore only mock sample folios
+      if (order.folio.startsWith('SAMPLE-')) {
         return { data: null, error: null };
       }
 
@@ -1168,7 +1166,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       tech = technicians[0];
     }
 
-    const newFolioNumber = 1000 + orders.length + 1;
+    const maxNum = orders.reduce((max, o) => {
+      const match = o.folio?.match(/OS-(\d+)/i);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        return num > max ? num : max;
+      }
+      return max;
+    }, 1000);
+    const newFolioNumber = maxNum + 1;
     const folio = `OS-${newFolioNumber}`;
     const nowStr = new Date().toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
     const nowIso = new Date().toISOString();

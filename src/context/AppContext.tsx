@@ -506,28 +506,81 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (!silent) console.warn('Load system_users notice:', e);
       }
 
-      // C. Load from 'technicians' table directly
+      // C. Load from 'technicians' table directly (only if not registered as another role like office/owner)
       try {
         const { data: techTableData, error: techErr } = await supabase.from('technicians').select('*');
         if (!techErr && techTableData && Array.isArray(techTableData)) {
           techTableData.forEach((t: any) => {
-            rawTechCandidates.push({
-              id: t.id,
-              name: t.name || 'Técnico',
-              phone: t.phone || '',
-              email: t.email || '',
-              specialty: t.specialty || 'Técnico de Campo',
-              activeOrdersCount: 0,
-              avgResponseTimeHours: 2.5,
-              status: t.status === 'Inactivo' ? 'Inactivo' : 'Activo'
-            });
+            const tEmail = (t.email || '').trim().toLowerCase();
+            const tName = (t.name || '').trim().toLowerCase();
+            
+            // Check if this technician was changed to office/owner in allUsersMap
+            let assignedNonTechRole = false;
+            for (const usr of allUsersMap.values()) {
+              const uEmail = (usr.email || '').trim().toLowerCase();
+              const uName = (usr.name || '').trim().toLowerCase();
+              if ((tEmail && uEmail === tEmail) || (tName && uName === tName)) {
+                if (usr.role !== 'tech') {
+                  assignedNonTechRole = true;
+                  break;
+                }
+              }
+            }
+
+            if (!assignedNonTechRole) {
+              rawTechCandidates.push({
+                id: t.id,
+                name: t.name || 'Técnico',
+                phone: t.phone || '',
+                email: t.email || '',
+                specialty: t.specialty || 'Técnico de Campo',
+                activeOrdersCount: 0,
+                avgResponseTimeHours: 2.5,
+                status: t.status === 'Inactivo' ? 'Inactivo' : 'Activo'
+              });
+            }
           });
         }
       } catch (e) {
         if (!silent) console.warn('Load technicians notice:', e);
       }
 
-      // Reconcile current logged in tech user if exists
+      const fetchedUsers = Array.from(allUsersMap.values());
+      if (fetchedUsers.length > 0) {
+        setSystemUsers(fetchedUsers);
+        localStorage.setItem('app_system_users', JSON.stringify(fetchedUsers));
+
+        // Re-synchronize currentUser if their role or status was modified in Supabase
+        if (currentUser) {
+          const curEmail = (currentUser.email || '').trim().toLowerCase();
+          const curUser = (currentUser.username || '').trim().toLowerCase();
+          const dbMatch = fetchedUsers.find(u =>
+            (curEmail && u.email?.trim().toLowerCase() === curEmail) ||
+            (curUser && u.username?.trim().toLowerCase() === curUser) ||
+            (currentUser.id && u.id === currentUser.id)
+          );
+
+          if (dbMatch && dbMatch.role !== currentUser.role) {
+            const updatedCurrent: SystemUser = {
+              ...currentUser,
+              role: dbMatch.role,
+              name: dbMatch.name || currentUser.name,
+              phone: dbMatch.phone || currentUser.phone,
+              status: dbMatch.status || currentUser.status
+            };
+            setCurrentUser(updatedCurrent);
+            localStorage.setItem('app_current_user', JSON.stringify(updatedCurrent));
+
+            // Auto switch activeRole view to match new role
+            if (activeRole !== 'home') {
+              setActiveRole(dbMatch.role);
+              localStorage.setItem('app_active_role', dbMatch.role);
+            }
+          }
+        }
+      }
+
+      // Reconcile current logged in tech user ONLY if their current role is tech
       if (currentUser && currentUser.role === 'tech') {
         rawTechCandidates.push({
           id: currentUser.id,
@@ -541,18 +594,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
       }
 
-      const fetchedUsers = Array.from(allUsersMap.values());
-      if (fetchedUsers.length > 0) {
-        setSystemUsers(fetchedUsers);
-        localStorage.setItem('app_system_users', JSON.stringify(fetchedUsers));
-      }
-
       const fetchedTechs = deduplicateTechnicians(rawTechCandidates);
+      setTechnicians(fetchedTechs);
+      localStorage.setItem('app_technicians', JSON.stringify(fetchedTechs));
 
       if (fetchedTechs.length > 0) {
-        setTechnicians(fetchedTechs);
-        localStorage.setItem('app_technicians', JSON.stringify(fetchedTechs));
-
         // Background auto-sync to Supabase technicians table if missing
         if (currentUser?.role === 'tech' && currentUser.email) {
           const userEm = currentUser.email.trim().toLowerCase();
@@ -2679,35 +2725,83 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateSystemUser = async (id: string, userData: Partial<SystemUser>) => {
-    setSystemUsers(prev =>
-      prev.map(u => (u.id === id ? { ...u, ...userData } : u))
-    );
+    let updatedUserRecord: SystemUser | null = null;
+
+    setSystemUsers(prev => {
+      const next = prev.map(u => {
+        if (u.id === id || (userData.email && u.email?.toLowerCase() === userData.email.toLowerCase())) {
+          const merged = { ...u, ...userData };
+          updatedUserRecord = merged;
+          return merged;
+        }
+        return u;
+      });
+      localStorage.setItem('app_system_users', JSON.stringify(next));
+      return next;
+    });
 
     try {
-      const user = systemUsers.find(u => u.id === id);
+      const user = systemUsers.find(u => u.id === id) || updatedUserRecord;
       if (user) {
         const userEmail = (userData.email ?? user.email ?? '').trim().toLowerCase();
+        const effectiveRole = normalizeRole(userData.role ?? user.role);
+        const effectiveName = userData.name ?? user.name ?? 'Usuario';
+        const effectivePhone = userData.phone ?? user.phone ?? '';
 
-        // Update 'employees'
+        // 1. If currentUser is being modified, update active session and activeRole immediately!
+        if (
+          currentUser &&
+          (currentUser.id === id ||
+            (userEmail && currentUser.email?.toLowerCase() === userEmail) ||
+            (user.username && currentUser.username?.toLowerCase() === user.username.toLowerCase()))
+        ) {
+          const updatedCurrent: SystemUser = {
+            ...currentUser,
+            ...userData,
+            role: effectiveRole
+          };
+          setCurrentUser(updatedCurrent);
+          localStorage.setItem('app_current_user', JSON.stringify(updatedCurrent));
+
+          // Adjust active module view
+          if (activeRole !== 'home') {
+            setActiveRole(effectiveRole);
+            localStorage.setItem('app_active_role', effectiveRole);
+          }
+        }
+
+        // 2. Update 'employees' in Supabase
         await supabase
           .from('employees')
           .update({
-            name: userData.name ?? user.name,
-            role: userData.role ?? user.role,
-            phone: userData.phone ?? user.phone,
+            name: effectiveName,
+            role: effectiveRole,
+            phone: effectivePhone,
             pin: userData.password ?? user.password,
             is_active: userData.status !== undefined ? userData.status !== 'Inactivo' : user.status !== 'Inactivo'
           })
           .ilike('email', userEmail);
 
-        // Update 'technicians' if applicable
-        const effectiveRole = userData.role ?? user.role;
+        // 3. Technicians table and state synchronization
         if (effectiveRole === 'tech') {
-          const effectiveName = userData.name ?? user.name ?? 'Técnico';
-          const effectivePhone = userData.phone ?? user.phone ?? '';
+          setTechnicians(prev => {
+            const filtered = prev.filter(t => (t.email || '').toLowerCase() !== userEmail && (t.name || '').toLowerCase() !== effectiveName.toLowerCase());
+            return [
+              ...filtered,
+              {
+                id: user.id || `tech-${Date.now()}`,
+                name: effectiveName,
+                email: userEmail,
+                phone: effectivePhone,
+                specialty: 'Técnico de Campo',
+                activeOrdersCount: 0,
+                avgResponseTimeHours: 2.5,
+                status: (userData.status ?? user.status) === 'Inactivo' ? 'Inactivo' : 'Activo'
+              }
+            ];
+          });
 
           try {
-            // Check if technician exists by email or name
             const { data: existingTech } = await supabase
               .from('technicians')
               .select('id')
@@ -2736,18 +2830,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           } catch (tErr) {
             console.warn('Silent technician sync notice on user update:', tErr);
           }
+        } else {
+          // If role changed from 'tech' to 'office' or 'owner', remove from technicians state & delete/inactivate from table
+          setTechnicians(prev => prev.filter(t => (t.email || '').toLowerCase() !== userEmail && (t.name || '').toLowerCase() !== effectiveName.toLowerCase()));
+          try {
+            await supabase
+              .from('technicians')
+              .delete()
+              .or(`email.ilike.${userEmail},name.ilike.${effectiveName}`);
+          } catch (tErr) {
+            console.warn('Silent technician deletion notice on user role change:', tErr);
+          }
         }
 
-        // Update 'system_users'
+        // 4. Update 'system_users' in Supabase
         await supabase
           .from('system_users')
           .update({
-            name: userData.name ?? user.name,
+            name: effectiveName,
             username: userData.username ?? user.username,
-            email: userData.email ?? user.email,
+            email: userEmail,
             password: userData.password ?? user.password,
-            phone: userData.phone ?? user.phone,
-            role: userData.role ?? user.role,
+            phone: effectivePhone,
+            role: effectiveRole,
             status: userData.status ?? user.status
           })
           .ilike('email', userEmail);

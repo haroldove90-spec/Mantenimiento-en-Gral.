@@ -42,19 +42,19 @@ export const TechMobileView: React.FC = () => {
     clearSampleData
   } = useApp();
 
+  // Persistent activeTechId (default 'all' so technician sees all incoming orders in primer plano)
   const [activeTechId, setActiveTechId] = useState<string>(() => {
-    if (currentUser?.role === 'tech') {
-      const match = technicians.find(
-        t => t.id === currentUser.id ||
-             (t.email && currentUser.email && t.email.toLowerCase() === currentUser.email.toLowerCase()) ||
-             (t.name && currentUser.name && t.name.toLowerCase() === currentUser.name.toLowerCase())
-      );
-      if (match) return match.id;
-    }
-    return technicians[0]?.id || 'all';
+    const saved = localStorage.getItem('sij_tech_active_filter');
+    if (saved) return saved;
+    return 'all';
   });
 
-  const [sortBy, setSortBy] = useState<'priority' | 'date'>('priority');
+  const handleSelectTechView = (val: string) => {
+    setActiveTechId(val);
+    localStorage.setItem('sij_tech_active_filter', val);
+  };
+
+  const [sortBy, setSortBy] = useState<'priority' | 'date'>('date');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'in_progress' | 'completed'>('all');
 
   // Status Change Confirmation Modal State
@@ -63,25 +63,7 @@ export const TechMobileView: React.FC = () => {
   const [statusNote, setStatusNote] = useState<string>('');
   const [statusFeedbackMsg, setStatusFeedbackMsg] = useState<string | null>(null);
 
-  // Sync active technician when list changes or user logs in
-  useEffect(() => {
-    if (currentUser?.role === 'tech') {
-      const matchLoggedIn = technicians.find(
-        t => t.id === currentUser.id ||
-             (t.email && currentUser.email && t.email.toLowerCase() === currentUser.email.toLowerCase()) ||
-             (t.name && currentUser.name && (t.name.toLowerCase() === currentUser.name.toLowerCase() || t.name.toLowerCase().includes(currentUser.name.toLowerCase()) || currentUser.name.toLowerCase().includes(t.name.toLowerCase())))
-      );
-      if (matchLoggedIn) {
-        setActiveTechId(matchLoggedIn.id);
-        return;
-      }
-    }
-    if (!activeTechId && technicians.length > 0) {
-      setActiveTechId(technicians[0].id);
-    }
-  }, [technicians, currentUser]);
-
-  const currentTech = technicians.find(t => t.id === activeTechId) || technicians[0];
+  const currentTech = technicians.find(t => t.id === activeTechId) || (activeTechId === 'all' ? null : technicians[0]);
 
   // Modals state
   const [diagOrder, setDiagOrder] = useState<ServiceOrder | null>(null);
@@ -90,7 +72,7 @@ export const TechMobileView: React.FC = () => {
   // Assigned orders for selected technician (resilient cross-device matching)
   const assignedOrders = orders.filter(o => {
     // 1. Show all if 'all' is selected or no technician registered
-    if (activeTechId === 'all' || technicians.length === 0) return true;
+    if (activeTechId === 'all' || !activeTechId || technicians.length === 0) return true;
 
     // 2. Direct ID match
     if (o.technicianId && (o.technicianId === activeTechId || (currentTech && o.technicianId === currentTech.id))) {
@@ -119,16 +101,16 @@ export const TechMobileView: React.FC = () => {
       return true;
     }
 
-    // 5. Single technician fallback: if only 1 tech is in the system, show all orders
-    if (technicians.length <= 1) {
-      return true;
-    }
-
     return false;
   });
 
+  // Effective orders list: If selected tech has 0 orders, fallback to all orders so user is never blinded
+  const effectiveOrders = (assignedOrders.length === 0 && activeTechId !== 'all' && orders.length > 0)
+    ? orders
+    : assignedOrders;
+
   // Filter by lifecycle category
-  const filteredByStatus = assignedOrders.filter(o => {
+  const filteredByStatus = effectiveOrders.filter(o => {
     if (statusFilter === 'pending') {
       return (
         o.status === 'Pendiente de Visita' ||
@@ -148,7 +130,14 @@ export const TechMobileView: React.FC = () => {
     return true;
   });
 
+  // Sort orders: Newest & Active (Non-closed) orders strictly in primer plano (top)
   const sortedOrders = [...filteredByStatus].sort((a, b) => {
+    // 1. Put active orders before closed orders
+    const aClosed = a.status === 'Cobrado/Cerrado' ? 1 : 0;
+    const bClosed = b.status === 'Cobrado/Cerrado' ? 1 : 0;
+    if (aClosed !== bClosed) return aClosed - bClosed;
+
+    // 2. Custom sort
     if (sortBy === 'priority') {
       const pMap = { Alta: 1, Media: 2, Baja: 3 };
       return pMap[a.priority] - pMap[b.priority];
@@ -263,7 +252,7 @@ export const TechMobileView: React.FC = () => {
             <label className="text-xs font-semibold text-slate-600 whitespace-nowrap">Vista Técnico:</label>
             <select
               value={activeTechId}
-              onChange={e => setActiveTechId(e.target.value)}
+              onChange={e => handleSelectTechView(e.target.value)}
               className="bg-slate-50 border border-slate-300 text-slate-900 text-xs font-bold rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-hidden cursor-pointer"
             >
               <option value="all">🌐 Ver Todas las Órdenes ({orders.length})</option>
@@ -417,7 +406,7 @@ export const TechMobileView: React.FC = () => {
               <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
                 <button
                   onClick={() => {
-                    setActiveTechId('all');
+                    handleSelectTechView('all');
                     setStatusFilter('all');
                   }}
                   className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-xs transition-all cursor-pointer flex items-center space-x-1.5"
@@ -433,7 +422,7 @@ export const TechMobileView: React.FC = () => {
                     <button
                       key={t.id}
                       onClick={() => {
-                        setActiveTechId(t.id);
+                        handleSelectTechView(t.id);
                         setStatusFilter('all');
                       }}
                       className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold px-4 py-2.5 rounded-xl transition-all cursor-pointer flex items-center space-x-1.5"

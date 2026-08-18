@@ -42,12 +42,46 @@ export const TechMobileView: React.FC = () => {
     clearSampleData
   } = useApp();
 
-  // Persistent activeTechId (default 'all' so technician sees all incoming orders in primer plano)
+  // Identify logged in technician if user role is 'tech'
+  const loggedInTech = useMemo(() => {
+    if (!currentUser || currentUser.role !== 'tech') return null;
+    const curEmail = (currentUser.email || '').trim().toLowerCase();
+    const curName = (currentUser.name || '').trim().toLowerCase();
+    const curUser = (currentUser.username || '').trim().toLowerCase();
+    return (
+      technicians.find(
+        t =>
+          (curEmail && t.email && t.email.toLowerCase() === curEmail) ||
+          (t.id && t.id === currentUser.id) ||
+          (curName && t.name && t.name.toLowerCase() === curName) ||
+          (curUser && t.name && t.name.toLowerCase() === curUser)
+      ) || null
+    );
+  }, [currentUser, technicians]);
+
+  // Persistent activeTechId
   const [activeTechId, setActiveTechId] = useState<string>(() => {
+    if (currentUser?.role === 'tech') {
+      const curEmail = (currentUser.email || '').trim().toLowerCase();
+      const curName = (currentUser.name || '').trim().toLowerCase();
+      const matched = technicians.find(
+        t =>
+          (curEmail && t.email && t.email.toLowerCase() === curEmail) ||
+          (t.id && t.id === currentUser.id) ||
+          (curName && t.name && t.name.toLowerCase() === curName)
+      );
+      if (matched) return matched.id;
+    }
     const saved = localStorage.getItem('sij_tech_active_filter');
     if (saved) return saved;
-    return 'all';
+    return currentUser?.role === 'tech' && technicians.length > 0 ? technicians[0].id : 'all';
   });
+
+  useEffect(() => {
+    if (currentUser?.role === 'tech' && loggedInTech) {
+      setActiveTechId(loggedInTech.id);
+    }
+  }, [currentUser, loggedInTech]);
 
   const handleSelectTechView = (val: string) => {
     setActiveTechId(val);
@@ -63,51 +97,55 @@ export const TechMobileView: React.FC = () => {
   const [statusNote, setStatusNote] = useState<string>('');
   const [statusFeedbackMsg, setStatusFeedbackMsg] = useState<string | null>(null);
 
-  const currentTech = technicians.find(t => t.id === activeTechId) || (activeTechId === 'all' ? null : technicians[0]);
+  const currentTech = useMemo(() => {
+    if (activeTechId === 'all') return null;
+    return technicians.find(t => t.id === activeTechId) || (loggedInTech && activeTechId === loggedInTech.id ? loggedInTech : null);
+  }, [activeTechId, technicians, loggedInTech]);
 
   // Modals state
   const [diagOrder, setDiagOrder] = useState<ServiceOrder | null>(null);
   const [execOrder, setExecOrder] = useState<ServiceOrder | null>(null);
 
-  // Assigned orders for selected technician (resilient cross-device matching)
-  const assignedOrders = orders.filter(o => {
-    // 1. Show all if 'all' is selected or no technician registered
-    if (activeTechId === 'all' || !activeTechId || technicians.length === 0) return true;
+  // Assigned orders for selected technician (STRICT single-technician matching)
+  const assignedOrders = useMemo(() => {
+    // If a specific technician is selected (or when logged in as technician)
+    if (activeTechId !== 'all') {
+      const targetTech = currentTech || technicians.find(t => t.id === activeTechId);
+      const targetId = targetTech ? targetTech.id : activeTechId;
+      const targetName = targetTech ? targetTech.name.trim().toLowerCase() : '';
+      const targetEmail = targetTech?.email ? targetTech.email.trim().toLowerCase() : '';
 
-    // 2. Direct ID match
-    if (o.technicianId && (o.technicianId === activeTechId || (currentTech && o.technicianId === currentTech.id))) {
-      return true;
+      return orders.filter(o => {
+        // Direct ID match
+        if (o.technicianId && o.technicianId === targetId) return true;
+
+        // Exact Name match (case insensitive)
+        if (targetName && o.technicianName && o.technicianName.trim().toLowerCase() === targetName) return true;
+
+        // Exact Email match
+        if (targetEmail && (o as any).technicianEmail && (o as any).technicianEmail.trim().toLowerCase() === targetEmail) return true;
+
+        return false;
+      });
     }
 
-    // 3. Name match (case-insensitive & trimmed)
-    const techNameClean = (currentTech?.name || '').trim().toLowerCase();
-    const orderTechClean = (o.technicianName || '').trim().toLowerCase();
-
-    if (techNameClean && orderTechClean && (
-      techNameClean === orderTechClean ||
-      techNameClean.includes(orderTechClean) ||
-      orderTechClean.includes(techNameClean)
-    )) {
-      return true;
+    // If 'all' is selected:
+    // If logged in as technician, strictly limit to his orders
+    if (currentUser?.role === 'tech' && loggedInTech) {
+      const myId = loggedInTech.id;
+      const myName = loggedInTech.name.trim().toLowerCase();
+      return orders.filter(o => {
+        if (o.technicianId && o.technicianId === myId) return true;
+        if (myName && o.technicianName && o.technicianName.trim().toLowerCase() === myName) return true;
+        return false;
+      });
     }
 
-    // 4. Current logged-in user match
-    const userNameClean = (currentUser?.name || '').trim().toLowerCase();
-    const userClean = (currentUser?.username || '').trim().toLowerCase();
-    if (currentUser?.role === 'tech' && orderTechClean && (
-      (userNameClean && (userNameClean === orderTechClean || userNameClean.includes(orderTechClean) || orderTechClean.includes(userNameClean))) ||
-      (userClean && orderTechClean.includes(userClean))
-    )) {
-      return true;
-    }
+    // Admins and Office seeing global list
+    return orders;
+  }, [orders, activeTechId, currentTech, technicians, currentUser, loggedInTech]);
 
-    return false;
-  });
-
-  // Effective orders list: If selected tech has 0 orders, fallback to all orders so user is never blinded
-  const effectiveOrders = (assignedOrders.length === 0 && activeTechId !== 'all' && orders.length > 0)
-    ? orders
-    : assignedOrders;
+  const effectiveOrders = assignedOrders;
 
   // Filter by lifecycle category
   const filteredByStatus = effectiveOrders.filter(o => {
@@ -432,22 +470,6 @@ export const TechMobileView: React.FC = () => {
                     </button>
                   );
                 })}
-
-                {currentTech && (
-                  <button
-                    onClick={() => {
-                      orders.forEach(o => {
-                        assignTechnician(o.id, currentTech.id, o.routeOrder || 1, o.scheduledDate);
-                      });
-                      setStatusFeedbackMsg(`¡Se reasignaron ${orders.length} órdenes a ${currentTech.name}!`);
-                      setTimeout(() => setStatusFeedbackMsg(null), 5000);
-                    }}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-xs transition-all cursor-pointer flex items-center space-x-1.5"
-                  >
-                    <Wrench className="w-3.5 h-3.5" />
-                    <span>⚡ Reasignarme todas las órdenes a mí</span>
-                  </button>
-                )}
               </div>
             )}
           </div>

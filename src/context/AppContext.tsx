@@ -1154,17 +1154,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }): ServiceOrder => {
     const client = clients.find(c => c.id === clientId);
     const department = client?.departments?.find(d => d.id === departmentId);
-    let tech = technicians.find(
-      t =>
-        t.id === technicianId ||
-        t.name === technicianId ||
-        (t.email && technicianId && t.email.toLowerCase() === technicianId.toLowerCase())
-    );
-
-    // Fallback: If only 1 technician is in the system and no other was picked, default to him
-    if (!tech && technicians.length === 1) {
-      tech = technicians[0];
-    }
+    let tech = technicianId
+      ? technicians.find(
+          t =>
+            t.id === technicianId ||
+            t.name === technicianId ||
+            (t.email && t.email.toLowerCase() === technicianId.toLowerCase())
+        )
+      : undefined;
 
     const maxNum = orders.reduce((max, o) => {
       const match = o.folio?.match(/OS-(\d+)/i);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useApp, deduplicateTechnicians } from '../../context/AppContext';
+import { useApp, deduplicateTechnicians, normalizeStr } from '../../context/AppContext';
 import { ServiceOrder, OrderStatus } from '../../types';
 import { InspectionDiagnosticsModal } from './InspectionDiagnosticsModal';
 import { ExecutionAndCloseModal } from './ExecutionAndCloseModal';
@@ -28,7 +28,9 @@ import {
   MessageSquareText,
   Radio,
   FileSpreadsheet,
-  Users
+  Users,
+  Briefcase,
+  Zap
 } from 'lucide-react';
 
 export const TechMobileView: React.FC = () => {
@@ -45,16 +47,16 @@ export const TechMobileView: React.FC = () => {
   // Identify logged in technician if user role is 'tech'
   const loggedInTech = useMemo(() => {
     if (!currentUser || currentUser.role !== 'tech') return null;
-    const curEmail = (currentUser.email || '').trim().toLowerCase();
-    const curName = (currentUser.name || '').trim().toLowerCase();
-    const curUser = (currentUser.username || '').trim().toLowerCase();
+    const curEmail = normalizeStr(currentUser.email);
+    const curName = normalizeStr(currentUser.name);
+    const curUser = normalizeStr(currentUser.username);
     return (
       technicians.find(
         t =>
-          (curEmail && t.email && t.email.toLowerCase() === curEmail) ||
+          (curEmail && t.email && normalizeStr(t.email) === curEmail) ||
           (t.id && t.id === currentUser.id) ||
-          (curName && t.name && t.name.toLowerCase() === curName) ||
-          (curUser && t.name && t.name.toLowerCase() === curUser)
+          (curName && t.name && normalizeStr(t.name) === curName) ||
+          (curUser && t.name && normalizeStr(t.name) === curUser)
       ) || null
     );
   }, [currentUser, technicians]);
@@ -62,13 +64,13 @@ export const TechMobileView: React.FC = () => {
   // Persistent activeTechId
   const [activeTechId, setActiveTechId] = useState<string>(() => {
     if (currentUser?.role === 'tech') {
-      const curEmail = (currentUser.email || '').trim().toLowerCase();
-      const curName = (currentUser.name || '').trim().toLowerCase();
+      const curEmail = normalizeStr(currentUser.email);
+      const curName = normalizeStr(currentUser.name);
       const matched = technicians.find(
         t =>
-          (curEmail && t.email && t.email.toLowerCase() === curEmail) ||
+          (curEmail && t.email && normalizeStr(t.email) === curEmail) ||
           (t.id && t.id === currentUser.id) ||
-          (curName && t.name && t.name.toLowerCase() === curName)
+          (curName && t.name && normalizeStr(t.name) === curName)
       );
       if (matched) return matched.id;
     }
@@ -88,6 +90,8 @@ export const TechMobileView: React.FC = () => {
     localStorage.setItem('sij_tech_active_filter', val);
   };
 
+  // Main Tab in Tech View: 'assigned' (Mis Trabajos) or 'unassigned' (Bolsa de Órdenes Disponibles)
+  const [techMainTab, setTechMainTab] = useState<'assigned' | 'unassigned'>('assigned');
   const [sortBy, setSortBy] = useState<'priority' | 'date'>('date');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'in_progress' | 'completed'>('all');
 
@@ -106,37 +110,37 @@ export const TechMobileView: React.FC = () => {
   const [diagOrder, setDiagOrder] = useState<ServiceOrder | null>(null);
   const [execOrder, setExecOrder] = useState<ServiceOrder | null>(null);
 
-  // Assigned orders for selected technician (STRICT single-technician matching)
+  // Assigned orders for selected technician (Normalized accent and case insensitive matching)
   const assignedOrders = useMemo(() => {
     // If a specific technician is selected (or when logged in as technician)
     if (activeTechId !== 'all') {
       const targetTech = currentTech || technicians.find(t => t.id === activeTechId);
       const targetId = targetTech ? targetTech.id : activeTechId;
-      const targetName = targetTech ? targetTech.name.trim().toLowerCase() : '';
-      const targetEmail = targetTech?.email ? targetTech.email.trim().toLowerCase() : '';
+      const targetNameNorm = targetTech ? normalizeStr(targetTech.name) : normalizeStr(currentUser?.name);
+      const targetEmailNorm = targetTech?.email ? normalizeStr(targetTech.email) : normalizeStr(currentUser?.email);
 
       return orders.filter(o => {
         // Direct ID match
-        if (o.technicianId && o.technicianId === targetId) return true;
+        if (targetId && o.technicianId && (o.technicianId === targetId || (targetTech && o.technicianId === targetTech.id))) return true;
 
-        // Exact Name match (case insensitive)
-        if (targetName && o.technicianName && o.technicianName.trim().toLowerCase() === targetName) return true;
+        // Normalized Name match (case and accent insensitive)
+        if (targetNameNorm && o.technicianName && normalizeStr(o.technicianName) === targetNameNorm) return true;
 
         // Exact Email match
-        if (targetEmail && (o as any).technicianEmail && (o as any).technicianEmail.trim().toLowerCase() === targetEmail) return true;
+        if (targetEmailNorm && (o as any).technicianEmail && normalizeStr((o as any).technicianEmail) === targetEmailNorm) return true;
 
         return false;
       });
     }
 
     // If 'all' is selected:
-    // If logged in as technician, strictly limit to his orders
+    // If logged in as technician, match with loggedInTech
     if (currentUser?.role === 'tech' && loggedInTech) {
       const myId = loggedInTech.id;
-      const myName = loggedInTech.name.trim().toLowerCase();
+      const myNameNorm = normalizeStr(loggedInTech.name);
       return orders.filter(o => {
         if (o.technicianId && o.technicianId === myId) return true;
-        if (myName && o.technicianName && o.technicianName.trim().toLowerCase() === myName) return true;
+        if (myNameNorm && o.technicianName && normalizeStr(o.technicianName) === myNameNorm) return true;
         return false;
       });
     }
@@ -144,6 +148,17 @@ export const TechMobileView: React.FC = () => {
     // Admins and Office seeing global list
     return orders;
   }, [orders, activeTechId, currentTech, technicians, currentUser, loggedInTech]);
+
+  // Unassigned / Available pool of orders (Órdenes pendientes de técnico)
+  const unassignedOrders = useMemo(() => {
+    return orders.filter(o => {
+      if (o.status === 'Cobrado/Cerrado') return false;
+      const tId = (o.technicianId || '').trim();
+      const tNameNorm = normalizeStr(o.technicianName);
+      const hasValidTech = Boolean(tId || (tNameNorm && tNameNorm !== 'sin asignar' && tNameNorm !== 'sin asignar por ahora' && tNameNorm !== 'disponible' && tNameNorm !== 'pendiente'));
+      return !hasValidTech;
+    });
+  }, [orders]);
 
   const effectiveOrders = assignedOrders;
 
@@ -189,20 +204,22 @@ export const TechMobileView: React.FC = () => {
     if (activeTechId !== 'all') {
       const targetTech = currentTech || technicians.find(t => t.id === activeTechId);
       const targetId = targetTech ? targetTech.id : activeTechId;
-      const targetName = targetTech ? targetTech.name.trim().toLowerCase() : '';
+      const targetNameNorm = targetTech ? normalizeStr(targetTech.name) : normalizeStr(currentUser?.name);
 
       if (!n.targetTechnicianId && !n.targetTechnicianName) return true;
-      if (n.targetTechnicianId && n.targetTechnicianId === targetId) return true;
-      if (targetName && n.targetTechnicianName && n.targetTechnicianName.trim().toLowerCase() === targetName) return true;
+      if (n.targetTechnicianId && (n.targetTechnicianId === targetId || (targetTech && n.targetTechnicianId === targetTech.id))) return true;
+      const notifNameNorm = normalizeStr(n.targetTechnicianName);
+      if (targetNameNorm && notifNameNorm && (notifNameNorm === targetNameNorm || (targetTech && notifNameNorm === normalizeStr(targetTech.name)))) return true;
       return false;
     }
 
     if (currentUser?.role === 'tech' && loggedInTech) {
       const myId = loggedInTech.id;
-      const myName = loggedInTech.name.trim().toLowerCase();
+      const myNameNorm = normalizeStr(loggedInTech.name);
       if (!n.targetTechnicianId && !n.targetTechnicianName) return true;
       if (n.targetTechnicianId && n.targetTechnicianId === myId) return true;
-      if (myName && n.targetTechnicianName && n.targetTechnicianName.trim().toLowerCase() === myName) return true;
+      const notifNameNorm = normalizeStr(n.targetTechnicianName);
+      if (myNameNorm && notifNameNorm && notifNameNorm === myNameNorm) return true;
       return false;
     }
 
@@ -367,135 +384,183 @@ export const TechMobileView: React.FC = () => {
         </div>
       )}
 
-      {/* Status Filter Tabs (Todos, Pendientes, En Proceso, Terminados) */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-slate-200 shadow-2xs">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button
-            onClick={() => setStatusFilter('all')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
-              statusFilter === 'all'
-                ? 'bg-slate-900 text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Todos ({assignedOrders.length})</span>
-          </button>
+      {/* Main Mode Segmented Control: Mis Asignadas vs Bolsa de Disponibles */}
+      <div className="grid grid-cols-2 gap-2 bg-slate-200/70 p-1.5 rounded-2xl border border-slate-300/80">
+        <button
+          onClick={() => setTechMainTab('assigned')}
+          className={`flex items-center justify-center space-x-2 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer ${
+            techMainTab === 'assigned'
+              ? 'bg-white text-emerald-800 shadow-md ring-1 ring-black/5'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
+          }`}
+        >
+          <Briefcase className="w-4 h-4 text-emerald-600" />
+          <span>Mis Trabajos Asignados ({assignedOrders.length})</span>
+        </button>
 
-          <button
-            onClick={() => setStatusFilter('pending')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
-              statusFilter === 'pending'
-                ? 'bg-amber-500 text-white shadow-xs'
-                : 'text-amber-800 hover:bg-amber-50 bg-amber-50/50'
-            }`}
-          >
-            <Hourglass className="w-3.5 h-3.5" />
-            <span>
-              Pendientes ({assignedOrders.filter(o => getStatusGroup(o.status) === 'pending').length})
+        <button
+          onClick={() => setTechMainTab('unassigned')}
+          className={`flex items-center justify-center space-x-2 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer relative ${
+            techMainTab === 'unassigned'
+              ? 'bg-emerald-600 text-white shadow-md'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
+          }`}
+        >
+          <Zap className={`w-4 h-4 ${techMainTab === 'unassigned' ? 'text-amber-300 fill-amber-300' : 'text-amber-500'}`} />
+          <span>Bolsa de Disponibles</span>
+          {unassignedOrders.length > 0 && (
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
+              techMainTab === 'unassigned' ? 'bg-white text-emerald-800' : 'bg-amber-500 text-slate-950 animate-pulse'
+            }`}>
+              {unassignedOrders.length}
             </span>
-          </button>
-
-          <button
-            onClick={() => setStatusFilter('in_progress')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
-              statusFilter === 'in_progress'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-blue-800 hover:bg-blue-50 bg-blue-50/50'
-            }`}
-          >
-            <Activity className="w-3.5 h-3.5" />
-            <span>
-              En Proceso ({assignedOrders.filter(o => getStatusGroup(o.status) === 'in_progress').length})
-            </span>
-          </button>
-
-          <button
-            onClick={() => setStatusFilter('completed')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
-              statusFilter === 'completed'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'text-emerald-800 hover:bg-emerald-50 bg-emerald-50/50'
-            }`}
-          >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>
-              Terminados ({assignedOrders.filter(o => getStatusGroup(o.status) === 'completed').length})
-            </span>
-          </button>
-        </div>
-
-        <div className="text-xs font-bold text-slate-500 px-2 flex items-center space-x-1">
-          <Radio className="w-3.5 h-3.5 text-emerald-500 animate-pulse" />
-          <span>Sincronización en tiempo real con Admin, Oficina y Cliente</span>
-        </div>
+          )}
+        </button>
       </div>
 
-      {/* Orders List View */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between px-1">
-          <span className="font-bold text-slate-800 uppercase tracking-wider text-sm">
-            Mis Trabajos Asignados ({sortedOrders.length})
-          </span>
-        </div>
+      {techMainTab === 'assigned' ? (
+        <>
+          {/* Status Filter Tabs (Todos, Pendientes, En Proceso, Terminados) */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-slate-200 shadow-2xs">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                onClick={() => setStatusFilter('all')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                  statusFilter === 'all'
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Todos ({assignedOrders.length})</span>
+              </button>
 
-        {sortedOrders.length === 0 ? (
-          <div className="bg-white border border-slate-200 rounded-2xl text-center py-12 px-6 text-slate-400 space-y-4 shadow-xs">
-            <CheckCircle2 className="w-12 h-12 text-slate-300 mx-auto" />
-            <div className="space-y-1 max-w-md mx-auto">
-              <p className="font-bold text-slate-800 text-base">
-                {orders.length > 0
-                  ? `No hay órdenes asignadas a "${currentTech?.name || currentUser?.name || 'este técnico'}" en esta vista.`
-                  : 'No hay órdenes de servicio en el sistema actualmente.'}
-              </p>
-              <p className="text-xs text-slate-500">
-                {orders.length > 0
-                  ? `Existen ${orders.length} orden(es) en el sistema (por ejemplo, asignadas a "Tecnico 1" o sin asignar).`
-                  : 'El administrador u oficina pueden crear una orden desde el panel de Oficina.'}
-              </p>
+              <button
+                onClick={() => setStatusFilter('pending')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                  statusFilter === 'pending'
+                    ? 'bg-amber-500 text-white shadow-xs'
+                    : 'text-amber-800 hover:bg-amber-50 bg-amber-50/50'
+                }`}
+              >
+                <Hourglass className="w-3.5 h-3.5" />
+                <span>
+                  Pendientes ({assignedOrders.filter(o => getStatusGroup(o.status) === 'pending').length})
+                </span>
+              </button>
+
+              <button
+                onClick={() => setStatusFilter('in_progress')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                  statusFilter === 'in_progress'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-blue-800 hover:bg-blue-50 bg-blue-50/50'
+                }`}
+              >
+                <Activity className="w-3.5 h-3.5" />
+                <span>
+                  En Proceso ({assignedOrders.filter(o => getStatusGroup(o.status) === 'in_progress').length})
+                </span>
+              </button>
+
+              <button
+                onClick={() => setStatusFilter('completed')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                  statusFilter === 'completed'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-emerald-800 hover:bg-emerald-50 bg-emerald-50/50'
+                }`}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>
+                  Terminados ({assignedOrders.filter(o => getStatusGroup(o.status) === 'completed').length})
+                </span>
+              </button>
             </div>
 
-            {orders.length > 0 && (
-              <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
-                <button
-                  onClick={() => {
-                    handleSelectTechView('all');
-                    setStatusFilter('all');
-                  }}
-                  className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-xs transition-all cursor-pointer flex items-center space-x-1.5"
-                >
-                  <Layers className="w-3.5 h-3.5" />
-                  <span>🌐 Ver Todas las Órdenes ({orders.length})</span>
-                </button>
+            <div className="text-xs font-bold text-slate-500 px-2 flex items-center space-x-1">
+              <Radio className="w-3.5 h-3.5 text-emerald-500 animate-pulse" />
+              <span>Sincronización en tiempo real con Admin, Oficina y Cliente</span>
+            </div>
+          </div>
 
-                {technicians
-                  .filter(
-                    t =>
-                      t.id !== activeTechId &&
-                      t.status !== 'Inactivo' &&
-                      !['tecnico 1', 'tecnico 2', 'técnico 1', 'técnico 2'].includes(t.name.toLowerCase().trim())
-                  )
-                  .map(t => {
-                  const tOrdersCount = orders.filter(o => o.technicianId === t.id || (o.technicianName && o.technicianName.toLowerCase() === t.name.toLowerCase())).length;
-                  if (tOrdersCount === 0) return null;
-                  return (
+          {/* Orders List View */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between px-1">
+              <span className="font-bold text-slate-800 uppercase tracking-wider text-sm">
+                Mis Trabajos Asignados ({sortedOrders.length})
+              </span>
+            </div>
+
+            {sortedOrders.length === 0 ? (
+              <div className="bg-white border border-slate-200 rounded-2xl text-center py-12 px-6 text-slate-400 space-y-4 shadow-xs">
+                <CheckCircle2 className="w-12 h-12 text-slate-300 mx-auto" />
+                <div className="space-y-1 max-w-md mx-auto">
+                  <p className="font-bold text-slate-800 text-base">
+                    {orders.length > 0
+                      ? `No hay órdenes asignadas a "${currentTech?.name || currentUser?.name || 'este técnico'}" en esta vista.`
+                      : 'No hay órdenes de servicio en el sistema actualmente.'}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {unassignedOrders.length > 0
+                      ? `Hay ${unassignedOrders.length} orden(es) disponible(s) en la Bolsa de Trabajo esperando técnico.`
+                      : orders.length > 0
+                      ? `Existen ${orders.length} orden(es) en el sistema.`
+                      : 'El administrador u oficina pueden crear una orden desde el panel de Oficina.'}
+                  </p>
+                </div>
+
+                <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
+                  {unassignedOrders.length > 0 && (
                     <button
-                      key={t.id}
+                      onClick={() => setTechMainTab('unassigned')}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-xs transition-all cursor-pointer flex items-center space-x-1.5"
+                    >
+                      <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
+                      <span>⚡ Ver Bolsa de Disponibles ({unassignedOrders.length})</span>
+                    </button>
+                  )}
+
+                  {orders.length > 0 && (
+                    <button
                       onClick={() => {
-                        handleSelectTechView(t.id);
+                        handleSelectTechView('all');
                         setStatusFilter('all');
                       }}
-                      className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold px-4 py-2.5 rounded-xl transition-all cursor-pointer flex items-center space-x-1.5"
+                      className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-xs transition-all cursor-pointer flex items-center space-x-1.5"
                     >
-                      <Users className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Ver órdenes de {t.name} ({tOrdersCount})</span>
+                      <Layers className="w-3.5 h-3.5" />
+                      <span>🌐 Ver Todas las Órdenes ({orders.length})</span>
                     </button>
-                  );
-                })}
+                  )}
+
+                  {technicians
+                    .filter(
+                      t =>
+                        t.id !== activeTechId &&
+                        t.status !== 'Inactivo' &&
+                        !['tecnico 1', 'tecnico 2', 'técnico 1', 'técnico 2'].includes(t.name.toLowerCase().trim())
+                    )
+                    .map(t => {
+                    const tOrdersCount = orders.filter(o => o.technicianId === t.id || (o.technicianName && normalizeStr(o.technicianName) === normalizeStr(t.name))).length;
+                    if (tOrdersCount === 0) return null;
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => {
+                          handleSelectTechView(t.id);
+                          setStatusFilter('all');
+                        }}
+                        className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold px-4 py-2.5 rounded-xl transition-all cursor-pointer flex items-center space-x-1.5"
+                      >
+                        <Users className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Ver órdenes de {t.name} ({tOrdersCount})</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            )}
-          </div>
-        ) : (
+            ) : (
           <div className="space-y-5">
             {sortedOrders.map(ord => {
               const isApproved = ord.budget?.status === 'Aprobado';
@@ -739,6 +804,127 @@ export const TechMobileView: React.FC = () => {
           </div>
         )}
       </div>
+      </>
+      ) : (
+        /* ================= UNASSIGNED ORDERS POOL / BOLSA DE TRABAJO ================= */
+        <div className="space-y-4">
+          <div className="flex items-center justify-between px-1">
+            <div className="space-y-0.5">
+              <span className="font-bold text-slate-900 text-base flex items-center space-x-2">
+                <Zap className="w-5 h-5 text-amber-500 fill-amber-500" />
+                <span>Bolsa de Órdenes Disponibles ({unassignedOrders.length})</span>
+              </span>
+              <p className="text-xs text-slate-500">
+                Órdenes registradas en Oficina sin técnico asignado. Puedes tomar cualquier orden para agregarla a tu jornada.
+              </p>
+            </div>
+          </div>
+
+          {unassignedOrders.length === 0 ? (
+            <div className="bg-white border border-slate-200 rounded-2xl text-center py-12 px-6 text-slate-400 space-y-3 shadow-xs">
+              <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto" />
+              <p className="font-bold text-slate-800 text-base">
+                ¡Todas las órdenes del sistema ya tienen técnico asignado!
+              </p>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                No hay órdenes pendientes en la bolsa de trabajo. Revisa tu pestaña "Mis Trabajos Asignados".
+              </p>
+              <button
+                onClick={() => setTechMainTab('assigned')}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-xs transition-all cursor-pointer inline-flex items-center space-x-2 mt-2"
+              >
+                <Briefcase className="w-4 h-4" />
+                <span>Volver a Mis Trabajos Asignados</span>
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {unassignedOrders.map(ord => (
+                <div
+                  key={ord.id}
+                  className="bg-white border border-amber-200 rounded-2xl p-5 shadow-xs space-y-4 hover:border-amber-400 transition-all ring-1 ring-amber-400/20"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono font-black text-sm text-emerald-900 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200">
+                        {ord.folio}
+                      </span>
+                      <span
+                        className={`text-xs font-bold px-3 py-1 rounded-full ${
+                          ord.priority === 'Alta'
+                            ? 'bg-rose-100 text-rose-800'
+                            : ord.priority === 'Media'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-emerald-100 text-emerald-800'
+                        }`}
+                      >
+                        Prioridad {ord.priority}
+                      </span>
+                      {ord.scheduledDate && (
+                        <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg flex items-center space-x-1">
+                          <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Programada: {ord.scheduledDate}</span>
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs font-bold text-amber-800 bg-amber-100 px-2.5 py-1 rounded-lg">
+                      ⚠️ Disponible / Sin Asignar
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <h4 className="font-bold text-slate-900 text-lg">{ord.clientName}</h4>
+                        <div className="text-xs font-semibold text-slate-500 flex items-center space-x-1 mt-0.5">
+                          <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>{ord.departmentName || 'Matriz Principal'}</span>
+                        </div>
+                      </div>
+                      {ord.equipmentType && (
+                        <span className="text-xs font-bold text-indigo-800 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-xl">
+                          ⚙️ {ord.equipmentType}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs sm:text-sm text-slate-800 font-medium leading-relaxed">
+                      <span className="font-bold text-slate-400 uppercase text-[10px] block mb-0.5">Descripción de la Falla:</span>
+                      {ord.description}
+                    </div>
+                  </div>
+
+                  {/* Claim Button */}
+                  <div className="pt-2 flex items-center justify-end">
+                    <button
+                      onClick={() => {
+                        const targetTechId = currentTech?.id || loggedInTech?.id || (activeTechId !== 'all' ? activeTechId : undefined);
+                        if (!targetTechId) {
+                          const firstTech = deduplicateTechnicians(technicians).find(t => t.status !== 'Inactivo');
+                          if (firstTech) {
+                            assignTechnician(ord.id, firstTech.id, ord.routeOrder || 1, ord.scheduledDate);
+                            setStatusFeedbackMsg(`¡Orden ${ord.folio} asignada a ${firstTech.name}!`);
+                          }
+                        } else {
+                          assignTechnician(ord.id, targetTechId, ord.routeOrder || 1, ord.scheduledDate);
+                          const myName = currentTech?.name || loggedInTech?.name || 'ti';
+                          setStatusFeedbackMsg(`¡Orden ${ord.folio} tomada y auto-asignada con éxito a ${myName}!`);
+                          setTechMainTab('assigned');
+                        }
+                        setTimeout(() => setStatusFeedbackMsg(null), 5000);
+                      }}
+                      className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-5 py-3 rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center space-x-2"
+                    >
+                      <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
+                      <span>⚡ Tomar esta Orden / Auto-asignarme a mi ruta</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ================= MODAL: CAMBIO DE ESTATUS CON NOTA Y CONFIRMACIÓN ================= */}
       {statusModalOrder && (

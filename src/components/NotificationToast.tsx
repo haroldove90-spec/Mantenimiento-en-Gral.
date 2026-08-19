@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useApp } from '../context/AppContext';
+import { useApp, normalizeStr } from '../context/AppContext';
 import { Bell, X, Wrench, Building2, Crown, UserCheck } from 'lucide-react';
 import { Notification } from '../types';
 
@@ -33,30 +33,31 @@ export const NotificationToast: React.FC = () => {
         // Technician ONLY receives notifications for tech role and for THIS specific technician
         if (latest.targetRole === 'tech') {
           const curId = currentUser?.id || localStorage.getItem('sij_tech_active_filter');
-          const curName = currentUser?.name?.trim().toLowerCase();
-          const curEmail = currentUser?.email?.trim().toLowerCase();
+          const curNameNorm = normalizeStr(currentUser?.name);
+          const curEmailNorm = normalizeStr(currentUser?.email);
 
           // Find current technician record
           const currentTech = technicians.find(
             t =>
               (curId && t.id === curId) ||
-              (curEmail && t.email && t.email.toLowerCase() === curEmail) ||
-              (curName && t.name.toLowerCase() === curName)
+              (curEmailNorm && t.email && normalizeStr(t.email) === curEmailNorm) ||
+              (curNameNorm && t.name && normalizeStr(t.name) === curNameNorm)
           );
 
           if (!latest.targetTechnicianId && !latest.targetTechnicianName) {
             // General technician bulletin
             isForCurrentRole = true;
           } else {
+            const targetNameNorm = normalizeStr(latest.targetTechnicianName);
             const matchId =
               latest.targetTechnicianId &&
               (latest.targetTechnicianId === curId ||
                 latest.targetTechnicianId === currentTech?.id ||
-                latest.targetTechnicianId === currentTech?.name);
+                (currentTech && normalizeStr(latest.targetTechnicianId) === normalizeStr(currentTech.name)));
             const matchName =
-              latest.targetTechnicianName &&
-              ((curName && latest.targetTechnicianName.toLowerCase() === curName) ||
-                (currentTech && latest.targetTechnicianName.toLowerCase() === currentTech.name.toLowerCase()));
+              targetNameNorm &&
+              ((curNameNorm && targetNameNorm === curNameNorm) ||
+                (currentTech && targetNameNorm === normalizeStr(currentTech.name)));
 
             isForCurrentRole = Boolean(matchId || matchName);
           }

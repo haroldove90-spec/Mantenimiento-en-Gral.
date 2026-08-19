@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useApp } from '../context/AppContext';
+import { useApp, normalizeStr } from '../context/AppContext';
 import {
   Building2,
   Wrench,
@@ -34,6 +34,7 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
     ownerSubTab,
     setOwnerSubTab,
     notifications,
+    technicians,
     markNotificationRead,
     logout,
     resetToDemoData,
@@ -49,10 +50,19 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
     if (activeRole === 'tech') {
       if (n.targetRole !== 'tech') return false;
       const curId = currentUser?.id || (typeof localStorage !== 'undefined' ? localStorage.getItem('sij_tech_active_filter') : null);
-      const curName = currentUser?.name?.trim().toLowerCase();
+      const curNameNorm = normalizeStr(currentUser?.name);
+      const curEmailNorm = normalizeStr(currentUser?.email);
+      const matchedTech = technicians.find(
+        t =>
+          (curId && t.id === curId) ||
+          (curEmailNorm && t.email && normalizeStr(t.email) === curEmailNorm) ||
+          (curNameNorm && t.name && normalizeStr(t.name) === curNameNorm)
+      );
+
       if (!n.targetTechnicianId && !n.targetTechnicianName) return true;
-      if (curId && n.targetTechnicianId === curId) return true;
-      if (curName && n.targetTechnicianName && n.targetTechnicianName.toLowerCase() === curName) return true;
+      if (curId && (n.targetTechnicianId === curId || (matchedTech && n.targetTechnicianId === matchedTech.id))) return true;
+      const targetNameNorm = normalizeStr(n.targetTechnicianName);
+      if (curNameNorm && targetNameNorm && (targetNameNorm === curNameNorm || (matchedTech && targetNameNorm === normalizeStr(matchedTech.name)))) return true;
       return false;
     }
     if (activeRole === 'client') {

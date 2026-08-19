@@ -136,6 +136,13 @@ const safeUuid = (str?: string): string | null => {
   return isUuid(str) ? (str as string) : null;
 };
 
+export const normalizeStr = (str?: string | null): string =>
+  (str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
 export const deduplicateTechnicians = (techs: Technician[]): Technician[] => {
   if (!Array.isArray(techs)) return [];
   const result: Technician[] = [];
@@ -147,8 +154,8 @@ export const deduplicateTechnicians = (techs: Technician[]): Technician[] => {
     if (['tech-1', 'tech-2', 'tech-3'].includes(t.id)) continue;
     if (['carlos.tech@mantenimiento.com', 'ana.tech@mantenimiento.com', 'roberto.tech@mantenimiento.com'].includes(t.email)) continue;
 
-    const normName = t.name.trim().toLowerCase();
-    const normEmail = (t.email || '').trim().toLowerCase();
+    const normName = normalizeStr(t.name);
+    const normEmail = normalizeStr(t.email);
 
     // Check if matching technician already exists by email, name, or id
     let matchedKey: string | null = null;
@@ -192,7 +199,7 @@ export const deduplicateTechnicians = (techs: Technician[]): Technician[] => {
   const seenNames = new Set<string>();
   const seenIds = new Set<string>();
   for (const t of byKey.values()) {
-    const normName = (t.name || '').trim().toLowerCase();
+    const normName = normalizeStr(t.name);
     if (!normName) continue;
     if (seenNames.has(normName)) continue;
     if (t.id && seenIds.has(t.id)) continue;
@@ -1290,8 +1297,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ? technicians.find(
           t =>
             t.id === technicianId ||
-            t.name === technicianId ||
-            (t.email && t.email.toLowerCase() === technicianId.toLowerCase())
+            normalizeStr(t.name) === normalizeStr(technicianId) ||
+            (t.email && normalizeStr(t.email) === normalizeStr(technicianId))
         )
       : undefined;
 
@@ -1493,8 +1500,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const tech = technicians.find(
       t =>
         t.id === technicianId ||
-        t.name === technicianId ||
-        (t.email && technicianId && t.email.toLowerCase() === technicianId.toLowerCase())
+        normalizeStr(t.name) === normalizeStr(technicianId) ||
+        (t.email && normalizeStr(t.email) === normalizeStr(technicianId))
     );
     if (!tech) {
       console.warn('Técnico no encontrado para ID/Nombre:', technicianId);

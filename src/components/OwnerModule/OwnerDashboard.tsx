@@ -257,22 +257,25 @@ export const OwnerDashboard: React.FC = () => {
     if (!userName || !userEmail) return;
 
     if (editingUser) {
-      updateSystemUser(editingUser.id, {
-        name: userName,
-        username: userUsername,
-        email: userEmail,
-        password: userPassword,
-        phone: userPhone,
+      const updatePayload: Partial<SystemUser> = {
+        name: userName.trim(),
+        username: userUsername ? userUsername.trim().toLowerCase().replace(/\s+/g, '') : userEmail.split('@')[0].toLowerCase(),
+        email: userEmail.trim().toLowerCase(),
+        phone: userPhone.trim(),
         role: userRole
-      });
+      };
+      if (userPassword && userPassword.trim()) {
+        updatePayload.password = userPassword.trim();
+      }
+      updateSystemUser(editingUser.id, updatePayload);
       setEditingUser(null);
     } else {
       addSystemUser({
-        name: userName,
-        username: userUsername || userEmail.split('@')[0],
-        email: userEmail,
-        password: userPassword || 'Temp1234!',
-        phone: userPhone,
+        name: userName.trim(),
+        username: userUsername ? userUsername.trim().toLowerCase().replace(/\s+/g, '') : userEmail.split('@')[0].toLowerCase(),
+        email: userEmail.trim().toLowerCase(),
+        password: userPassword.trim() || 'Temp1234!',
+        phone: userPhone.trim(),
         role: userRole,
         status: 'Activo'
       });
@@ -280,11 +283,11 @@ export const OwnerDashboard: React.FC = () => {
       // Automatically trigger WhatsApp credentials modal
       setWhatsAppModalData({
         type: userRole === 'tech' ? 'tech' : 'client',
-        recipientName: userName,
-        recipientUsername: userUsername || userEmail.split('@')[0],
-        recipientEmail: userEmail,
-        recipientPhone: userPhone,
-        recipientPassword: userPassword || 'Temp1234!',
+        recipientName: userName.trim(),
+        recipientUsername: userUsername ? userUsername.trim().toLowerCase().replace(/\s+/g, '') : userEmail.split('@')[0].toLowerCase(),
+        recipientEmail: userEmail.trim().toLowerCase(),
+        recipientPhone: userPhone.trim(),
+        recipientPassword: userPassword.trim() || 'Temp1234!',
         specialty: userRole === 'tech' ? 'Técnico de Campo' : userRole === 'office' ? 'Oficina Administrativa' : 'Administrador'
       });
     }
@@ -1671,7 +1674,24 @@ DO $$ BEGIN
     CREATE POLICY "Public Access notifications" ON public.notifications FOR ALL USING (true) WITH CHECK (true);
 END $$;
 
--- 12. HABILITAR PUBLICACIÓN EN TIEMPO REAL (SUPABASE REALTIME)
+-- 12. MIGRACIONES / ACTUALIZACIÓN DE COLUMNAS PARA TABLAS EXISTENTES
+ALTER TABLE public.system_users ADD COLUMN IF NOT EXISTS username TEXT;
+ALTER TABLE public.system_users ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE public.system_users ADD COLUMN IF NOT EXISTS password TEXT;
+ALTER TABLE public.system_users ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Activo';
+ALTER TABLE public.system_users ADD COLUMN IF NOT EXISTS last_login TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS tax_id TEXT DEFAULT 'XAXX010101000';
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS whatsapp TEXT;
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'Regular';
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS credit_limit NUMERIC(12,2) DEFAULT 0;
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS credit_days INTEGER DEFAULT 0;
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS fiscal_address TEXT;
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS delivery_address TEXT;
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS contact_name TEXT;
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS contact_phone TEXT;
+
+-- 13. HABILITAR PUBLICACIÓN EN TIEMPO REAL (SUPABASE REALTIME)
 DO $$ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.service_orders, public.notifications, public.technicians, public.operating_expenses, public.clients;
 EXCEPTION WHEN OTHERS THEN

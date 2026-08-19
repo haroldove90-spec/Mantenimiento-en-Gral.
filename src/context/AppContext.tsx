@@ -600,11 +600,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
 
             const userKey = email || name.toLowerCase();
-            if (userKey && !allUsersMap.has(userKey)) {
+            if (allUsersMap.has(userKey)) {
+              const existing = allUsersMap.get(userKey)!;
+              allUsersMap.set(userKey, {
+                ...existing,
+                username: u.username || existing.username || (email ? email.split('@')[0] : name.toLowerCase()),
+                name: u.name || existing.name,
+                password: u.password || existing.password,
+                phone: u.phone || existing.phone,
+                role: role || existing.role,
+                status: u.status || existing.status,
+                lastLogin: u.last_login ? new Date(u.last_login).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : existing.lastLogin,
+                id: u.id || existing.id
+              });
+            } else if (userKey) {
               allUsersMap.set(userKey, {
                 id: userId,
                 name: u.name || 'Usuario',
-                username: u.username || email.split('@')[0] || name.toLowerCase(),
+                username: u.username || (email ? email.split('@')[0] : name.toLowerCase()),
                 email: u.email || '',
                 password: u.password || '',
                 phone: u.phone || '',
@@ -2152,38 +2165,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateClient = async (id: string, clientData: Partial<Client>) => {
+    let oldClient: Client | undefined;
     setClients(prev =>
-      prev.map(c => (c.id === id ? { ...c, ...clientData } : c))
+      prev.map(c => {
+        if (c.id === id) {
+          oldClient = c;
+          return { ...c, ...clientData };
+        }
+        return c;
+      })
     );
 
     try {
-      const client = clients.find(c => c.id === id);
+      const client = clients.find(c => c.id === id) || oldClient;
       if (client) {
         const updatePayload: any = {
           name: clientData.name ?? client.name,
-          tax_id: clientData.taxId ?? client.taxId,
+          tax_id: clientData.taxId ?? client.taxId ?? 'XAXX010101000',
           contact_name: clientData.name ?? client.name,
           contact_email: clientData.email ?? client.email,
           contact_phone: clientData.phone ?? client.phone ?? 'S/N',
           address: clientData.address ?? client.address,
+          fiscal_address: clientData.fiscalAddress ?? client.fiscalAddress ?? clientData.address ?? client.address,
+          delivery_address: clientData.deliveryAddress ?? client.deliveryAddress ?? clientData.address ?? client.address,
           phone: clientData.phone ?? client.phone,
-          whatsapp: clientData.whatsapp ?? client.whatsapp,
-          model: clientData.model ?? client.model,
-          fault: clientData.fault ?? client.fault,
-          status: clientData.status ?? client.status
+          whatsapp: clientData.whatsapp ?? client.whatsapp ?? clientData.phone ?? client.phone,
+          model: clientData.model ?? client.model ?? '',
+          fault: clientData.fault ?? client.fault ?? '',
+          category: clientData.category ?? client.category ?? 'Regular',
+          credit_limit: Number(clientData.creditLimit ?? client.creditLimit ?? 0),
+          credit_days: Number(clientData.creditDays ?? client.creditDays ?? 0),
+          status: clientData.status ?? client.status ?? 'Activo'
         };
 
-        const { error } = await supabase
-          .from('clients')
-          .update(updatePayload)
-          .or(`id.eq.${id},contact_email.eq.${client.email}`);
-
-        if (error) {
-          // Fallback update
-          await supabase
-            .from('clients')
-            .update({ name: updatePayload.name, contact_name: updatePayload.name })
-            .or(`id.eq.${id},contact_email.eq.${client.email}`);
+        if (isUuid(id)) {
+          await supabase.from('clients').update(updatePayload).eq('id', id);
+        } else {
+          const oldEmail = client.email?.trim().toLowerCase();
+          const oldName = client.name?.trim();
+          if (oldEmail) {
+            await supabase.from('clients').update(updatePayload).ilike('contact_email', oldEmail);
+          } else if (oldName) {
+            await supabase.from('clients').update(updatePayload).ilike('name', oldName);
+          }
         }
       }
     } catch (err) {
@@ -2196,10 +2220,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setClients(prev => prev.filter(c => c.id !== id));
     if (clientToDelete) {
       try {
-        await supabase
-          .from('clients')
-          .delete()
-          .or(`id.eq.${id},contact_email.eq.${clientToDelete.email || 'none'}`);
+        if (isUuid(id)) {
+          await supabase.from('clients').delete().eq('id', id);
+        } else if (clientToDelete.email) {
+          await supabase.from('clients').delete().ilike('contact_email', clientToDelete.email);
+        } else if (clientToDelete.name) {
+          await supabase.from('clients').delete().ilike('name', clientToDelete.name);
+        }
       } catch (e) {
         console.warn('Error borrando cliente en Supabase:', e);
       }
@@ -2285,34 +2312,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateSparePart = async (id: string, partData: Partial<SparePart>) => {
+    let oldPart: SparePart | undefined;
     setSpareParts(prev =>
-      prev.map(p => (p.id === id ? { ...p, ...partData } : p))
+      prev.map(p => {
+        if (p.id === id) {
+          oldPart = p;
+          return { ...p, ...partData };
+        }
+        return p;
+      })
     );
     try {
-      const part = spareParts.find(p => p.id === id);
+      const part = spareParts.find(p => p.id === id) || oldPart;
       if (part) {
         const updatePayload: any = {
           name: partData.name ?? part.name,
           code: partData.code ?? part.code,
           category: partData.category ?? part.category,
-          unit_price: partData.unitPrice ?? part.unitPrice,
-          stock: partData.stock ?? part.stock
+          unit_price: Number(partData.unitPrice ?? part.unitPrice ?? 0),
+          stock: Number(partData.stock ?? part.stock ?? 0)
         };
         if (partData.status !== undefined) {
           updatePayload.status = partData.status;
         }
 
-        const { error } = await supabase
-          .from('spare_parts')
-          .update(updatePayload)
-          .or(`id.eq.${id},code.eq.${part.code}`);
-
-        if (error && error.message.includes('status')) {
-          delete updatePayload.status;
-          await supabase
-            .from('spare_parts')
-            .update(updatePayload)
-            .or(`id.eq.${id},code.eq.${part.code}`);
+        if (isUuid(id)) {
+          const { error } = await supabase.from('spare_parts').update(updatePayload).eq('id', id);
+          if (error && error.message?.includes('status')) {
+            delete updatePayload.status;
+            await supabase.from('spare_parts').update(updatePayload).eq('id', id);
+          }
+        } else if (part.code) {
+          const { error } = await supabase.from('spare_parts').update(updatePayload).eq('code', part.code);
+          if (error && error.message?.includes('status')) {
+            delete updatePayload.status;
+            await supabase.from('spare_parts').update(updatePayload).eq('code', part.code);
+          }
         }
       }
     } catch (e) {
@@ -2332,10 +2367,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSpareParts(prev => prev.filter(p => p.id !== id));
     if (partToDelete) {
       try {
-        await supabase
-          .from('spare_parts')
-          .delete()
-          .or(`id.eq.${id},code.eq.${partToDelete.code}`);
+        if (isUuid(id)) {
+          await supabase.from('spare_parts').delete().eq('id', id);
+        } else if (partToDelete.code) {
+          await supabase.from('spare_parts').delete().eq('code', partToDelete.code);
+        }
       } catch (e) {
         console.warn('Error borrando refacción en Supabase:', e);
       }
@@ -2377,29 +2413,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateService = async (id: string, serviceData: Partial<BusinessService>) => {
+    let oldService: BusinessService | undefined;
     setServices(prev =>
-      prev.map(s => (s.id === id ? { ...s, ...serviceData } : s))
+      prev.map(s => {
+        if (s.id === id) {
+          oldService = s;
+          return { ...s, ...serviceData };
+        }
+        return s;
+      })
     );
     try {
-      const service = services.find(s => s.id === id);
+      const service = services.find(s => s.id === id) || oldService;
       if (service) {
         const updatePayload: any = {
           name: serviceData.name ?? service.name,
           code: serviceData.code ?? service.code,
           category: serviceData.category ?? service.category,
           description: serviceData.description ?? service.description,
-          base_price: serviceData.basePrice ?? service.basePrice,
-          estimated_duration_hours: serviceData.estimatedDurationHours ?? service.estimatedDurationHours,
-          warranty_days: serviceData.warrantyDays ?? service.warrantyDays
+          base_price: Number(serviceData.basePrice ?? service.basePrice ?? 0),
+          estimated_duration_hours: Number(serviceData.estimatedDurationHours ?? service.estimatedDurationHours ?? 1),
+          warranty_days: Number(serviceData.warrantyDays ?? service.warrantyDays ?? 30)
         };
         if (serviceData.status !== undefined) {
           updatePayload.status = serviceData.status;
         }
 
-        await supabase
-          .from('services')
-          .update(updatePayload)
-          .or(`id.eq.${id},code.eq.${service.code}`);
+        if (isUuid(id)) {
+          await supabase.from('services').update(updatePayload).eq('id', id);
+        } else if (service.code) {
+          await supabase.from('services').update(updatePayload).eq('code', service.code);
+        }
       }
     } catch (e) {
       console.warn('Error actualizando servicio en Supabase:', e);
@@ -2418,10 +2462,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setServices(prev => prev.filter(s => s.id !== id));
     if (srvToDelete) {
       try {
-        await supabase
-          .from('services')
-          .delete()
-          .or(`id.eq.${id},code.eq.${srvToDelete.code}`);
+        if (isUuid(id)) {
+          await supabase.from('services').delete().eq('id', id);
+        } else if (srvToDelete.code) {
+          await supabase.from('services').delete().eq('code', srvToDelete.code);
+        }
       } catch (e) {
         console.warn('Error borrando servicio en Supabase:', e);
       }
@@ -2429,11 +2474,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateTechnician = async (id: string, techData: Partial<Technician>) => {
+    let oldTech: Technician | undefined;
     setTechnicians(prev =>
-      prev.map(t => (t.id === id ? { ...t, ...techData } : t))
+      prev.map(t => {
+        if (t.id === id) {
+          oldTech = t;
+          return { ...t, ...techData };
+        }
+        return t;
+      })
     );
     try {
-      const tech = technicians.find(t => t.id === id);
+      const tech = technicians.find(t => t.id === id) || oldTech;
       if (tech) {
         const updatePayload: any = {
           name: techData.name ?? tech.name,
@@ -2444,10 +2496,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           updatePayload.status = techData.status === 'Activo' ? 'Disponible' : techData.status;
         }
 
-        await supabase
-          .from('technicians')
-          .update(updatePayload)
-          .or(`id.eq.${id},name.eq.${tech.name}`);
+        if (isUuid(id)) {
+          await supabase.from('technicians').update(updatePayload).eq('id', id);
+        } else {
+          const targetEmail = (tech.email || '').trim().toLowerCase();
+          const targetName = (tech.name || '').trim();
+          if (targetEmail) {
+            await supabase.from('technicians').update(updatePayload).ilike('email', targetEmail);
+          } else if (targetName) {
+            await supabase.from('technicians').update(updatePayload).ilike('name', targetName);
+          }
+        }
       }
     } catch (e) {
       console.warn('Error actualizando técnico en Supabase:', e);
@@ -2974,12 +3033,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateSystemUser = async (id: string, userData: Partial<SystemUser>) => {
+    let originalUser: SystemUser | null = null;
     let updatedUserRecord: SystemUser | null = null;
 
     setSystemUsers(prev => {
       const next = prev.map(u => {
-        if (u.id === id || (userData.email && u.email?.toLowerCase() === userData.email.toLowerCase())) {
-          const merged = { ...u, ...userData };
+        if (
+          u.id === id ||
+          (userData.email && u.email?.toLowerCase() === userData.email.toLowerCase()) ||
+          (userData.username && u.username?.toLowerCase() === userData.username.toLowerCase())
+        ) {
+          originalUser = u;
+          // Filter out empty password so we never wipe passwords with blank input
+          const cleanUserData = { ...userData };
+          if (cleanUserData.password !== undefined && (!cleanUserData.password || !cleanUserData.password.trim())) {
+            delete cleanUserData.password;
+          }
+          const merged = { ...u, ...cleanUserData };
           updatedUserRecord = merged;
           return merged;
         }
@@ -2990,25 +3060,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     try {
-      const user = systemUsers.find(u => u.id === id) || updatedUserRecord;
+      const user = originalUser || systemUsers.find(u => u.id === id) || updatedUserRecord;
       if (user) {
-        const userEmail = (userData.email ?? user.email ?? '').trim().toLowerCase();
+        const oldEmail = (user.email || '').trim().toLowerCase();
+        const oldUsername = (user.username || '').trim().toLowerCase();
+        const oldName = (user.name || '').trim();
+
+        const userEmail = (userData.email ? userData.email.trim().toLowerCase() : oldEmail) || '';
+        const userUsername = (userData.username ? userData.username.trim().toLowerCase().replace(/\s+/g, '') : oldUsername) || userEmail.split('@')[0];
         const effectiveRole = normalizeRole(userData.role ?? user.role);
-        const effectiveName = userData.name ?? user.name ?? 'Usuario';
-        const effectivePhone = userData.phone ?? user.phone ?? '';
+        const effectiveName = userData.name ? userData.name.trim() : (user.name || 'Usuario');
+        const effectivePhone = userData.phone !== undefined ? userData.phone.trim() : (user.phone || '');
+        const effectivePassword = (userData.password && userData.password.trim()) ? userData.password.trim() : (user.password || 'Temp1234!');
+        const effectiveStatus = (userData.status ?? user.status) === 'Inactivo' ? 'Inactivo' : 'Activo';
 
         // 1. If currentUser is being modified, update active session and activeRole immediately!
         if (
           currentUser &&
           (currentUser.id === id ||
+            (oldEmail && currentUser.email?.toLowerCase() === oldEmail) ||
             (userEmail && currentUser.email?.toLowerCase() === userEmail) ||
-            (user.username && currentUser.username?.toLowerCase() === user.username.toLowerCase()))
+            (oldUsername && currentUser.username?.toLowerCase() === oldUsername) ||
+            (userUsername && currentUser.username?.toLowerCase() === userUsername))
         ) {
           const updatedCurrent: SystemUser = {
             ...currentUser,
             ...userData,
-            role: effectiveRole
+            name: effectiveName,
+            username: userUsername,
+            email: userEmail,
+            role: effectiveRole,
+            phone: effectivePhone,
+            status: effectiveStatus
           };
+          if (userData.password && userData.password.trim()) {
+            updatedCurrent.password = userData.password.trim();
+          }
           setCurrentUser(updatedCurrent);
           localStorage.setItem('app_current_user', JSON.stringify(updatedCurrent));
 
@@ -3019,19 +3106,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
 
-        // 2. Update 'employees' in Supabase
-        await supabase
-          .from('employees')
-          .update({
-            name: effectiveName,
-            role: effectiveRole,
-            phone: effectivePhone,
-            pin: userData.password ?? user.password,
-            is_active: userData.status !== undefined ? userData.status !== 'Inactivo' : user.status !== 'Inactivo'
-          })
-          .ilike('email', userEmail);
+        // 2. Update 'system_users' table in Supabase
+        const sysUserPayload: any = {
+          name: effectiveName,
+          username: userUsername,
+          email: userEmail,
+          password: effectivePassword,
+          phone: effectivePhone,
+          role: effectiveRole,
+          status: effectiveStatus
+        };
 
-        // 3. Technicians table and state synchronization
+        if (isUuid(id)) {
+          const { error: sysErr } = await supabase.from('system_users').update(sysUserPayload).eq('id', id);
+          if (sysErr) {
+            await supabase.from('system_users').update(sysUserPayload).ilike('email', oldEmail || userEmail);
+          }
+        } else {
+          const { data: existingSys } = await supabase
+            .from('system_users')
+            .select('id')
+            .or(`email.ilike.${oldEmail || userEmail},username.ilike.${oldUsername || userUsername}`);
+
+          if (existingSys && existingSys.length > 0) {
+            await supabase.from('system_users').update(sysUserPayload).eq('id', existingSys[0].id);
+          } else {
+            await supabase.from('system_users').insert([sysUserPayload]);
+          }
+        }
+
+        // 3. Update 'employees' table in Supabase
+        const empPayload: any = {
+          name: effectiveName,
+          role: effectiveRole,
+          phone: effectivePhone,
+          pin: effectivePassword,
+          is_active: effectiveStatus === 'Activo'
+        };
+
+        if (isUuid(id)) {
+          await supabase.from('employees').update(empPayload).eq('id', id);
+        } else {
+          await supabase.from('employees').update(empPayload).or(`email.ilike.${oldEmail || userEmail},name.ilike.${oldName || effectiveName}`);
+        }
+
+        // 4. Technicians table and state synchronization
         if (effectiveRole === 'tech') {
           setTechnicians(prev => {
             const filtered = prev.filter(t => (t.email || '').toLowerCase() !== userEmail && (t.name || '').toLowerCase() !== effectiveName.toLowerCase());
@@ -3045,7 +3164,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 specialty: 'Técnico de Campo',
                 activeOrdersCount: 0,
                 avgResponseTimeHours: 2.5,
-                status: (userData.status ?? user.status) === 'Inactivo' ? 'Inactivo' : 'Activo'
+                status: effectiveStatus === 'Inactivo' ? 'Inactivo' : 'Activo'
               }
             ];
           });
@@ -3054,7 +3173,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const { data: existingTech } = await supabase
               .from('technicians')
               .select('id')
-              .or(`email.ilike.${userEmail},name.ilike.${effectiveName}`);
+              .or(`email.ilike.${oldEmail || userEmail},name.ilike.${oldName || effectiveName}`);
 
             if (existingTech && existingTech.length > 0) {
               await supabase
@@ -3064,7 +3183,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   email: userEmail,
                   phone: effectivePhone,
                   specialty: 'Técnico de Campo',
-                  status: 'Disponible'
+                  status: effectiveStatus === 'Inactivo' ? 'Inactivo' : 'Disponible'
                 })
                 .eq('id', existingTech[0].id);
             } else {
@@ -3073,7 +3192,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 email: userEmail,
                 phone: effectivePhone,
                 specialty: 'Técnico de Campo',
-                status: 'Disponible'
+                status: effectiveStatus === 'Inactivo' ? 'Inactivo' : 'Disponible'
               }]);
             }
           } catch (tErr) {
@@ -3086,25 +3205,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             await supabase
               .from('technicians')
               .delete()
-              .or(`email.ilike.${userEmail},name.ilike.${effectiveName}`);
+              .or(`email.ilike.${oldEmail || userEmail},name.ilike.${oldName || effectiveName}`);
           } catch (tErr) {
             console.warn('Silent technician deletion notice on user role change:', tErr);
           }
         }
-
-        // 4. Update 'system_users' in Supabase
-        await supabase
-          .from('system_users')
-          .update({
-            name: effectiveName,
-            username: userData.username ?? user.username,
-            email: userEmail,
-            password: userData.password ?? user.password,
-            phone: effectivePhone,
-            role: effectiveRole,
-            status: userData.status ?? user.status
-          })
-          .ilike('email', userEmail);
       }
     } catch (err) {
       console.error('Error actualizando usuario en Supabase:', err);
@@ -3233,11 +3338,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateExpense = async (id: string, expenseData: Partial<OperatingExpense>) => {
+    let oldExp: OperatingExpense | undefined;
     setExpenses(prev =>
-      prev.map(e => (e.id === id ? { ...e, ...expenseData } : e))
+      prev.map(e => {
+        if (e.id === id) {
+          oldExp = e;
+          return { ...e, ...expenseData };
+        }
+        return e;
+      })
     );
     try {
-      const exp = expenses.find(e => e.id === id);
+      const exp = expenses.find(e => e.id === id) || oldExp;
       if (exp) {
         const updatePayload: any = {
           category: expenseData.category ?? exp.category,
@@ -3247,13 +3359,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           registered_by: expenseData.registeredBy ?? exp.registeredBy
         };
 
-        const { error } = await supabase
-          .from('operating_expenses')
-          .update(updatePayload)
-          .or(`id.eq.${id},description.eq.${exp.description}`);
-
-        if (error) {
-          console.warn('Error actualizando gasto en Supabase:', error);
+        if (isUuid(id)) {
+          await supabase.from('operating_expenses').update(updatePayload).eq('id', id);
+        } else if (exp.description) {
+          await supabase.from('operating_expenses').update(updatePayload).eq('description', exp.description);
         }
       }
     } catch (e) {
@@ -3266,10 +3375,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setExpenses(prev => prev.filter(e => e.id !== id));
     if (expToDelete) {
       try {
-        await supabase
-          .from('operating_expenses')
-          .delete()
-          .or(`id.eq.${id},description.eq.${expToDelete.description}`);
+        if (isUuid(id)) {
+          await supabase.from('operating_expenses').delete().eq('id', id);
+        } else if (expToDelete.description) {
+          await supabase.from('operating_expenses').delete().eq('description', expToDelete.description);
+        }
       } catch (e) {
         console.warn('Error borrando gasto en Supabase:', e);
       }

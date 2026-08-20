@@ -519,6 +519,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Sync data from Supabase on load, on realtime events, and with live polling
   const fetchSupabaseData = async (silent = false) => {
+    let fetchedTechs: Technician[] = [];
+
     // 1. Fetch Employees & Technicians (from 'employees', 'technicians', and 'system_users')
     try {
       // Purge deleted sample demo technicians from Supabase if present
@@ -737,7 +739,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
       }
 
-      const fetchedTechs = deduplicateTechnicians(
+      fetchedTechs = deduplicateTechnicians(
         rawTechCandidates.filter(t => !forbiddenDemoNames.has(t.name.toLowerCase()) && t.status !== 'Inactivo')
       );
       setTechnicians(fetchedTechs);
@@ -768,50 +770,78 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const { data: oData, error: oErr } = await supabase.from('service_orders').select('*').order('created_at', { ascending: false });
       if (!oErr && oData && Array.isArray(oData)) {
-        const mappedOrders: ServiceOrder[] = oData.map((o: any) => ({
-          id: o.id,
-          folio: o.folio || `OS-${Math.floor(1000 + Math.random() * 9000)}`,
-          clientId: o.client_id || '',
-          clientName: o.client_name || 'Cliente',
-          departmentId: o.department_id || '',
-          departmentName: o.department_name || 'Matriz Principal',
-          equipmentType: o.equipment_type || 'General',
-          priority: (o.priority === 'Alta' || o.priority === 'Media' || o.priority === 'Baja') ? o.priority : 'Media',
-          status: (o.status as OrderStatus) || 'Pendiente de Visita',
-          description: o.description || '',
-          technicianId: o.technician_id || undefined,
-          technicianName: o.technician_name || undefined,
-          scheduledDate: o.scheduled_date || new Date().toISOString().split('T')[0],
-          routeOrder: Number(o.route_order || 1),
-          diagnosticNotes: o.diagnostic_notes || '',
-          diagnosticPhotos: Array.isArray(o.diagnostic_photos) ? o.diagnostic_photos : [],
-          requestedParts: Array.isArray(o.requested_parts) ? o.requested_parts : [],
-          solutionNotes: o.solution_notes || '',
-          solutionPhotos: Array.isArray(o.solution_photos) ? o.solution_photos : [],
-          collectedAmount: Number(o.collected_amount || 0),
-          paymentMethod: o.payment_method || undefined,
-          isWarranty: Boolean(o.is_warranty),
-          warrantyNotes: o.warranty_reason || o.warranty_notes || undefined,
-          budget: o.budget || undefined,
-          clientSignature: o.signature_data || o.client_signature || undefined,
-          createdAt: o.created_at ? new Date(o.created_at).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : 'Reciente',
-          timeline: Array.isArray(o.timeline) && o.timeline.length > 0
-            ? o.timeline
-            : [
-                {
-                  id: `tl-${o.id}-init`,
-                  timestamp: o.created_at ? new Date(o.created_at).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : 'Registro',
-                  title: 'Orden de Servicio Registrada',
-                  author: 'Sistema',
-                  note: `Folio: ${o.folio || ''}`
-                }
-              ]
-        }));
+        const mappedOrders: ServiceOrder[] = oData.map((o: any) => {
+          let matchedTechId = o.technician_id;
+          if (!matchedTechId && o.technician_name) {
+            const foundTech = fetchedTechs.find(t => normalizeStr(t.name) === normalizeStr(o.technician_name));
+            if (foundTech) matchedTechId = foundTech.id;
+          }
+          return {
+            id: o.id,
+            folio: o.folio || `OS-${Math.floor(1000 + Math.random() * 9000)}`,
+            clientId: o.client_id || '',
+            clientName: o.client_name || 'Cliente',
+            departmentId: o.department_id || '',
+            departmentName: o.department_name || 'Matriz Principal',
+            equipmentType: o.equipment_type || 'General',
+            priority: (o.priority === 'Alta' || o.priority === 'Media' || o.priority === 'Baja') ? o.priority : 'Media',
+            status: (o.status as OrderStatus) || 'Pendiente de Visita',
+            description: o.description || '',
+            technicianId: matchedTechId || undefined,
+            technicianName: o.technician_name || undefined,
+            scheduledDate: o.scheduled_date || new Date().toISOString().split('T')[0],
+            routeOrder: Number(o.route_order || 1),
+            diagnosticNotes: o.diagnostic_notes || '',
+            diagnosticPhotos: Array.isArray(o.diagnostic_photos) ? o.diagnostic_photos : [],
+            requestedParts: Array.isArray(o.requested_parts) ? o.requested_parts : [],
+            solutionNotes: o.solution_notes || '',
+            solutionPhotos: Array.isArray(o.solution_photos) ? o.solution_photos : [],
+            collectedAmount: Number(o.collected_amount || 0),
+            paymentMethod: o.payment_method || undefined,
+            isWarranty: Boolean(o.is_warranty),
+            warrantyNotes: o.warranty_reason || o.warranty_notes || undefined,
+            budget: o.budget || undefined,
+            clientSignature: o.signature_data || o.client_signature || undefined,
+            createdAt: o.created_at ? new Date(o.created_at).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : 'Reciente',
+            timeline: Array.isArray(o.timeline) && o.timeline.length > 0
+              ? o.timeline
+              : [
+                  {
+                    id: `tl-${o.id}-init`,
+                    timestamp: o.created_at ? new Date(o.created_at).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : 'Registro',
+                    title: 'Orden de Servicio Registrada',
+                    author: 'Sistema',
+                    note: `Folio: ${o.folio || ''}`
+                  }
+                ]
+          };
+        });
 
         setOrders(prev => {
-          const dbFolios = new Set(mappedOrders.map(o => o.folio));
+          // Merge strategy: If local 'prev' has an assigned technician that DB mappedOrder lacks (due to a recent change),
+          // preserve the local assigned technician and schedule until DB confirms it!
+          const mergedList = mappedOrders.map(dbOrd => {
+            const localOrd = prev.find(p => p.folio === dbOrd.folio || p.id === dbOrd.id);
+            if (!localOrd) return dbOrd;
+
+            const resolvedTechName = dbOrd.technicianName || localOrd.technicianName;
+            const resolvedTechId = dbOrd.technicianId || localOrd.technicianId;
+            const resolvedStatus = dbOrd.status || localOrd.status;
+
+            return {
+              ...dbOrd,
+              technicianName: resolvedTechName,
+              technicianId: resolvedTechId,
+              status: resolvedStatus,
+              routeOrder: dbOrd.routeOrder || localOrd.routeOrder,
+              scheduledDate: dbOrd.scheduledDate || localOrd.scheduledDate,
+              timeline: Array.isArray(dbOrd.timeline) && dbOrd.timeline.length > 0 ? dbOrd.timeline : localOrd.timeline
+            };
+          });
+
+          const dbFolios = new Set(mergedList.map(o => o.folio));
           const unsavedLocal = prev.filter(o => o && o.folio && !dbFolios.has(o.folio) && !o.folio.startsWith('SAMPLE-'));
-          const combined = mappedOrders.length > 0 ? [...mappedOrders, ...unsavedLocal] : unsavedLocal;
+          const combined = mergedList.length > 0 ? [...mergedList, ...unsavedLocal] : unsavedLocal;
           localStorage.setItem('app_service_orders', JSON.stringify(combined));
           return combined;
         });
@@ -1145,14 +1175,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if ('department_id' in cleanPayload && !isUuid(cleanPayload.department_id)) delete cleanPayload.department_id;
       if ('technician_id' in cleanPayload && !isUuid(cleanPayload.technician_id)) delete cleanPayload.technician_id;
 
+      // Ensure valid scheduled_date format YYYY-MM-DD
+      if (cleanPayload.scheduled_date) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanPayload.scheduled_date)) {
+          const parsed = new Date(cleanPayload.scheduled_date);
+          if (!isNaN(parsed.getTime())) {
+            cleanPayload.scheduled_date = parsed.toISOString().split('T')[0];
+          } else {
+            cleanPayload.scheduled_date = new Date().toISOString().split('T')[0];
+          }
+        }
+      }
+
+      const folio = fallbackFolio || (orderIdOrFolio && orderIdOrFolio.startsWith('OS-') ? orderIdOrFolio : null);
+
       if (isUuid(orderIdOrFolio)) {
         const { data, error } = await supabase.from('service_orders').update(cleanPayload).eq('id', orderIdOrFolio).select();
         if (!error && data && data.length > 0) return { data, error: null };
       }
-      const folio = fallbackFolio || (orderIdOrFolio && orderIdOrFolio.startsWith('OS-') ? orderIdOrFolio : null);
       if (folio) {
-        return await supabase.from('service_orders').update(cleanPayload).eq('folio', folio).select();
+        const { data, error } = await supabase.from('service_orders').update(cleanPayload).eq('folio', folio).select();
+        if (!error && data && data.length > 0) return { data, error: null };
       }
+
+      // Retry with minimal safe columns if full payload failed
+      const minimalPayload: any = {};
+      if ('technician_name' in cleanPayload) minimalPayload.technician_name = cleanPayload.technician_name;
+      if ('status' in cleanPayload) minimalPayload.status = cleanPayload.status;
+      if ('scheduled_date' in cleanPayload) minimalPayload.scheduled_date = cleanPayload.scheduled_date;
+      if ('route_order' in cleanPayload) minimalPayload.route_order = cleanPayload.route_order;
+
+      if (Object.keys(minimalPayload).length > 0) {
+        if (isUuid(orderIdOrFolio)) {
+          const { data, error } = await supabase.from('service_orders').update(minimalPayload).eq('id', orderIdOrFolio).select();
+          if (!error && data && data.length > 0) return { data, error: null };
+        }
+        if (folio) {
+          const { data, error } = await supabase.from('service_orders').update(minimalPayload).eq('folio', folio).select();
+          if (!error && data && data.length > 0) return { data, error: null };
+        }
+      }
+
       return { data: null, error: null };
     } catch (e) {
       console.warn('updateSupabaseOrder warning:', e);
@@ -1534,13 +1597,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let targetFolio = '';
     let targetClientName = '';
     let targetEquip = '';
+    let currentOrd: ServiceOrder | undefined;
 
-    setOrders(prev =>
-      prev.map(ord => {
+    setOrders(prev => {
+      const next = prev.map(ord => {
         if (ord.id !== orderId && ord.folio !== orderId) return ord;
         targetFolio = ord.folio;
         targetClientName = ord.clientName;
         targetEquip = ord.equipmentType;
+        currentOrd = ord;
         return {
           ...ord,
           technicianId: tech.id,
@@ -1549,10 +1614,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           scheduledDate: scheduledDate || ord.scheduledDate || new Date().toISOString().split('T')[0],
           timeline: [...ord.timeline, newTimelineItem]
         };
-      })
-    );
+      });
+      localStorage.setItem('app_service_orders', JSON.stringify(next));
+      return next;
+    });
 
-    const targetOrd = orders.find(o => o.id === orderId || o.folio === orderId);
+    const targetOrd = currentOrd || orders.find(o => o.id === orderId || o.folio === orderId);
     const finalFolio = targetOrd?.folio || targetFolio;
     const finalClientName = targetOrd?.clientName || targetClientName || 'Cliente';
     const finalEquipment = targetOrd?.equipmentType || targetEquip || 'General';
@@ -1585,10 +1652,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 4. Synchronize immediately with Supabase service_orders
     (async () => {
+      let finalDate = scheduledDate || targetOrd?.scheduledDate || new Date().toISOString().split('T')[0];
+      if (finalDate && !/^\d{4}-\d{2}-\d{2}$/.test(finalDate)) {
+        finalDate = new Date().toISOString().split('T')[0];
+      }
+
       const updatePayload: any = {
         technician_name: tech.name,
-        scheduled_date: scheduledDate || targetOrd?.scheduledDate || new Date().toISOString().split('T')[0],
-        route_order: routeOrder || targetOrd?.routeOrder || 1
+        scheduled_date: finalDate,
+        route_order: Number(routeOrder || targetOrd?.routeOrder || 1)
       };
       if (isUuid(tech.id)) {
         updatePayload.technician_id = tech.id;
@@ -1602,9 +1674,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateOrderRoute = (orderId: string, routeOrder: number, scheduledDate: string, notes?: string) => {
     const nowStr = new Date().toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
-    setOrders(prev =>
-      prev.map(ord => {
-        if (ord.id !== orderId) return ord;
+    let finalFolio = '';
+    setOrders(prev => {
+      const next = prev.map(ord => {
+        if (ord.id !== orderId && ord.folio !== orderId) return ord;
+        finalFolio = ord.folio;
         return {
           ...ord,
           routeOrder,
@@ -1621,8 +1695,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
           ]
         };
-      })
-    );
+      });
+      localStorage.setItem('app_service_orders', JSON.stringify(next));
+      return next;
+    });
+
+    (async () => {
+      let finalDate = scheduledDate || new Date().toISOString().split('T')[0];
+      if (finalDate && !/^\d{4}-\d{2}-\d{2}$/.test(finalDate)) {
+        finalDate = new Date().toISOString().split('T')[0];
+      }
+      await updateSupabaseOrder(orderId, {
+        route_order: Number(routeOrder),
+        scheduled_date: finalDate
+      }, finalFolio);
+    })();
   };
 
   const reopenWarrantyOrder = (orderId: string, warrantyNotes: string) => {

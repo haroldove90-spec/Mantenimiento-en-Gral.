@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useApp, deduplicateTechnicians } from '../../context/AppContext';
+import { useApp, deduplicateTechnicians, normalizeStr } from '../../context/AppContext';
 import { OrderStatus, ServiceOrder } from '../../types';
 import { CreateOrderModal } from './CreateOrderModal';
 import { BudgetGeneratorModal } from './BudgetGeneratorModal';
@@ -776,7 +776,7 @@ export const OfficeDashboard: React.FC = () => {
                           
                           {/* Reassign Tech Dropdown */}
                           <select
-                            value={ord.technicianId || ''}
+                            value={ord.technicianId || uniqueTechnicians.find(t => normalizeStr(t.name) === normalizeStr(ord.technicianName))?.id || ''}
                             onChange={e => {
                               if (e.target.value) {
                                 assignTechnician(ord.id, e.target.value, ord.routeOrder || 1, ord.scheduledDate);
@@ -966,7 +966,7 @@ export const OfficeDashboard: React.FC = () => {
                             <div className="pt-1 border-t border-slate-100 flex items-center justify-between text-[11px]">
                               <span className="text-slate-500 font-bold">👨‍🔧 Técnico:</span>
                               <select
-                                value={ord.technicianId || ''}
+                                value={ord.technicianId || uniqueTechnicians.find(t => normalizeStr(t.name) === normalizeStr(ord.technicianName))?.id || ''}
                                 onChange={e => {
                                   if (e.target.value) {
                                     assignTechnician(ord.id, e.target.value, ord.routeOrder || 1, ord.scheduledDate);
@@ -1311,7 +1311,7 @@ export const OfficeDashboard: React.FC = () => {
                           <span>{assignedTech?.name || ord.technicianName || 'Sin Asignar'}</span>
                         </div>
                         <select
-                          value={ord.technicianId || ''}
+                          value={ord.technicianId || uniqueTechnicians.find(t => normalizeStr(t.name) === normalizeStr(ord.technicianName))?.id || ''}
                           onChange={e => {
                             if (e.target.value) {
                               assignTechnician(ord.id, e.target.value, ord.routeOrder || 1, ord.scheduledDate || selectedRouteDate);
@@ -1658,7 +1658,7 @@ export const OfficeDashboard: React.FC = () => {
                   </span>
                 </div>
                 <select
-                  value={detailOrder.technicianId || ''}
+                  value={detailOrder.technicianId || uniqueTechnicians.find(t => normalizeStr(t.name) === normalizeStr(detailOrder.technicianName))?.id || ''}
                   onChange={e => {
                     const targetTechId = e.target.value;
                     const tech = technicians.find(t => t.id === targetTechId);

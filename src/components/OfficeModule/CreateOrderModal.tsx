@@ -23,7 +23,7 @@ export const CreateOrderModal: React.FC<{ isOpen: boolean; onClose: () => void }
   isOpen,
   onClose
 }) => {
-  const { clients, technicians, createOrder, addClient } = useApp();
+  const { clients, technicians, createOrder, addClient, setSelectedClientOrderFolio } = useApp();
 
   // Mode: existing vs new client
   const [clientMode, setClientMode] = useState<'existing' | 'new'>(
@@ -172,6 +172,10 @@ export const CreateOrderModal: React.FC<{ isOpen: boolean; onClose: () => void }
         clientName: finalClientName,
         departmentName: finalDeptName
       });
+
+      if (newOrder && newOrder.folio) {
+        setSelectedClientOrderFolio(newOrder.folio);
+      }
 
       setSuccessMessage(`¡Orden ${newOrder.folio} generada con éxito para ${finalClientName}!`);
 

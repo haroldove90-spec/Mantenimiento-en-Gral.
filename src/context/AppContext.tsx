@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, SUPABASE_PROJECT_URL } from '../lib/supabase';
 import {
   RoleType,
   ServiceOrder,
@@ -15,7 +15,9 @@ import {
   Budget,
   SystemUser,
   OperatingExpense,
-  normalizeRole
+  normalizeRole,
+  TelemetrySaveRecord,
+  SupabaseConnectionState
 } from '../types';
 import {
   INITIAL_CLIENTS,
@@ -46,6 +48,16 @@ interface AppContextType {
   notifications: Notification[];
   selectedClientOrderFolio: string | null;
   setSelectedClientOrderFolio: (folio: string | null) => void;
+
+  // Supabase Smart Telemetry & Status
+  supabaseStatus: SupabaseConnectionState;
+  telemetryLogs: TelemetrySaveRecord[];
+  latestSaveTelemetry: TelemetrySaveRecord | null;
+  isAuditModalOpen: boolean;
+  setIsAuditModalOpen: (open: boolean) => void;
+  checkSupabaseConnection: (isManual?: boolean) => Promise<SupabaseConnectionState>;
+  dismissSaveTelemetry: () => void;
+  clearTelemetryLogs: () => void;
 
   // Actions
   createOrder: (data: {
@@ -457,6 +469,185 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return [];
     }
   });
+
+  // Supabase Smart Telemetry & Connectivity State
+  const [supabaseStatus, setSupabaseStatus] = useState<SupabaseConnectionState>({
+    isConnected: true,
+    latencyMs: null,
+    lastChecked: null,
+    isChecking: false,
+    errorMessage: null,
+    projectUrl: SUPABASE_PROJECT_URL,
+    totalRecordsCount: undefined
+  });
+
+  const [telemetryLogs, setTelemetryLogs] = useState<TelemetrySaveRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem('app_supabase_telemetry_logs');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [latestSaveTelemetry, setLatestSaveTelemetry] = useState<TelemetrySaveRecord | null>(null);
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
+
+  const formatFullDateTime = (date = new Date()): string => {
+    const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    const dayName = days[date.getDay()];
+    const dd = String(date.getDate()).padStart(2, '0');
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const yyyy = date.getFullYear();
+    const hh = String(date.getHours()).padStart(2, '0');
+    const min = String(date.getMinutes()).padStart(2, '0');
+    const ss = String(date.getSeconds()).padStart(2, '0');
+    return `${dayName}, ${dd}/${mm}/${yyyy} - ${hh}:${min}:${ss}`;
+  };
+
+  const recordTelemetry = (entry: {
+    table: string;
+    action: 'INSERT' | 'UPDATE' | 'DELETE' | 'SYNC' | 'PING';
+    identifier: string;
+    latencyMs: number;
+    preCount?: number;
+    postCount?: number;
+    status: 'success' | 'error';
+    errorMessage?: string;
+  }) => {
+    const deltaCount =
+      entry.preCount !== undefined && entry.postCount !== undefined
+        ? entry.postCount - entry.preCount
+        : undefined;
+
+    const now = new Date();
+    const newRecord: TelemetrySaveRecord = {
+      id: `tel-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      table: entry.table,
+      action: entry.action,
+      identifier: entry.identifier,
+      preCount: entry.preCount,
+      postCount: entry.postCount,
+      deltaCount,
+      latencyMs: Math.max(1, Math.round(entry.latencyMs)),
+      timestamp: now.toISOString(),
+      formattedDate: formatFullDateTime(now),
+      status: entry.status,
+      errorMessage: entry.errorMessage
+    };
+
+    setTelemetryLogs(prev => {
+      const next = [newRecord, ...prev].slice(0, 30);
+      try {
+        localStorage.setItem('app_supabase_telemetry_logs', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    if (entry.action !== 'PING') {
+      setLatestSaveTelemetry(newRecord);
+    }
+    return newRecord;
+  };
+
+  const checkSupabaseConnection = async (isManual = false): Promise<SupabaseConnectionState> => {
+    setSupabaseStatus(prev => ({ ...prev, isChecking: true }));
+    const startTime = performance.now();
+
+    try {
+      const { count, error } = await supabase
+        .from('service_orders')
+        .select('id', { count: 'exact', head: true });
+
+      const latencyMs = Math.max(1, Math.round(performance.now() - startTime));
+      const now = new Date();
+      const formatted = formatFullDateTime(now);
+
+      if (error && error.code !== 'PGRST116') {
+        // Fallback probe
+        const fb = await supabase.from('clients').select('id', { count: 'exact', head: true });
+        if (fb.error) {
+          throw error;
+        }
+      }
+
+      const totalCount = count !== null && count !== undefined ? count : orders.length;
+
+      const newState: SupabaseConnectionState = {
+        isConnected: true,
+        latencyMs,
+        lastChecked: formatted,
+        isChecking: false,
+        errorMessage: null,
+        projectUrl: SUPABASE_PROJECT_URL,
+        totalRecordsCount: totalCount
+      };
+
+      setSupabaseStatus(newState);
+
+      if (isManual) {
+        recordTelemetry({
+          table: 'service_orders',
+          action: 'PING',
+          identifier: `Diagnóstico Manual Supabase (${totalCount} registros)`,
+          latencyMs,
+          status: 'success'
+        });
+      }
+
+      return newState;
+    } catch (err: any) {
+      const latencyMs = Math.max(1, Math.round(performance.now() - startTime));
+      const now = new Date();
+      const formatted = formatFullDateTime(now);
+      const errMsg = err?.message || 'Error de conexión con Supabase';
+
+      const newState: SupabaseConnectionState = {
+        isConnected: false,
+        latencyMs,
+        lastChecked: formatted,
+        isChecking: false,
+        errorMessage: errMsg,
+        projectUrl: SUPABASE_PROJECT_URL,
+        totalRecordsCount: orders.length
+      };
+
+      setSupabaseStatus(newState);
+
+      if (isManual) {
+        recordTelemetry({
+          table: 'sistema',
+          action: 'PING',
+          identifier: 'Fallo de Conexión Supabase',
+          latencyMs,
+          status: 'error',
+          errorMessage: errMsg
+        });
+      }
+
+      return newState;
+    }
+  };
+
+  const dismissSaveTelemetry = () => {
+    setLatestSaveTelemetry(null);
+  };
+
+  const clearTelemetryLogs = () => {
+    setTelemetryLogs([]);
+    localStorage.removeItem('app_supabase_telemetry_logs');
+  };
+
+  // Heartbeat monitoring every 25 seconds in background
+  useEffect(() => {
+    checkSupabaseConnection(false);
+
+    const interval = setInterval(() => {
+      checkSupabaseConnection(false);
+    }, 25000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const realtimeChannelRef = useRef<any>(null);
 
@@ -1244,6 +1435,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Resilient helper to update an order in Supabase without throwing UUID cast errors
   const updateSupabaseOrder = async (orderIdOrFolio: string, payload: any, fallbackFolio?: string) => {
+    const startTime = performance.now();
+    const folio = fallbackFolio || (orderIdOrFolio && orderIdOrFolio.startsWith('OS-') ? orderIdOrFolio : null);
     try {
       const cleanPayload: any = { ...payload };
       if ('client_id' in cleanPayload && !isUuid(cleanPayload.client_id)) delete cleanPayload.client_id;
@@ -1262,44 +1455,87 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
 
-      const folio = fallbackFolio || (orderIdOrFolio && orderIdOrFolio.startsWith('OS-') ? orderIdOrFolio : null);
+      let resData: any = null;
+      let resError: any = null;
 
       if (isUuid(orderIdOrFolio)) {
         const { data, error } = await supabase.from('service_orders').update(cleanPayload).eq('id', orderIdOrFolio).select();
-        if (!error && data && data.length > 0) return { data, error: null };
+        if (!error && data && data.length > 0) {
+          resData = data;
+        } else {
+          resError = error;
+        }
       }
-      if (folio) {
+      if (!resData && folio) {
         const { data, error } = await supabase.from('service_orders').update(cleanPayload).eq('folio', folio).select();
-        if (!error && data && data.length > 0) return { data, error: null };
+        if (!error && data && data.length > 0) {
+          resData = data;
+          resError = null;
+        } else {
+          resError = error;
+        }
       }
 
       // Retry with minimal safe columns if full payload failed
-      const minimalPayload: any = {};
-      if ('technician_name' in cleanPayload) minimalPayload.technician_name = cleanPayload.technician_name;
-      if ('status' in cleanPayload) minimalPayload.status = cleanPayload.status;
-      if ('scheduled_date' in cleanPayload) minimalPayload.scheduled_date = cleanPayload.scheduled_date;
-      if ('route_order' in cleanPayload) minimalPayload.route_order = cleanPayload.route_order;
+      if (!resData) {
+        const minimalPayload: any = {};
+        if ('technician_name' in cleanPayload) minimalPayload.technician_name = cleanPayload.technician_name;
+        if ('status' in cleanPayload) minimalPayload.status = cleanPayload.status;
+        if ('scheduled_date' in cleanPayload) minimalPayload.scheduled_date = cleanPayload.scheduled_date;
+        if ('route_order' in cleanPayload) minimalPayload.route_order = cleanPayload.route_order;
 
-      if (Object.keys(minimalPayload).length > 0) {
-        if (isUuid(orderIdOrFolio)) {
-          const { data, error } = await supabase.from('service_orders').update(minimalPayload).eq('id', orderIdOrFolio).select();
-          if (!error && data && data.length > 0) return { data, error: null };
-        }
-        if (folio) {
-          const { data, error } = await supabase.from('service_orders').update(minimalPayload).eq('folio', folio).select();
-          if (!error && data && data.length > 0) return { data, error: null };
+        if (Object.keys(minimalPayload).length > 0) {
+          if (isUuid(orderIdOrFolio)) {
+            const { data, error } = await supabase.from('service_orders').update(minimalPayload).eq('id', orderIdOrFolio).select();
+            if (!error && data && data.length > 0) {
+              resData = data;
+              resError = null;
+            }
+          }
+          if (!resData && folio) {
+            const { data, error } = await supabase.from('service_orders').update(minimalPayload).eq('folio', folio).select();
+            if (!error && data && data.length > 0) {
+              resData = data;
+              resError = null;
+            }
+          }
         }
       }
 
-      return { data: null, error: null };
-    } catch (e) {
+      const latencyMs = Math.max(1, Math.round(performance.now() - startTime));
+      recordTelemetry({
+        table: 'service_orders',
+        action: 'UPDATE',
+        identifier: `Folio: ${folio || orderIdOrFolio}`,
+        latencyMs,
+        preCount: orders.length,
+        postCount: orders.length,
+        status: resError ? 'error' : 'success',
+        errorMessage: resError?.message
+      });
+
+      return { data: resData, error: resError };
+    } catch (e: any) {
       console.warn('updateSupabaseOrder warning:', e);
+      const latencyMs = Math.max(1, Math.round(performance.now() - startTime));
+      recordTelemetry({
+        table: 'service_orders',
+        action: 'UPDATE',
+        identifier: `Folio: ${folio || orderIdOrFolio}`,
+        latencyMs,
+        preCount: orders.length,
+        postCount: orders.length,
+        status: 'error',
+        errorMessage: e?.message || 'Error en actualización'
+      });
       return { data: null, error: e };
     }
   };
 
   // Resilient helper to insert an order in Supabase without schema or column mismatches
   const insertSupabaseOrder = async (order: ServiceOrder): Promise<{ data: any; error: any }> => {
+    const startTime = performance.now();
+    const preCount = orders.length;
     try {
       if (!order || !order.folio) return { data: null, error: null };
       // Ignore only mock sample folios
@@ -1342,6 +1578,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const { data, error } = await supabase.from('service_orders').insert([fullPayload]).select();
       if (!error && data && data.length > 0) {
+        const latencyMs = Math.max(1, Math.round(performance.now() - startTime));
+        recordTelemetry({
+          table: 'service_orders',
+          action: 'INSERT',
+          identifier: `Folio: ${order.folio} (${order.clientName})`,
+          latencyMs,
+          preCount,
+          postCount: preCount + 1,
+          status: 'success'
+        });
         return { data, error: null };
       }
 
@@ -1360,24 +1606,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (isUuid(order.clientId)) corePayload.client_id = order.clientId;
 
       const { data: coreData, error: coreErr } = await supabase.from('service_orders').insert([corePayload]).select();
+      const latencyMs = Math.max(1, Math.round(performance.now() - startTime));
+      recordTelemetry({
+        table: 'service_orders',
+        action: 'INSERT',
+        identifier: `Folio: ${order.folio} (${order.clientName})`,
+        latencyMs,
+        preCount,
+        postCount: coreErr ? preCount : preCount + 1,
+        status: coreErr ? 'error' : 'success',
+        errorMessage: coreErr?.message
+      });
       return { data: coreData, error: coreErr };
-    } catch (e) {
+    } catch (e: any) {
       console.warn('insertSupabaseOrder warning:', e);
+      const latencyMs = Math.max(1, Math.round(performance.now() - startTime));
+      recordTelemetry({
+        table: 'service_orders',
+        action: 'INSERT',
+        identifier: `Folio: ${order.folio} (${order.clientName})`,
+        latencyMs,
+        preCount,
+        postCount: preCount,
+        status: 'error',
+        errorMessage: e?.message || 'Error en inserción'
+      });
       return { data: null, error: e };
     }
   };
 
   // Resilient helper to delete an order from Supabase
   const deleteSupabaseOrder = async (orderIdOrFolio: string, fallbackFolio?: string) => {
+    const startTime = performance.now();
+    const preCount = orders.length;
     try {
+      let res: any;
       if (isUuid(orderIdOrFolio)) {
-        return await supabase.from('service_orders').delete().eq('id', orderIdOrFolio);
+        res = await supabase.from('service_orders').delete().eq('id', orderIdOrFolio);
       }
       const folio = fallbackFolio || (orderIdOrFolio && orderIdOrFolio.startsWith('OS-') ? orderIdOrFolio : null);
-      if (folio) {
-        return await supabase.from('service_orders').delete().eq('folio', folio);
+      if (!res && folio) {
+        res = await supabase.from('service_orders').delete().eq('folio', folio);
       }
-    } catch (e) {
+
+      const latencyMs = Math.max(1, Math.round(performance.now() - startTime));
+      recordTelemetry({
+        table: 'service_orders',
+        action: 'DELETE',
+        identifier: `Orden Eliminada: ${folio || orderIdOrFolio}`,
+        latencyMs,
+        preCount,
+        postCount: Math.max(0, preCount - 1),
+        status: res?.error ? 'error' : 'success',
+        errorMessage: res?.error?.message
+      });
+      return res;
+    } catch (e: any) {
       console.warn('deleteSupabaseOrder error:', e);
     }
   };
@@ -3694,6 +3978,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         notifications,
         selectedClientOrderFolio,
         setSelectedClientOrderFolio,
+        supabaseStatus,
+        telemetryLogs,
+        latestSaveTelemetry,
+        isAuditModalOpen,
+        setIsAuditModalOpen,
+        checkSupabaseConnection,
+        dismissSaveTelemetry,
+        clearTelemetryLogs,
         createOrder,
         updateOrderStatus,
         assignTechnician,

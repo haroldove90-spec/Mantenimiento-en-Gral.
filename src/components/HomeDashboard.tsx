@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { RoleType } from '../types';
 import { Building2, Wrench, UserCheck, ArrowRight, Crown, Smartphone, Info, Trash2, RotateCcw, ShieldAlert } from 'lucide-react';
 import { UserAuthModal } from './UserAuthModal';
+import { SupabaseSmartButton } from './SupabaseSmartButton';
 
 export const HomeDashboard: React.FC = () => {
   const { setActiveRole, setOwnerSubTab, setOfficeSubTab, clearSampleData, resetToDemoData, currentUser, setCurrentUser, logout } = useApp();
@@ -146,6 +147,9 @@ export const HomeDashboard: React.FC = () => {
           <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
             Plataforma Integral de Servicios Técnicos y Operaciones
           </p>
+          <div className="mt-2.5 flex justify-center">
+            <SupabaseSmartButton variant="pill" />
+          </div>
         </div>
 
         {/* Global Access CTA Buttons */}

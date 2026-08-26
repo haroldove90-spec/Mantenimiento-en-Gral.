@@ -8,9 +8,11 @@ import { TechMobileView } from './components/TechModule/TechMobileView';
 import { ClientPortalView } from './components/ClientModule/ClientPortalView';
 import { CreateOrderModal } from './components/OfficeModule/CreateOrderModal';
 import { NotificationToast } from './components/NotificationToast';
+import { SaveTelemetryToast } from './components/SaveTelemetryToast';
+import { SupabaseAuditModal } from './components/SupabaseAuditModal';
 
 function MainContent() {
-  const { activeRole, currentUser } = useApp();
+  const { activeRole, currentUser, isAuditModalOpen, setIsAuditModalOpen } = useApp();
   const [isNavCreateOpen, setIsNavCreateOpen] = useState(false);
 
   // RBAC Guard: Restrict views based on currentUser role
@@ -47,6 +49,15 @@ function MainContent() {
 
       {/* Global Real-time Notification Banner / Toast */}
       <NotificationToast />
+
+      {/* Global Supabase Save Telemetry Toast */}
+      <SaveTelemetryToast />
+
+      {/* Global Supabase Audit & Diagnostics Modal */}
+      <SupabaseAuditModal
+        isOpen={isAuditModalOpen}
+        onClose={() => setIsAuditModalOpen(false)}
+      />
 
       {/* Clean Subtle Footer */}
       <footer className={`${activeRole !== 'home' ? 'lg:pl-64 pb-20 lg:pb-0' : ''} border-t border-slate-200 bg-white py-3 text-center text-xs text-slate-500 no-print`}>

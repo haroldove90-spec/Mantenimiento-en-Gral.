@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp, normalizeStr } from '../context/AppContext';
+import { SupabaseSmartButton } from './SupabaseSmartButton';
 import {
   Building2,
   Wrench,
@@ -510,6 +511,11 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
             </button>
           )}
 
+          {/* Supabase Intelligent Button / Live Status & Diagnostics */}
+          <div className="pt-1">
+            <SupabaseSmartButton variant="full" className="w-full" />
+          </div>
+
           <div className="flex items-center space-x-2.5 px-1 text-slate-400 text-[11px]">
             <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
             <span className="font-semibold text-slate-300">SIJ Sistema Activo</span>
@@ -532,7 +538,7 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
             <div>
               <span className="text-xs sm:text-sm font-bold text-sij-cyan block leading-tight">{getRoleName()}</span>
               {currentUser && (
-                <span className="text-[10px] text-slate-300 font-semibold block truncate max-w-[130px]">
+                <span className="text-[10px] text-slate-300 font-semibold block truncate max-w-[110px] sm:max-w-[140px]">
                   👤 {currentUser.name || currentUser.username}
                 </span>
               )}
@@ -540,6 +546,9 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
           </div>
 
           <div className="flex items-center space-x-1.5 shrink-0">
+            {/* Supabase Smart Pulse Status Button */}
+            <SupabaseSmartButton variant="compact" />
+
             {/* Notifications Button */}
             <button
               onClick={() => setShowNotifMenu(!showNotifMenu)}

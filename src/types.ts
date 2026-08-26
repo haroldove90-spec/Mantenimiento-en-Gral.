@@ -221,3 +221,28 @@ export interface Notification {
   targetTechnicianName?: string;
   targetClientId?: string;
 }
+
+export interface TelemetrySaveRecord {
+  id: string;
+  table: string;
+  action: 'INSERT' | 'UPDATE' | 'DELETE' | 'SYNC' | 'PING';
+  identifier: string;
+  preCount?: number;
+  postCount?: number;
+  deltaCount?: number;
+  latencyMs: number;
+  timestamp: string;
+  formattedDate: string;
+  status: 'success' | 'error';
+  errorMessage?: string;
+}
+
+export interface SupabaseConnectionState {
+  isConnected: boolean;
+  latencyMs: number | null;
+  lastChecked: string | null;
+  isChecking: boolean;
+  errorMessage?: string | null;
+  projectUrl: string;
+  totalRecordsCount?: number;
+}

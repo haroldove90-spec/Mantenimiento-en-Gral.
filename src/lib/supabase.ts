@@ -28,5 +28,6 @@ const rawKey = env.VITE_SUPABASE_ANON_KEY;
 const SUPABASE_URL = sanitizeUrl(rawUrl);
 const SUPABASE_ANON_KEY = isValidKey(rawKey) ? rawKey : FALLBACK_KEY;
 
+export const SUPABASE_PROJECT_URL = SUPABASE_URL;
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 

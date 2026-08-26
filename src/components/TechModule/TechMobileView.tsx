@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useApp, deduplicateTechnicians, normalizeStr } from '../../context/AppContext';
+import { useApp, deduplicateTechnicians, normalizeStr, getOrderClientInfo } from '../../context/AppContext';
 import { ServiceOrder, OrderStatus } from '../../types';
 import { InspectionDiagnosticsModal } from './InspectionDiagnosticsModal';
 import { ExecutionAndCloseModal } from './ExecutionAndCloseModal';
@@ -30,7 +30,13 @@ import {
   FileSpreadsheet,
   Users,
   Briefcase,
-  Zap
+  Zap,
+  Phone,
+  Mail,
+  MessageCircle,
+  ExternalLink,
+  Building,
+  User
 } from 'lucide-react';
 
 export const TechMobileView: React.FC = () => {
@@ -38,6 +44,7 @@ export const TechMobileView: React.FC = () => {
     orders,
     technicians,
     notifications,
+    clients,
     currentUser,
     updateOrderStatus,
     assignTechnician,
@@ -565,6 +572,7 @@ export const TechMobileView: React.FC = () => {
             {sortedOrders.map(ord => {
               const isApproved = ord.budget?.status === 'Aprobado';
               const currentGroup = getStatusGroup(ord.status);
+              const clientInfo = getOrderClientInfo(ord, clients);
 
               return (
                 <div
@@ -636,10 +644,10 @@ export const TechMobileView: React.FC = () => {
                   <div className="space-y-3">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
-                        <h4 className="font-bold text-slate-900 text-lg">{ord.clientName}</h4>
+                        <h4 className="font-bold text-slate-900 text-lg">{clientInfo.name}</h4>
                         <div className="text-xs font-semibold text-slate-500 flex items-center space-x-1 mt-0.5">
                           <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          <span>{ord.departmentName || 'Matriz Principal'}</span>
+                          <span>{clientInfo.departmentName}</span>
                         </div>
                       </div>
 
@@ -648,6 +656,109 @@ export const TechMobileView: React.FC = () => {
                           ⚙️ {ord.equipmentType}
                         </span>
                       )}
+                    </div>
+
+                    {/* Ficha Completa de Datos del Cliente Registrado */}
+                    <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-4 space-y-3 shadow-2xs">
+                      <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
+                        <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center space-x-1.5">
+                          <Building className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>Datos Completos del Cliente</span>
+                        </span>
+                        {clientInfo.taxId && clientInfo.taxId !== 'XAXX010101000' && (
+                          <span className="text-[10px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                            RFC: {clientInfo.taxId}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        {/* Dirección con acceso a Mapas */}
+                        <div className="flex items-start space-x-2.5">
+                          <div className="w-7 h-7 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 mt-0.5">
+                            <MapPin className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0 space-y-1">
+                            <span className="font-bold text-slate-500 uppercase text-[10px] block">Dirección / Ubicación:</span>
+                            <p className="font-bold text-slate-900 text-xs sm:text-sm leading-snug break-words">
+                              {clientInfo.address}
+                            </p>
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(clientInfo.address)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center space-x-1 text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1 rounded-lg transition-all"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              <span>Abrir en Google Maps / Waze</span>
+                            </a>
+                          </div>
+                        </div>
+
+                        {/* Teléfono & WhatsApp con llamada y mensaje en 1 clic */}
+                        <div className="flex items-start space-x-2.5">
+                          <div className="w-7 h-7 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                            <Phone className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0 space-y-1">
+                            <span className="font-bold text-slate-500 uppercase text-[10px] block">Teléfono / WhatsApp:</span>
+                            <p className="font-black text-slate-900 text-xs sm:text-sm">
+                              {clientInfo.phone || 'Sin número registrado'}
+                            </p>
+                            {clientInfo.phone && (
+                              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                                <a
+                                  href={`tel:${clientInfo.phone.replace(/[^0-9+]/g, '')}`}
+                                  className="inline-flex items-center space-x-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-lg transition-all"
+                                >
+                                  <Phone className="w-3 h-3" />
+                                  <span>Llamar</span>
+                                </a>
+                                <a
+                                  href={`https://wa.me/${clientInfo.whatsapp.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hola, soy el técnico asignado a su orden ${ord.folio}.`)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center space-x-1 text-[11px] font-bold text-emerald-900 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 px-2 py-0.5 rounded-lg transition-all"
+                                >
+                                  <MessageCircle className="w-3 h-3 text-emerald-700" />
+                                  <span>WhatsApp</span>
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Contacto en sitio */}
+                        <div className="flex items-start space-x-2.5">
+                          <div className="w-7 h-7 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0 mt-0.5">
+                            <User className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <span className="font-bold text-slate-500 uppercase text-[10px] block">Contacto en Sitio:</span>
+                            <p className="font-bold text-slate-800 text-xs">
+                              {clientInfo.contactName}
+                            </p>
+                            <span className="text-[11px] text-slate-500 font-medium block">
+                              Sucursal: {clientInfo.departmentName}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Correo Electrónico */}
+                        {clientInfo.email && (
+                          <div className="flex items-start space-x-2.5">
+                            <div className="w-7 h-7 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0 mt-0.5">
+                              <Mail className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <span className="font-bold text-slate-500 uppercase text-[10px] block">Correo Electrónico:</span>
+                              <p className="font-medium text-slate-700 text-xs break-all">
+                                {clientInfo.email}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     {/* Assigned Tech Attribution & Quick Claim */}
@@ -839,7 +950,10 @@ export const TechMobileView: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {unassignedOrders.map(ord => (
+              {unassignedOrders.map(ord => {
+                const clientInfo = getOrderClientInfo(ord, clients);
+
+                return (
                 <div
                   key={ord.id}
                   className="bg-white border border-amber-200 rounded-2xl p-5 shadow-xs space-y-4 hover:border-amber-400 transition-all ring-1 ring-amber-400/20"
@@ -872,13 +986,13 @@ export const TechMobileView: React.FC = () => {
                     </span>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
-                        <h4 className="font-bold text-slate-900 text-lg">{ord.clientName}</h4>
+                        <h4 className="font-bold text-slate-900 text-lg">{clientInfo.name}</h4>
                         <div className="text-xs font-semibold text-slate-500 flex items-center space-x-1 mt-0.5">
                           <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          <span>{ord.departmentName || 'Matriz Principal'}</span>
+                          <span>{clientInfo.departmentName}</span>
                         </div>
                       </div>
                       {ord.equipmentType && (
@@ -886,6 +1000,55 @@ export const TechMobileView: React.FC = () => {
                           ⚙️ {ord.equipmentType}
                         </span>
                       )}
+                    </div>
+
+                    {/* Ficha Completa del Cliente */}
+                    <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-3 space-y-2 text-xs">
+                      <div className="flex items-center justify-between pb-1 border-b border-amber-200/60">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-amber-900 flex items-center space-x-1">
+                          <Building className="w-3 h-3 text-amber-700" />
+                          <span>Datos de Contacto y Ubicación</span>
+                        </span>
+                        {clientInfo.taxId && clientInfo.taxId !== 'XAXX010101000' && (
+                          <span className="text-[10px] font-bold text-slate-600">RFC: {clientInfo.taxId}</span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="flex items-start space-x-2">
+                          <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0 mt-0.5" />
+                          <div className="min-w-0">
+                            <span className="font-bold text-slate-700 text-[11px] block">Dirección:</span>
+                            <span className="text-slate-800 font-medium block leading-tight">{clientInfo.address}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start space-x-2">
+                          <Phone className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                          <div className="min-w-0">
+                            <span className="font-bold text-slate-700 text-[11px] block">Teléfono:</span>
+                            <span className="text-slate-900 font-bold block">{clientInfo.phone || 'S/N'}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start space-x-2">
+                          <User className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+                          <div className="min-w-0">
+                            <span className="font-bold text-slate-700 text-[11px] block">Contacto en Sitio:</span>
+                            <span className="text-slate-800 font-medium block">{clientInfo.contactName}</span>
+                          </div>
+                        </div>
+
+                        {clientInfo.email && (
+                          <div className="flex items-start space-x-2">
+                            <Mail className="w-3.5 h-3.5 text-purple-600 shrink-0 mt-0.5" />
+                            <div className="min-w-0">
+                              <span className="font-bold text-slate-700 text-[11px] block">Correo:</span>
+                              <span className="text-slate-600 truncate block">{clientInfo.email}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs sm:text-sm text-slate-800 font-medium leading-relaxed">
@@ -920,7 +1083,8 @@ export const TechMobileView: React.FC = () => {
                     </button>
                   </div>
                 </div>
-              ))}
+              );
+              })}
             </div>
           )}
         </div>

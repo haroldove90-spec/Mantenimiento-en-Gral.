@@ -161,6 +161,23 @@ export const CreateOrderModal: React.FC<{ isOpen: boolean; onClose: () => void }
       }
 
       // 2. Create the Service Order
+      const currentDept = currentClient?.departments?.find(d => d.id === selectedDepartmentId);
+      const finalClientAddress = clientMode === 'new'
+        ? (newClientAddress.trim() || 'Ubicación General')
+        : (currentDept?.address || currentClient?.address || currentClient?.deliveryAddress || currentClient?.fiscalAddress || '');
+      const finalClientPhone = clientMode === 'new'
+        ? (newClientPhone.trim() || 'S/N')
+        : (currentDept?.phone || currentClient?.phone || currentClient?.whatsapp || '');
+      const finalClientContact = clientMode === 'new'
+        ? (newClientContact.trim() || newClientName.trim())
+        : (currentDept?.contactName || currentClient?.name || '');
+      const finalClientEmail = clientMode === 'new'
+        ? (newClientEmail.trim() || '')
+        : (currentClient?.email || '');
+      const finalClientTaxId = clientMode === 'new'
+        ? 'XAXX010101000'
+        : (currentClient?.taxId || 'XAXX010101000');
+
       const newOrder = createOrder({
         clientId: finalClientId,
         departmentId: finalDepartmentId || `dept-${finalClientId}-1`,
@@ -170,7 +187,12 @@ export const CreateOrderModal: React.FC<{ isOpen: boolean; onClose: () => void }
         technicianId: technicianId || undefined,
         scheduledDate,
         clientName: finalClientName,
-        departmentName: finalDeptName
+        departmentName: finalDeptName,
+        clientAddress: finalClientAddress,
+        clientPhone: finalClientPhone,
+        clientEmail: finalClientEmail,
+        clientContact: finalClientContact,
+        clientTaxId: finalClientTaxId
       });
 
       if (newOrder && newOrder.folio) {
@@ -373,6 +395,72 @@ export const CreateOrderModal: React.FC<{ isOpen: boolean; onClose: () => void }
                         )}
                       </select>
                     </div>
+
+                    {/* Live Preview of Registered Client Data Sent to Technician */}
+                    {currentClient && (() => {
+                      const curDept = currentClient.departments?.find(d => d.id === selectedDepartmentId);
+                      const addr = curDept?.address || currentClient.address || currentClient.deliveryAddress || currentClient.fiscalAddress || 'Sin dirección registrada';
+                      const ph = curDept?.phone || currentClient.phone || currentClient.whatsapp || 'Sin teléfono';
+                      const contact = curDept?.contactName || currentClient.name || 'Encargado en sitio';
+                      const em = currentClient.email || 'Sin correo';
+                      const rfc = currentClient.taxId || 'XAXX010101000';
+
+                      return (
+                        <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-3.5 space-y-2.5 mt-2 shadow-2xs">
+                          <div className="flex items-center justify-between pb-1.5 border-b border-emerald-200/70">
+                            <span className="text-[11px] font-black uppercase tracking-wider text-emerald-950 flex items-center space-x-1.5">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <span>Datos del Cliente Registrado (Visibles para el Técnico)</span>
+                            </span>
+                            <span className="text-[10px] font-bold text-emerald-800 bg-white px-2 py-0.5 rounded-md border border-emerald-200">
+                              RFC: {rfc}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                            <div className="flex items-start space-x-2">
+                              <div className="w-5 h-5 rounded-md bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 mt-0.5">
+                                <MapPin className="w-3 h-3" />
+                              </div>
+                              <div className="min-w-0">
+                                <span className="font-bold text-slate-800 text-[11px] block">Dirección de Atención:</span>
+                                <span className="text-slate-700 font-medium leading-tight block break-words">{addr}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-start space-x-2">
+                              <div className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                                <Phone className="w-3 h-3" />
+                              </div>
+                              <div className="min-w-0">
+                                <span className="font-bold text-slate-800 text-[11px] block">Teléfono / WhatsApp:</span>
+                                <span className="text-slate-900 font-bold block">{ph}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-start space-x-2">
+                              <div className="w-5 h-5 rounded-md bg-blue-100 text-blue-700 flex items-center justify-center shrink-0 mt-0.5">
+                                <User className="w-3 h-3" />
+                              </div>
+                              <div className="min-w-0">
+                                <span className="font-bold text-slate-800 text-[11px] block">Contacto en Sitio:</span>
+                                <span className="text-slate-700 font-semibold block">{contact}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-start space-x-2">
+                              <div className="w-5 h-5 rounded-md bg-purple-100 text-purple-700 flex items-center justify-center shrink-0 mt-0.5">
+                                <Mail className="w-3 h-3" />
+                              </div>
+                              <div className="min-w-0">
+                                <span className="font-bold text-slate-800 text-[11px] block">Correo:</span>
+                                <span className="text-slate-600 block truncate">{em}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </>
                 )}
               </div>

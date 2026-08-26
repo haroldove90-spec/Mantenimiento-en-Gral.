@@ -142,6 +142,13 @@ export interface ServiceOrder {
   scheduledDate?: string; // YYYY-MM-DD
   routeNotes?: string;
 
+  // Client contact and location details (stored directly on the order)
+  clientAddress?: string;
+  clientPhone?: string;
+  clientEmail?: string;
+  clientContact?: string;
+  clientTaxId?: string;
+
   // Tech inspection data
   diagnosticPhotos: string[];
   diagnosticNotes?: string;

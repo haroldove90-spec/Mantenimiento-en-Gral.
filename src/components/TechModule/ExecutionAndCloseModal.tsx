@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { useApp } from '../../context/AppContext';
+import { useApp, getOrderClientInfo } from '../../context/AppContext';
 import { ServiceOrder, PaymentMethod } from '../../types';
 import {
   X,
@@ -15,7 +15,11 @@ import {
   Smartphone,
   Laptop,
   Trash2,
-  Eye
+  Eye,
+  MapPin,
+  Phone,
+  User,
+  Building
 } from 'lucide-react';
 
 // Helper to compress image and convert to Base64
@@ -55,7 +59,8 @@ export const ExecutionAndCloseModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
 }> = ({ order, isOpen, onClose }) => {
-  const { submitTechResolution } = useApp();
+  const { submitTechResolution, clients } = useApp();
+  const clientInfo = getOrderClientInfo(order, clients);
 
   const totalToCollect = order.budget?.grandTotal || 0;
 
@@ -223,6 +228,29 @@ export const ExecutionAndCloseModal: React.FC<{
         {/* Scrollable Form Body */}
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
           <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4 text-xs">
+
+            {/* Client Info Summary */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2 shadow-2xs">
+              <div className="flex items-center justify-between border-b border-slate-200 pb-1.5">
+                <span className="font-bold text-slate-900 text-xs flex items-center space-x-1.5">
+                  <Building className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{clientInfo.name}</span>
+                </span>
+                <span className="text-[10px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                  {clientInfo.departmentName}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-700 text-xs">
+                <div className="flex items-start space-x-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0 mt-0.5" />
+                  <span className="leading-tight font-medium text-slate-800 break-words">{clientInfo.address}</span>
+                </div>
+                <div className="flex items-start space-x-1.5">
+                  <Phone className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                  <span className="font-bold text-slate-900">{clientInfo.contactName} ({clientInfo.phone || 'S/N'})</span>
+                </div>
+              </div>
+            </div>
 
             {/* Budget Approval Banner */}
             <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 text-xs text-emerald-900 flex items-center space-x-3 shadow-2xs">

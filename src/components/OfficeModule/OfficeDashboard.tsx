@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useApp, deduplicateTechnicians, normalizeStr } from '../../context/AppContext';
+import { useApp, deduplicateTechnicians, normalizeStr, getOrderClientInfo } from '../../context/AppContext';
 import { OrderStatus, ServiceOrder } from '../../types';
 import { CreateOrderModal } from './CreateOrderModal';
 import { BudgetGeneratorModal } from './BudgetGeneratorModal';
@@ -1695,10 +1695,59 @@ export const OfficeDashboard: React.FC = () => {
                 </select>
               </div>
 
-              <div>
-                <span className="font-bold text-slate-700 block">Ubicación / Departamento:</span>
-                <span className="text-slate-600 font-medium">{detailOrder.departmentName}</span>
-              </div>
+              {/* Client Info Card */}
+              {(() => {
+                const cliInfo = getOrderClientInfo(detailOrder, clients);
+                return (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2.5 shadow-2xs">
+                    <div className="flex items-center justify-between pb-1 border-b border-slate-200">
+                      <span className="font-bold text-slate-800 text-xs flex items-center space-x-1.5">
+                        <Building2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>{cliInfo.name}</span>
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                        {cliInfo.departmentName}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs text-slate-700">
+                      <div className="flex items-start space-x-2">
+                        <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-bold text-slate-500 text-[10px] block">Dirección:</span>
+                          <span className="font-medium text-slate-900 leading-snug">{cliInfo.address}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start space-x-2">
+                        <Phone className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-bold text-slate-500 text-[10px] block">Teléfono / WhatsApp:</span>
+                          <span className="font-bold text-slate-900">{cliInfo.phone || 'S/N'}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start space-x-2">
+                        <Users className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-bold text-slate-500 text-[10px] block">Contacto en Sitio:</span>
+                          <span className="font-medium text-slate-900">{cliInfo.contactName}</span>
+                        </div>
+                      </div>
+
+                      {cliInfo.email && (
+                        <div className="flex items-start space-x-2">
+                          <Send className="w-3.5 h-3.5 text-purple-600 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="font-bold text-slate-500 text-[10px] block">Correo:</span>
+                            <span className="font-medium text-slate-700 truncate block">{cliInfo.email}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div>
                 <span className="font-bold text-slate-700 block">Tipo de Equipo:</span>

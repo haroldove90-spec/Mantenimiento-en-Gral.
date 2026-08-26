@@ -56,6 +56,13 @@ interface AppContextType {
     priority: PriorityType;
     technicianId?: string;
     scheduledDate?: string;
+    clientName?: string;
+    departmentName?: string;
+    clientAddress?: string;
+    clientPhone?: string;
+    clientEmail?: string;
+    clientContact?: string;
+    clientTaxId?: string;
   }) => ServiceOrder;
 
   updateOrderStatus: (orderId: string, newStatus: OrderStatus, note?: string, authorName?: string) => void;
@@ -209,6 +216,64 @@ export const deduplicateTechnicians = (techs: Technician[]): Technician[] => {
   }
 
   return result;
+};
+
+export interface ResolvedClientInfo {
+  name: string;
+  departmentName: string;
+  address: string;
+  phone: string;
+  whatsapp: string;
+  email: string;
+  contactName: string;
+  taxId: string;
+}
+
+export const getOrderClientInfo = (order: ServiceOrder, clients: Client[]): ResolvedClientInfo => {
+  const directClient = clients.find(
+    c => c.id === order.clientId || (c.name && order.clientName && normalizeStr(c.name) === normalizeStr(order.clientName))
+  );
+  const directDept = directClient?.departments?.find(d => d.id === order.departmentId);
+
+  const name = order.clientName || directClient?.name || 'Cliente General';
+  const departmentName = order.departmentName || directDept?.name || 'Matriz Principal';
+  const address =
+    order.clientAddress ||
+    directDept?.address ||
+    directClient?.address ||
+    directClient?.deliveryAddress ||
+    directClient?.fiscalAddress ||
+    'Ubicación en sitio del cliente';
+  const phone =
+    order.clientPhone ||
+    directDept?.phone ||
+    directClient?.phone ||
+    directClient?.whatsapp ||
+    '';
+  const whatsapp =
+    directClient?.whatsapp ||
+    order.clientPhone ||
+    directDept?.phone ||
+    directClient?.phone ||
+    '';
+  const email = order.clientEmail || directClient?.email || '';
+  const contactName =
+    order.clientContact ||
+    directDept?.contactName ||
+    directClient?.name ||
+    'Encargado en sitio';
+  const taxId = order.clientTaxId || directClient?.taxId || 'XAXX010101000';
+
+  return {
+    name,
+    departmentName,
+    address,
+    phone,
+    whatsapp,
+    email,
+    contactName,
+    taxId
+  };
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -796,6 +861,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             requestedParts: Array.isArray(o.requested_parts) ? o.requested_parts : [],
             solutionNotes: o.solution_notes || '',
             solutionPhotos: Array.isArray(o.solution_photos) ? o.solution_photos : [],
+            clientAddress: o.client_address || o.delivery_address || o.address || undefined,
+            clientPhone: o.client_phone || o.phone || o.whatsapp || undefined,
+            clientEmail: o.client_email || o.email || o.contact_email || undefined,
+            clientContact: o.client_contact || o.contact_name || undefined,
+            clientTaxId: o.client_tax_id || o.tax_id || undefined,
             collectedAmount: Number(o.collected_amount || 0),
             paymentMethod: o.payment_method || undefined,
             isWarranty: Boolean(o.is_warranty),
@@ -830,6 +900,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
             return {
               ...dbOrd,
+              clientAddress: dbOrd.clientAddress || localOrd.clientAddress,
+              clientPhone: dbOrd.clientPhone || localOrd.clientPhone,
+              clientEmail: dbOrd.clientEmail || localOrd.clientEmail,
+              clientContact: dbOrd.clientContact || localOrd.clientContact,
+              clientTaxId: dbOrd.clientTaxId || localOrd.clientTaxId,
               technicianName: resolvedTechName,
               technicianId: resolvedTechId,
               status: resolvedStatus,
@@ -1235,6 +1310,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const fullPayload: any = {
         folio: order.folio,
         client_name: order.clientName || 'Cliente',
+        department_name: order.departmentName || 'Matriz Principal',
+        client_address: order.clientAddress || null,
+        client_phone: order.clientPhone || null,
+        client_email: order.clientEmail || null,
+        client_contact: order.clientContact || null,
+        client_tax_id: order.clientTaxId || null,
         equipment_type: order.equipmentType || 'General',
         description: order.description || '',
         priority: order.priority || 'Media',
@@ -1355,7 +1436,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     technicianId,
     scheduledDate,
     clientName,
-    departmentName
+    departmentName,
+    clientAddress,
+    clientPhone,
+    clientEmail,
+    clientContact,
+    clientTaxId
   }: {
     clientId: string;
     departmentId: string;
@@ -1366,6 +1452,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     scheduledDate?: string;
     clientName?: string;
     departmentName?: string;
+    clientAddress?: string;
+    clientPhone?: string;
+    clientEmail?: string;
+    clientContact?: string;
+    clientTaxId?: string;
   }): ServiceOrder => {
     const client = clients.find(c => c.id === clientId);
     const department = client?.departments?.find(d => d.id === departmentId);
@@ -1393,6 +1484,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const finalClientName = client?.name || clientName || 'Cliente';
     const finalDeptName = department?.name || departmentName || 'Matriz Principal';
+    const finalAddress =
+      clientAddress ||
+      department?.address ||
+      client?.address ||
+      client?.deliveryAddress ||
+      client?.fiscalAddress ||
+      '';
+    const finalPhone =
+      clientPhone ||
+      department?.phone ||
+      client?.phone ||
+      client?.whatsapp ||
+      '';
+    const finalEmail = clientEmail || client?.email || '';
+    const finalContact =
+      clientContact ||
+      department?.contactName ||
+      client?.name ||
+      '';
+    const finalTaxId = clientTaxId || client?.taxId || 'XAXX010101000';
 
     const newOrder: ServiceOrder = {
       id: `ord-${Date.now()}`,
@@ -1401,6 +1512,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       clientName: finalClientName,
       departmentId,
       departmentName: finalDeptName,
+      clientAddress: finalAddress || undefined,
+      clientPhone: finalPhone || undefined,
+      clientEmail: finalEmail || undefined,
+      clientContact: finalContact || undefined,
+      clientTaxId: finalTaxId || undefined,
       equipmentType: equipmentType || 'Equipo General',
       description,
       priority,

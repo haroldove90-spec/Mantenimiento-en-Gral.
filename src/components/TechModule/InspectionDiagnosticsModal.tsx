@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useApp } from '../../context/AppContext';
+import { useApp, getOrderClientInfo } from '../../context/AppContext';
 import { ServiceOrder, RequestedPart } from '../../types';
 import {
   X,
@@ -16,7 +16,12 @@ import {
   RefreshCw,
   Video,
   Smartphone,
-  Laptop
+  Laptop,
+  MapPin,
+  Phone,
+  User,
+  Building,
+  ExternalLink
 } from 'lucide-react';
 
 // Helper to compress image and convert to Base64
@@ -56,7 +61,8 @@ export const InspectionDiagnosticsModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
 }> = ({ order, isOpen, onClose }) => {
-  const { startInspection, submitTechDiagnostic, spareParts } = useApp();
+  const { startInspection, submitTechDiagnostic, spareParts, clients } = useApp();
+  const clientInfo = getOrderClientInfo(order, clients);
 
   const [notes, setNotes] = useState(order.diagnosticNotes || '');
   const [photos, setPhotos] = useState<string[]>(order.diagnosticPhotos || []);
@@ -272,6 +278,55 @@ export const InspectionDiagnosticsModal: React.FC<{
         {/* Scrollable Form Body */}
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
           <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-5 text-xs">
+
+            {/* Client Information Header Card */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2.5 shadow-2xs">
+              <div className="flex items-center justify-between border-b border-slate-200 pb-1.5">
+                <span className="font-bold text-slate-800 text-xs flex items-center space-x-1.5">
+                  <Building className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{clientInfo.name}</span>
+                </span>
+                <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                  {clientInfo.departmentName}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-700">
+                <div className="flex items-start space-x-2">
+                  <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <span className="font-bold text-[10px] text-slate-500 block">Dirección:</span>
+                    <p className="font-medium text-slate-900 leading-snug break-words">{clientInfo.address}</p>
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(clientInfo.address)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center space-x-1 text-[10px] font-bold text-rose-700 mt-0.5 hover:underline"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      <span>Abrir Navegador GPS</span>
+                    </a>
+                  </div>
+                </div>
+
+                <div className="flex items-start space-x-2">
+                  <Phone className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <span className="font-bold text-[10px] text-slate-500 block">Contacto & Teléfono:</span>
+                    <p className="font-bold text-slate-900">{clientInfo.contactName} ({clientInfo.phone || 'S/N'})</p>
+                    {clientInfo.phone && (
+                      <a
+                        href={`tel:${clientInfo.phone.replace(/[^0-9+]/g, '')}`}
+                        className="inline-flex items-center space-x-1 text-[10px] font-bold text-emerald-700 mt-0.5 hover:underline"
+                      >
+                        <Phone className="w-3 h-3" />
+                        <span>Llamar al cliente</span>
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
 
             {/* Start Inspection Banner */}
             {order.status === 'Pendiente de Revisión' && (

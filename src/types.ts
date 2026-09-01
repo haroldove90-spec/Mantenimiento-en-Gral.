@@ -36,6 +36,7 @@ export type OrderStatus =
   | 'Presupuesto Pendiente'
   | 'Esperando Aprobación'
   | 'En Reparación'
+  | 'Pendiente de Entrega'
   | 'Cobrado/Cerrado'
   | 'Garantía Reabierta';
 

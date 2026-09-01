@@ -59,6 +59,7 @@ const STAGES: OrderStatus[] = [
   'Presupuesto Pendiente',
   'Esperando Aprobación',
   'En Reparación',
+  'Pendiente de Entrega',
   'Cobrado/Cerrado',
   'Garantía Reabierta'
 ];
@@ -710,7 +711,9 @@ export const OfficeDashboard: React.FC = () => {
                               updateOrderStatus(ord.id, newSt, 'Estatus modificado directamente por Administración');
                             }}
                             className={`px-3 py-1.5 rounded-xl text-xs font-black border cursor-pointer focus:outline-hidden transition-all shadow-2xs ${
-                              ord.status === 'Garantía Reabierta'
+                              ord.status === 'Pendiente de Entrega'
+                                ? 'bg-amber-300 text-slate-950 border-amber-500 ring-1 ring-amber-400'
+                                : ord.status === 'Garantía Reabierta'
                                 ? 'bg-amber-100 text-amber-900 border-amber-300'
                                 : ord.status === 'Cobrado/Cerrado'
                                 ? 'bg-emerald-100 text-emerald-800 border-emerald-300'

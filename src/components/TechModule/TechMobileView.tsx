@@ -36,7 +36,11 @@ import {
   MessageCircle,
   ExternalLink,
   Building,
-  User
+  User,
+  DollarSign,
+  Truck,
+  PackageCheck,
+  Receipt
 } from 'lucide-react';
 
 export const TechMobileView: React.FC = () => {
@@ -176,6 +180,7 @@ export const TechMobileView: React.FC = () => {
         o.status === 'Pendiente de Visita' ||
         o.status === 'Presupuesto Pendiente' ||
         o.status === 'Esperando Aprobación' ||
+        o.status === 'Pendiente de Entrega' ||
         o.status === 'Garantía Reabierta' ||
         (o.status as any) === 'Recepción Inicial' ||
         (o.status as any) === 'Asignada'
@@ -236,7 +241,7 @@ export const TechMobileView: React.FC = () => {
   // Helper to categorize status into the 3 core pillars: Pendiente, En Proceso, Terminado
   const getStatusGroup = (status: OrderStatus): 'pending' | 'in_progress' | 'completed' => {
     if (status === 'Cobrado/Cerrado') return 'completed';
-    if (status === 'En Diagnóstico' || status === 'En Reparación') return 'in_progress';
+    if (status === 'En Diagnóstico' || status === 'En Reparación' || status === 'Pendiente de Entrega') return 'in_progress';
     return 'pending';
   };
 
@@ -267,7 +272,7 @@ export const TechMobileView: React.FC = () => {
     if (group === 'pending') {
       newSt = 'Pendiente de Visita';
     } else if (group === 'in_progress') {
-      newSt = order.budget?.status === 'Aprobado' ? 'En Reparación' : 'En Diagnóstico';
+      newSt = order.status === 'Pendiente de Entrega' ? 'Pendiente de Entrega' : order.budget?.status === 'Aprobado' ? 'En Reparación' : 'En Diagnóstico';
     } else if (group === 'completed') {
       newSt = 'Cobrado/Cerrado';
     }
@@ -282,6 +287,7 @@ export const TechMobileView: React.FC = () => {
     'Presupuesto Pendiente',
     'Esperando Aprobación',
     'En Reparación',
+    'Pendiente de Entrega',
     'Cobrado/Cerrado',
     'Garantía Reabierta'
   ];
@@ -620,7 +626,9 @@ export const TechMobileView: React.FC = () => {
                         value={ord.status}
                         onChange={e => handleOpenStatusModal(ord, e.target.value as OrderStatus)}
                         className={`text-xs font-bold rounded-xl px-3 py-1.5 border cursor-pointer outline-hidden transition-all shadow-2xs ${
-                          ord.status === 'Cobrado/Cerrado'
+                          ord.status === 'Pendiente de Entrega'
+                            ? 'bg-amber-400 text-slate-950 font-black border-amber-500 ring-2 ring-amber-400/50 shadow-md animate-pulse'
+                            : ord.status === 'Cobrado/Cerrado'
                             ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
                             : ord.status === 'En Reparación'
                             ? 'bg-blue-100 text-blue-900 border-blue-300'
@@ -632,8 +640,8 @@ export const TechMobileView: React.FC = () => {
                         }`}
                       >
                         {ALL_STATUSES.map(st => (
-                          <option key={st} value={st} className="bg-white text-slate-900">
-                            {st}
+                          <option key={st} value={st} className="bg-white text-slate-900 font-medium">
+                            {st === 'Pendiente de Entrega' ? '📦 Pendiente de Entrega (Cobro Activo)' : st}
                           </option>
                         ))}
                       </select>
@@ -792,12 +800,84 @@ export const TechMobileView: React.FC = () => {
                     </div>
 
                     {/* Budget approval alert */}
-                    {isApproved && ord.status !== 'Cobrado/Cerrado' && (
+                    {isApproved && ord.status !== 'Cobrado/Cerrado' && ord.status !== 'Pendiente de Entrega' && (
                       <div className="bg-emerald-600 text-white p-3.5 rounded-xl text-xs sm:text-sm font-bold flex items-center space-x-2.5 shadow-xs">
                         <CheckCircle2 className="w-5 h-5 shrink-0" />
                         <span>¡Presupuesto APROBADO por el Cliente! Puedes iniciar la reparación o concluir la orden.</span>
                       </div>
                     )}
+
+                    {/* ================= SECCIÓN EXCLUSIVA: CUÁNTO COBRAR AL CLIENTE (ÚNICAMENTE CUANDO ESTÁ EN PENDIENTE DE ENTREGA) ================= */}
+                    {ord.status === 'Pendiente de Entrega' && (() => {
+                      const partsSub = (ord.budget?.parts || []).reduce((s, p) => s + (p.quantity || 1) * (p.estimatedUnitPrice || 0), 0);
+                      const labor = ord.budget?.laborCost || 0;
+                      const subtotal = labor + partsSub;
+                      const tax = subtotal * (ord.budget?.taxRate ?? 0.16);
+                      const grandTotal = ord.budget?.grandTotal || (subtotal > 0 ? subtotal + tax : ord.collectedAmount || 0);
+
+                      return (
+                        <div className="bg-gradient-to-br from-amber-500 via-amber-400 to-yellow-500 text-slate-950 p-4 sm:p-5 rounded-2xl border-2 border-amber-600 shadow-md space-y-3 animate-in fade-in slide-in-from-top-2">
+                          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-600/30 pb-2.5">
+                            <div className="flex items-center space-x-2.5">
+                              <div className="w-9 h-9 rounded-xl bg-slate-950 text-amber-400 flex items-center justify-center font-black shadow-xs shrink-0">
+                                <DollarSign className="w-5 h-5" />
+                              </div>
+                              <div>
+                                <div className="text-[10px] uppercase font-black tracking-wider text-slate-900 flex items-center space-x-1">
+                                  <Truck className="w-3.5 h-3.5" />
+                                  <span>Estatus: Pendiente de Entrega</span>
+                                </div>
+                                <h4 className="text-base sm:text-lg font-black text-slate-950 leading-tight">
+                                  💵 Cuánto Cobrar al Cliente al Entregar
+                                </h4>
+                              </div>
+                            </div>
+                            <div className="text-right bg-slate-950 text-amber-300 px-4 py-2 rounded-xl border border-amber-400/40 shadow-inner">
+                              <span className="text-[10px] font-bold block text-amber-200/80 uppercase">Total a Cobrar</span>
+                              <span className="text-xl sm:text-2xl font-black tracking-tight">
+                                ${grandTotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs font-bold text-amber-400">MXN</span>
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Desglose rápido del cobro */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                            <div className="bg-white/90 backdrop-blur-xs p-2.5 rounded-xl border border-amber-600/20">
+                              <span className="text-[10px] font-bold text-slate-600 uppercase block">Mano de Obra</span>
+                              <span className="font-extrabold text-slate-900 text-sm">
+                                ${labor.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                            <div className="bg-white/90 backdrop-blur-xs p-2.5 rounded-xl border border-amber-600/20">
+                              <span className="text-[10px] font-bold text-slate-600 uppercase block">Refacciones ({ord.budget?.parts?.length || 0})</span>
+                              <span className="font-extrabold text-slate-900 text-sm">
+                                ${partsSub.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                            <div className="bg-white/90 backdrop-blur-xs p-2.5 rounded-xl border border-amber-600/20">
+                              <span className="text-[10px] font-bold text-slate-600 uppercase block">IVA (16%)</span>
+                              <span className="font-extrabold text-slate-900 text-sm">
+                                ${tax.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                            <div className="bg-slate-950 text-amber-300 p-2.5 rounded-xl border border-amber-500/30 flex flex-col justify-center">
+                              <span className="text-[10px] font-bold text-amber-200/70 uppercase block">Cobro en Entrega</span>
+                              <span className="font-black text-sm text-emerald-400 flex items-center space-x-1">
+                                <Receipt className="w-3.5 h-3.5 text-emerald-400" />
+                                <span>Por Liquidar</span>
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center justify-between text-xs font-bold text-slate-950 pt-1">
+                            <span className="flex items-center space-x-1.5">
+                              <PackageCheck className="w-4 h-4 text-slate-900 shrink-0" />
+                              <span>Equipo reparado listo para entrega. Cobra este monto exacto al cliente y registra el cierre.</span>
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* ================= PRIMARY STATUS CONTROL BAR (PENDIENTE, EN PROCESO, TERMINADO) ================= */}
@@ -1133,15 +1213,47 @@ export const TechMobileView: React.FC = () => {
               <select
                 value={targetNewStatus}
                 onChange={e => setTargetNewStatus(e.target.value as OrderStatus)}
-                className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-xs font-bold rounded-xl p-3 focus:ring-2 focus:ring-emerald-500 outline-hidden"
+                className={`w-full border text-xs font-black rounded-xl p-3 focus:ring-2 focus:ring-emerald-500 outline-hidden transition-all ${
+                  targetNewStatus === 'Pendiente de Entrega'
+                    ? 'bg-amber-400 text-slate-950 border-amber-500 ring-2 ring-amber-400/40 shadow-sm'
+                    : 'bg-slate-50 border-slate-300 text-slate-900'
+                }`}
               >
                 {ALL_STATUSES.map(st => (
-                  <option key={st} value={st}>
-                    {st}
+                  <option key={st} value={st} className="bg-white text-slate-900 font-medium">
+                    {st === 'Pendiente de Entrega' ? '📦 Pendiente de Entrega (Cobro Activo)' : st}
                   </option>
                 ))}
               </select>
             </div>
+
+            {/* PREVISUALIZACIÓN DE CUÁNTO COBRAR AL SELECCIONAR PENDIENTE DE ENTREGA */}
+            {targetNewStatus === 'Pendiente de Entrega' && (() => {
+              const partsSub = (statusModalOrder.budget?.parts || []).reduce((s, p) => s + (p.quantity || 1) * (p.estimatedUnitPrice || 0), 0);
+              const labor = statusModalOrder.budget?.laborCost || 0;
+              const subtotal = labor + partsSub;
+              const tax = subtotal * (statusModalOrder.budget?.taxRate ?? 0.16);
+              const grandTotal = statusModalOrder.budget?.grandTotal || (subtotal > 0 ? subtotal + tax : statusModalOrder.collectedAmount || 0);
+
+              return (
+                <div className="bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 text-slate-950 p-3.5 rounded-2xl border border-amber-600 shadow-sm space-y-2 animate-in zoom-in-95">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <DollarSign className="w-5 h-5 text-slate-950 shrink-0" />
+                      <span className="font-black text-xs uppercase tracking-wider">Monto a Cobrar al Entregar:</span>
+                    </div>
+                    <span className="font-black text-lg text-slate-950 bg-white/90 px-3 py-1 rounded-xl border border-amber-600/30">
+                      ${grandTotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-[11px] font-bold text-slate-800 border-t border-amber-600/30 pt-1.5 px-1">
+                    <span>Mano de obra: ${labor.toLocaleString('es-MX')}</span>
+                    <span>Refacciones: ${partsSub.toLocaleString('es-MX')}</span>
+                    <span>IVA: ${tax.toLocaleString('es-MX')}</span>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Optional Note / Observaciones */}
             <div className="space-y-1.5">

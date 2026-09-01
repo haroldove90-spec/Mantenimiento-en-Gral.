@@ -150,6 +150,8 @@ export const ClientPortalView: React.FC = () => {
               className={`inline-block px-3.5 py-1.5 rounded-full text-xs font-black shadow-xs ${
                 currentOrder.status === 'Cobrado/Cerrado'
                   ? 'bg-emerald-500 text-white'
+                  : currentOrder.status === 'Pendiente de Entrega'
+                  ? 'bg-amber-400 text-slate-950 ring-2 ring-amber-400/50 animate-pulse'
                   : currentOrder.status === 'En Reparación' || currentOrder.status === 'En Diagnóstico'
                   ? 'bg-blue-500 text-white'
                   : budget?.status === 'Aprobado'
@@ -159,7 +161,17 @@ export const ClientPortalView: React.FC = () => {
                   : 'bg-amber-400 text-slate-950'
               }`}
             >
-              {currentOrder.status === 'Cobrado/Cerrado' ? '✅ Servicio Terminado' : currentOrder.status === 'En Reparación' ? '⚡ En Reparación' : currentOrder.status === 'En Diagnóstico' ? '🔍 En Diagnóstico' : budget?.status ? `Presupuesto ${budget.status}` : '⏳ ' + currentOrder.status}
+              {currentOrder.status === 'Cobrado/Cerrado' 
+                ? '✅ Servicio Terminado' 
+                : currentOrder.status === 'Pendiente de Entrega'
+                ? '📦 Pendiente de Entrega / Cobro'
+                : currentOrder.status === 'En Reparación' 
+                ? '⚡ En Reparación' 
+                : currentOrder.status === 'En Diagnóstico' 
+                ? '🔍 En Diagnóstico' 
+                : budget?.status 
+                ? `Presupuesto ${budget.status}` 
+                : '⏳ ' + currentOrder.status}
             </span>
             <span className="text-[11px] text-slate-400">Técnico Asignado: <strong>{currentOrder.technicianName || 'Por Asignar'}</strong></span>
           </div>
@@ -169,7 +181,7 @@ export const ClientPortalView: React.FC = () => {
         <div className="bg-slate-800/60 border-y border-slate-700/50 p-4 px-6">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-xs">
             <div className={`p-2 rounded-xl flex flex-col items-center ${
-              currentOrder.status === 'Pendiente de Visita' || currentOrder.status === 'Presupuesto Pendiente' || currentOrder.status === 'Esperando Aprobación' || currentOrder.status === 'En Diagnóstico' || currentOrder.status === 'En Reparación' || currentOrder.status === 'Cobrado/Cerrado'
+              currentOrder.status === 'Pendiente de Visita' || currentOrder.status === 'Presupuesto Pendiente' || currentOrder.status === 'Esperando Aprobación' || currentOrder.status === 'En Diagnóstico' || currentOrder.status === 'En Reparación' || currentOrder.status === 'Pendiente de Entrega' || currentOrder.status === 'Cobrado/Cerrado'
                 ? 'bg-purple-950/70 border border-purple-700/60 text-purple-200'
                 : 'text-slate-500'
             }`}>
@@ -178,7 +190,7 @@ export const ClientPortalView: React.FC = () => {
             </div>
 
             <div className={`p-2 rounded-xl flex flex-col items-center ${
-              currentOrder.status === 'En Diagnóstico' || currentOrder.status === 'Presupuesto Pendiente' || currentOrder.status === 'Esperando Aprobación' || currentOrder.status === 'En Reparación' || currentOrder.status === 'Cobrado/Cerrado'
+              currentOrder.status === 'En Diagnóstico' || currentOrder.status === 'Presupuesto Pendiente' || currentOrder.status === 'Esperando Aprobación' || currentOrder.status === 'En Reparación' || currentOrder.status === 'Pendiente de Entrega' || currentOrder.status === 'Cobrado/Cerrado'
                 ? 'bg-indigo-950/70 border border-indigo-700/60 text-indigo-200'
                 : 'text-slate-500'
             }`}>
@@ -187,7 +199,7 @@ export const ClientPortalView: React.FC = () => {
             </div>
 
             <div className={`p-2 rounded-xl flex flex-col items-center ${
-              currentOrder.status === 'En Reparación' || currentOrder.status === 'Cobrado/Cerrado'
+              currentOrder.status === 'En Reparación' || currentOrder.status === 'Pendiente de Entrega' || currentOrder.status === 'Cobrado/Cerrado'
                 ? 'bg-blue-950/70 border border-blue-700/60 text-blue-200'
                 : currentOrder.status === 'Esperando Aprobación'
                 ? 'bg-amber-950/70 border border-amber-500 text-amber-200 ring-2 ring-amber-400/40 animate-pulse'
@@ -200,10 +212,12 @@ export const ClientPortalView: React.FC = () => {
             <div className={`p-2 rounded-xl flex flex-col items-center ${
               currentOrder.status === 'Cobrado/Cerrado'
                 ? 'bg-emerald-950/70 border border-emerald-500 text-emerald-200 ring-2 ring-emerald-400/40'
+                : currentOrder.status === 'Pendiente de Entrega'
+                ? 'bg-amber-950/70 border border-amber-500 text-amber-200 ring-2 ring-amber-400/40 animate-pulse'
                 : 'text-slate-500'
             }`}>
               <span className="font-bold text-[10px] uppercase tracking-wider">Paso 4</span>
-              <span className="font-extrabold mt-0.5">4. Concluido / Terminado</span>
+              <span className="font-extrabold mt-0.5">{currentOrder.status === 'Pendiente de Entrega' ? '4. Listo para Entrega' : '4. Concluido / Terminado'}</span>
             </div>
           </div>
         </div>

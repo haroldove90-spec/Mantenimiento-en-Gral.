@@ -106,7 +106,9 @@ export interface Budget {
   id: string;
   laborCost: number;
   parts: RequestedPart[];
-  taxRate: number; // e.g. 0.16 for 16%
+  taxRate: number; // e.g. 0.16 for 16% or 0 for no IVA
+  includeTax?: boolean;
+  grandTotal?: number;
   notes?: string;
   status: 'Borrador' | 'Enviado' | 'Aprobado' | 'Rechazado';
   sentAt?: string;

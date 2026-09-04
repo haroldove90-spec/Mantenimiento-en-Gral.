@@ -164,8 +164,10 @@ export const OwnerDashboard: React.FC = () => {
   const totalSalesAllTime = closedOrders.reduce((sum, o) => {
     if (o.collectedAmount) return sum + o.collectedAmount;
     if (o.budget) {
-      const parts = o.budget.parts.reduce((s, p) => s + p.quantity * p.estimatedUnitPrice, 0);
-      return sum + Math.round((o.budget.laborCost + parts) * (1 + o.budget.taxRate));
+      if (o.budget.grandTotal !== undefined && o.budget.grandTotal > 0) return sum + o.budget.grandTotal;
+      const parts = (o.budget.parts || []).reduce((s, p) => s + (p.quantity || 1) * (p.estimatedUnitPrice || 0), 0);
+      const taxRate = o.budget.taxRate ?? 0;
+      return sum + Math.round((o.budget.laborCost + parts) * (1 + taxRate));
     }
     return sum;
   }, 0);

@@ -100,7 +100,7 @@ interface AppContextType {
   }) => void;
 
   // Office & Catalog actions
-  saveBudget: (orderId: string, budgetData: { laborCost: number; parts: RequestedPart[]; taxRate: number; notes?: string }) => void;
+  saveBudget: (orderId: string, budgetData: { laborCost: number; parts: RequestedPart[]; taxRate: number; includeTax?: boolean; notes?: string }) => void;
   sendBudgetToClient: (orderId: string) => void;
   updateOrder: (id: string, orderData: Partial<ServiceOrder>) => void;
   deleteOrder: (id: string) => void;
@@ -2242,14 +2242,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const saveBudget = (
     orderId: string,
-    budgetData: { laborCost: number; parts: RequestedPart[]; taxRate: number; notes?: string }
+    budgetData: { laborCost: number; parts: RequestedPart[]; taxRate: number; includeTax?: boolean; notes?: string }
   ) => {
     const nowStr = new Date().toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
+    const partsSub = (budgetData.parts || []).reduce((s, p) => s + (p.quantity || 1) * (p.estimatedUnitPrice || 0), 0);
+    const subtotal = (budgetData.laborCost || 0) + partsSub;
+    const taxRate = budgetData.taxRate ?? 0;
+    const computedGrandTotal = Math.round(subtotal * (1 + taxRate));
+
     const newBudget: Budget = {
       id: `bud-${Date.now()}`,
       laborCost: budgetData.laborCost,
       parts: budgetData.parts,
-      taxRate: budgetData.taxRate,
+      taxRate: taxRate,
+      includeTax: budgetData.includeTax !== undefined ? budgetData.includeTax : taxRate > 0,
+      grandTotal: computedGrandTotal,
       notes: budgetData.notes,
       status: 'Borrador'
     };
@@ -2482,9 +2489,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Calculate exact total to collect from budget
         let total = 0;
         if (ord.budget) {
-          const partsSubtotal = ord.budget.parts.reduce((sum, p) => sum + p.quantity * p.estimatedUnitPrice, 0);
-          const subtotal = ord.budget.laborCost + partsSubtotal;
-          total = Math.round(subtotal * (1 + ord.budget.taxRate));
+          if (ord.budget.grandTotal !== undefined && ord.budget.grandTotal > 0) {
+            total = ord.budget.grandTotal;
+          } else {
+            const partsSubtotal = ord.budget.parts.reduce((sum, p) => sum + (p.quantity || 1) * (p.estimatedUnitPrice || 0), 0);
+            const subtotal = ord.budget.laborCost + partsSubtotal;
+            const taxRate = ord.budget.taxRate ?? 0;
+            total = Math.round(subtotal * (1 + taxRate));
+          }
         }
 
         return {
@@ -2530,9 +2542,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         let total = 0;
         if (ord.budget) {
-          const partsSubtotal = ord.budget.parts.reduce((sum, p) => sum + p.quantity * p.estimatedUnitPrice, 0);
-          const subtotal = ord.budget.laborCost + partsSubtotal;
-          total = Math.round(subtotal * (1 + ord.budget.taxRate));
+          if (ord.budget.grandTotal !== undefined && ord.budget.grandTotal > 0) {
+            total = ord.budget.grandTotal;
+          } else {
+            const partsSubtotal = ord.budget.parts.reduce((sum, p) => sum + (p.quantity || 1) * (p.estimatedUnitPrice || 0), 0);
+            const subtotal = ord.budget.laborCost + partsSubtotal;
+            const taxRate = ord.budget.taxRate ?? 0;
+            total = Math.round(subtotal * (1 + taxRate));
+          }
         }
 
         await updateSupabaseOrder(orderId, {

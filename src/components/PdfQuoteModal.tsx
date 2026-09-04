@@ -15,7 +15,9 @@ export const PdfQuoteModal: React.FC<{
     0
   );
   const subtotal = b.laborCost + partsSubtotal;
-  const taxAmount = subtotal * b.taxRate;
+  const taxRate = b.taxRate ?? 0;
+  const hasTax = taxRate > 0;
+  const taxAmount = subtotal * taxRate;
   const total = subtotal + taxAmount;
 
   const handlePrint = () => {
@@ -90,9 +92,18 @@ export const PdfQuoteModal: React.FC<{
             </div>
 
             <div className="text-left sm:text-right">
-              <span className="inline-block px-3 py-1 bg-blue-50 text-blue-700 font-bold text-xs rounded-md border border-blue-200 uppercase mb-2">
-                PRESUPUESTO OFICIAL
-              </span>
+              <div className="flex flex-wrap sm:justify-end items-center gap-1.5 mb-2">
+                <span className="inline-block px-3 py-1 bg-blue-50 text-blue-700 font-bold text-xs rounded-md border border-blue-200 uppercase">
+                  PRESUPUESTO OFICIAL
+                </span>
+                <span className={`inline-block px-2.5 py-1 text-xs font-bold rounded-md border ${
+                  hasTax 
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-300' 
+                    : 'bg-slate-100 text-slate-700 border-slate-300'
+                }`}>
+                  {hasTax ? 'IVA (16%) INCLUIDO' : 'SIN IVA (PRECIO NETO)'}
+                </span>
+              </div>
               <div className="text-lg font-bold text-slate-900">{order.folio}</div>
               <p className="text-xs text-slate-500">
                 Fecha: {order.budget.sentAt || new Date().toLocaleDateString('es-MX')}
@@ -159,18 +170,23 @@ export const PdfQuoteModal: React.FC<{
 
           {/* Totals Summary */}
           <div className="flex justify-end pt-4 border-t border-slate-200">
-            <div className="w-64 space-y-1.5 text-xs">
+            <div className="w-72 space-y-2 text-xs">
               <div className="flex justify-between text-slate-600">
-                <span>Subtotal:</span>
-                <span className="font-semibold">${subtotal.toLocaleString('es-MX')} MXN</span>
+                <span>Subtotal Neto:</span>
+                <span className="font-semibold">${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN</span>
               </div>
-              <div className="flex justify-between text-slate-600">
-                <span>IVA (16%):</span>
-                <span className="font-semibold">${taxAmount.toLocaleString('es-MX')} MXN</span>
+              <div className="flex justify-between text-slate-600 items-center">
+                <span>{hasTax ? `IVA (${Math.round(taxRate * 100)}%):` : 'Impuesto (IVA):'}</span>
+                <span className={`font-semibold ${hasTax ? 'text-slate-800' : 'text-slate-500 italic'}`}>
+                  {hasTax ? `$${taxAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN` : 'Sin IVA ($0.00 MXN)'}
+                </span>
               </div>
-              <div className="flex justify-between text-sm font-bold text-slate-900 border-t border-slate-800 pt-2">
-                <span>Total:</span>
-                <span className="text-blue-700">${total.toLocaleString('es-MX')} MXN</span>
+              <div className="flex justify-between text-sm font-bold text-slate-900 border-t-2 border-slate-800 pt-2">
+                <span>{hasTax ? 'Total (IVA 16% Incluido):' : 'Total Neto (Sin IVA):'}</span>
+                <span className="text-blue-700 text-base font-black">${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN</span>
+              </div>
+              <div className="text-right text-[10.5px] text-slate-500 font-medium">
+                {hasTax ? '• Esta cotización incluye IVA del 16%.' : '• Esta cotización no incluye IVA (Precio Neto Directo).'}
               </div>
             </div>
           </div>
@@ -182,6 +198,9 @@ export const PdfQuoteModal: React.FC<{
               <span>Garantía de Servicio de 90 días en refacciones y mano de obra.</span>
             </div>
             <p>{b.notes}</p>
+            <p className="text-[10.5px] text-slate-400 font-medium">
+              Régimen: {hasTax ? 'Facturación / Comprobante con IVA desglosado (16%).' : 'Comprobante de servicio sin desglose de IVA (Precio Neto).'}
+            </p>
           </div>
 
         </div>

@@ -23,7 +23,7 @@ export const BudgetGeneratorModal: React.FC<{
   const { saveBudget, sendBudgetToClient, spareParts } = useApp();
 
   const initialBudget = order.budget;
-  const [laborCost, setLaborCost] = useState<number>(initialBudget?.laborCost || 1200);
+  const [laborCost, setLaborCost] = useState<number>(initialBudget?.laborCost !== undefined ? initialBudget.laborCost : 1200);
   const [parts, setParts] = useState<RequestedPart[]>(
     initialBudget?.parts && initialBudget.parts.length > 0
       ? initialBudget.parts
@@ -34,6 +34,15 @@ export const BudgetGeneratorModal: React.FC<{
   const [notes, setNotes] = useState<string>(
     initialBudget?.notes || 'Incluye diagnóstico técnico, refacciones originales y garantía de 90 días.'
   );
+
+  // Por defecto NO se carga el IVA automáticamente al hacer una cotización.
+  // El usuario decide explícitamente mediante la casilla si incluir el 16% de IVA o dejar el total neto.
+  const [applyTax, setApplyTax] = useState<boolean>(() => {
+    if (initialBudget) {
+      return (initialBudget.taxRate ?? 0) > 0;
+    }
+    return false;
+  });
 
   if (!isOpen) return null;
 
@@ -65,7 +74,7 @@ export const BudgetGeneratorModal: React.FC<{
     0
   );
   const subtotal = laborCost + partsSubtotal;
-  const taxRate = 0.16;
+  const taxRate = applyTax ? 0.16 : 0;
   const taxAmount = subtotal * taxRate;
   const total = subtotal + taxAmount;
 
@@ -74,6 +83,7 @@ export const BudgetGeneratorModal: React.FC<{
       laborCost,
       parts,
       taxRate,
+      includeTax: applyTax,
       notes
     });
   };
@@ -86,7 +96,11 @@ export const BudgetGeneratorModal: React.FC<{
 
   // WhatsApp Share text generator
   const getWhatsAppMessage = () => {
-    const text = `Hola *${order.clientName}*, le enviamos el presupuesto para la Orden *${order.folio}* (${order.departmentName}):\n\n- Mano de obra: $${laborCost.toLocaleString()} MXN\n- Refacciones (${parts.length}): $${partsSubtotal.toLocaleString()} MXN\n- IVA (16%): $${taxAmount.toLocaleString()} MXN\n*Total:* $${total.toLocaleString()} MXN\n\nPuede revisar y autorizar su presupuesto en nuestro portal de clientes.\nGracias por su confianza.`;
+    const ivaLine = applyTax
+      ? `- IVA (16%): $${taxAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN\n*Total (IVA 16% Incluido):* $${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN`
+      : `- IVA: No aplica (Sin IVA / Precio Neto)\n*Total Neto:* $${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN`;
+
+    const text = `Hola *${order.clientName}*, le enviamos la cotización para la Orden *${order.folio}* (${order.departmentName}):\n\n- Mano de obra: $${laborCost.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN\n- Refacciones (${parts.length}): $${partsSubtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN\n- Subtotal: $${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN\n${ivaLine}\n\nPuede revisar y autorizar su presupuesto en nuestro portal de clientes.\nGracias por su confianza.`;
     return encodeURIComponent(text);
   };
 
@@ -238,27 +252,88 @@ export const BudgetGeneratorModal: React.FC<{
             />
           </div>
 
+          {/* Casilla de Control de IVA (16%) Cerca del Presupuesto Total */}
+          <div className={`p-3.5 rounded-xl border transition-all ${
+            applyTax 
+              ? 'bg-emerald-50 border-emerald-300 shadow-xs' 
+              : 'bg-slate-50 border-slate-200'
+          }`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <label htmlFor="iva-checkbox-budget" className="flex items-start sm:items-center space-x-3 cursor-pointer select-none">
+                <input
+                  id="iva-checkbox-budget"
+                  type="checkbox"
+                  checked={applyTax}
+                  onChange={e => setApplyTax(e.target.checked)}
+                  className="w-5 h-5 mt-0.5 sm:mt-0 rounded-md border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer shrink-0"
+                />
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs sm:text-sm font-bold text-slate-900">
+                      ¿Cargar IVA (16%) a esta cotización?
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    {applyTax 
+                      ? 'Activo: Se suma automáticamente el 16% de IVA sobre el subtotal.' 
+                      : 'Desactivado: No se carga IVA, se mantiene el total neto del presupuesto.'}
+                  </p>
+                </div>
+              </label>
+
+              <div className="sm:text-right shrink-0">
+                <span className={`inline-block text-[11px] font-black px-2.5 py-1 rounded-md border tracking-wide uppercase ${
+                  applyTax 
+                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300' 
+                    : 'bg-slate-200 text-slate-600 border-slate-300'
+                }`}>
+                  {applyTax ? '+ 16% IVA INCLUIDO' : 'TOTAL NETO (SIN IVA)'}
+                </span>
+              </div>
+            </div>
+          </div>
+
           {/* Calculations Summary Box */}
-          <div className="bg-slate-900 text-white p-4 rounded-xl space-y-1.5 text-xs">
+          <div className="bg-slate-900 text-white p-4 rounded-xl space-y-2 text-xs shadow-md">
             <div className="flex justify-between text-slate-300">
               <span>Mano de obra:</span>
-              <span className="font-semibold">${laborCost.toLocaleString('es-MX')} MXN</span>
+              <span className="font-semibold">${laborCost.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN</span>
             </div>
             <div className="flex justify-between text-slate-300">
               <span>Refacciones ({parts.length}):</span>
-              <span className="font-semibold">${partsSubtotal.toLocaleString('es-MX')} MXN</span>
+              <span className="font-semibold">${partsSubtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN</span>
             </div>
-            <div className="flex justify-between text-slate-300">
-              <span>Subtotal:</span>
-              <span className="font-semibold">${subtotal.toLocaleString('es-MX')} MXN</span>
+            <div className="flex justify-between text-slate-300 pt-1.5 border-t border-slate-800">
+              <span>Subtotal Neto:</span>
+              <span className="font-semibold">${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN</span>
             </div>
-            <div className="flex justify-between text-slate-400">
-              <span>IVA (16%):</span>
-              <span className="font-semibold">${taxAmount.toLocaleString('es-MX')} MXN</span>
+            <div className="flex justify-between items-center text-slate-300">
+              <span className="flex items-center space-x-1.5">
+                <span>IVA (16%):</span>
+                {!applyTax && (
+                  <span className="text-[10px] bg-slate-800 text-amber-300 px-1.5 py-0.5 rounded font-medium border border-amber-400/20">
+                    No cargado
+                  </span>
+                )}
+              </span>
+              <span className={`font-semibold ${applyTax ? 'text-white' : 'text-slate-400'}`}>
+                {applyTax ? `$${taxAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN` : '$0.00 MXN (Sin IVA)'}
+              </span>
             </div>
-            <div className="border-t border-slate-700 pt-2 flex justify-between text-sm font-bold text-emerald-400">
-              <span>TOTAL COTIZACIÓN:</span>
-              <span>${total.toLocaleString('es-MX')} MXN</span>
+            <div className="border-t-2 border-slate-700 pt-2.5 flex justify-between items-baseline">
+              <div>
+                <span className="text-xs uppercase tracking-wider font-extrabold text-slate-300 block">
+                  {applyTax ? 'TOTAL COTIZACIÓN (IVA Incluido):' : 'TOTAL NETO (Sin IVA):'}
+                </span>
+                <span className="text-[10px] text-slate-400 font-normal">
+                  {applyTax ? 'Incluye desglose de impuesto 16%' : 'Precio directo sin cargo de IVA'}
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-base sm:text-xl font-black text-emerald-400">
+                  ${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
+                </span>
+              </div>
             </div>
           </div>
 

@@ -309,8 +309,10 @@ export const exportSingleOrderPDF = (order: any) => {
     : 0;
   const laborCost = budget?.laborCost || 0;
   const subtotal = laborCost + partsSubtotal;
-  const tax = budget ? subtotal * (budget.taxRate || 0.16) : 0;
-  const total = budget ? subtotal + tax : order.collectedAmount || 0;
+  const taxRate = budget?.taxRate !== undefined ? budget.taxRate : 0;
+  const hasTax = taxRate > 0;
+  const tax = budget ? subtotal * taxRate : 0;
+  const total = budget?.grandTotal !== undefined && budget.grandTotal > 0 ? budget.grandTotal : (budget ? subtotal + tax : order.collectedAmount || 0);
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -462,8 +464,23 @@ export const exportSingleOrderPDF = (order: any) => {
                 <td style="padding: 5px 8px; text-align: right; border-bottom: 1px solid #e2e8f0;">$${(p.quantity * p.estimatedUnitPrice).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
               </tr>
             `).join('')}
+            ${hasTax ? `
+            <tr>
+              <td colspan="3" style="padding: 5px 8px; text-align: right; border-bottom: 1px solid #e2e8f0; color: #64748b;">Subtotal Neto:</td>
+              <td style="padding: 5px 8px; text-align: right; border-bottom: 1px solid #e2e8f0; font-weight: 600;">$${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+            </tr>
+            <tr>
+              <td colspan="3" style="padding: 5px 8px; text-align: right; border-bottom: 1px solid #e2e8f0; color: #64748b;">IVA (${Math.round(taxRate * 100)}%):</td>
+              <td style="padding: 5px 8px; text-align: right; border-bottom: 1px solid #e2e8f0; font-weight: 600;">$${tax.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+            </tr>
+            ` : `
+            <tr>
+              <td colspan="3" style="padding: 5px 8px; text-align: right; border-bottom: 1px solid #e2e8f0; color: #64748b;">Condición Fiscal (IVA):</td>
+              <td style="padding: 5px 8px; text-align: right; border-bottom: 1px solid #e2e8f0; font-weight: 600; color: #64748b;">Sin IVA / Precio Neto</td>
+            </tr>
+            `}
             <tr style="font-weight: 800; font-size: 13px; background: #0f172a; color: #fff;">
-              <td colspan="3" style="padding: 7px 8px;">TOTAL AUTORIZADO (IVA Incluido):</td>
+              <td colspan="3" style="padding: 7px 8px;">${hasTax ? 'TOTAL AUTORIZADO (IVA 16% Incluido):' : 'TOTAL AUTORIZADO NETO (Sin IVA):'}</td>
               <td style="padding: 7px 8px; text-align: right; color: #4ade80;">$${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN</td>
             </tr>
           </table>

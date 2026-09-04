@@ -77,8 +77,10 @@ export const ClientPortalView: React.FC = () => {
     0
   ) || 0;
   const subtotal = (budget?.laborCost || 0) + partsSubtotal;
-  const taxAmount = subtotal * (budget?.taxRate || 0.16);
-  const total = subtotal + taxAmount;
+  const taxRate = budget?.taxRate !== undefined ? budget.taxRate : 0;
+  const hasTax = taxRate > 0;
+  const taxAmount = subtotal * taxRate;
+  const total = budget?.grandTotal !== undefined && budget.grandTotal > 0 ? budget.grandTotal : (subtotal + taxAmount);
 
   return (
     <div id="client-portal" className="w-full max-w-5xl mx-auto px-4 sm:px-6 py-4 space-y-4">
@@ -287,11 +289,18 @@ export const ClientPortalView: React.FC = () => {
                 ))}
 
                 {/* Total box */}
-                <div className="pt-2 space-y-1 text-right">
-                  <div className="text-slate-500">Subtotal: ${subtotal.toLocaleString('es-MX')} MXN</div>
-                  <div className="text-slate-500">IVA (16%): ${taxAmount.toLocaleString('es-MX')} MXN</div>
-                  <div className="text-lg font-bold text-purple-700 pt-1 border-t border-slate-300">
-                    TOTAL: ${total.toLocaleString('es-MX')} MXN
+                <div className="pt-2.5 space-y-1.5 text-right">
+                  <div className="text-slate-600">Subtotal Neto: ${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN</div>
+                  <div className="text-slate-600">
+                    {hasTax ? (
+                      <span>IVA (${Math.round(taxRate * 100)}%): <strong className="text-slate-800">${taxAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN</strong></span>
+                    ) : (
+                      <span className="text-slate-500 italic">Impuesto: Sin IVA / Precio Neto ($0.00 MXN)</span>
+                    )}
+                  </div>
+                  <div className="text-lg font-bold text-purple-700 pt-1.5 border-t border-slate-300 flex items-center justify-end space-x-2">
+                    <span className="text-xs uppercase text-slate-500 font-semibold">{hasTax ? 'Total con IVA:' : 'Total Neto:'}</span>
+                    <span>${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN</span>
                   </div>
                 </div>
               </div>

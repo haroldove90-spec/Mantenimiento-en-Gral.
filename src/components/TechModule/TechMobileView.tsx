@@ -812,8 +812,12 @@ export const TechMobileView: React.FC = () => {
                       const partsSub = (ord.budget?.parts || []).reduce((s, p) => s + (p.quantity || 1) * (p.estimatedUnitPrice || 0), 0);
                       const labor = ord.budget?.laborCost || 0;
                       const subtotal = labor + partsSub;
-                      const tax = subtotal * (ord.budget?.taxRate ?? 0.16);
-                      const grandTotal = ord.budget?.grandTotal || (subtotal > 0 ? subtotal + tax : ord.collectedAmount || 0);
+                      const taxRate = ord.budget?.taxRate !== undefined ? ord.budget.taxRate : 0;
+                      const hasTax = taxRate > 0;
+                      const tax = subtotal * taxRate;
+                      const grandTotal = ord.budget?.grandTotal !== undefined && ord.budget.grandTotal > 0
+                        ? ord.budget.grandTotal
+                        : (subtotal > 0 ? subtotal + tax : ord.collectedAmount || 0);
 
                       return (
                         <div className="bg-gradient-to-br from-amber-500 via-amber-400 to-yellow-500 text-slate-950 p-4 sm:p-5 rounded-2xl border-2 border-amber-600 shadow-md space-y-3 animate-in fade-in slide-in-from-top-2">
@@ -833,7 +837,9 @@ export const TechMobileView: React.FC = () => {
                               </div>
                             </div>
                             <div className="text-right bg-slate-950 text-amber-300 px-4 py-2 rounded-xl border border-amber-400/40 shadow-inner">
-                              <span className="text-[10px] font-bold block text-amber-200/80 uppercase">Total a Cobrar</span>
+                              <span className="text-[10px] font-bold block text-amber-200/80 uppercase">
+                                {hasTax ? 'Total a Cobrar (IVA Incl.)' : 'Total a Cobrar (Neto)'}
+                              </span>
                               <span className="text-xl sm:text-2xl font-black tracking-tight">
                                 ${grandTotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs font-bold text-amber-400">MXN</span>
                               </span>
@@ -855,9 +861,11 @@ export const TechMobileView: React.FC = () => {
                               </span>
                             </div>
                             <div className="bg-white/90 backdrop-blur-xs p-2.5 rounded-xl border border-amber-600/20">
-                              <span className="text-[10px] font-bold text-slate-600 uppercase block">IVA (16%)</span>
+                              <span className="text-[10px] font-bold text-slate-600 uppercase block">
+                                {hasTax ? `IVA (${Math.round(taxRate * 100)}%)` : 'IVA (Impuesto)'}
+                              </span>
                               <span className="font-extrabold text-slate-900 text-sm">
-                                ${tax.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                {hasTax ? `$${tax.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : 'Sin IVA ($0)'}
                               </span>
                             </div>
                             <div className="bg-slate-950 text-amber-300 p-2.5 rounded-xl border border-amber-500/30 flex flex-col justify-center">
@@ -1232,24 +1240,30 @@ export const TechMobileView: React.FC = () => {
               const partsSub = (statusModalOrder.budget?.parts || []).reduce((s, p) => s + (p.quantity || 1) * (p.estimatedUnitPrice || 0), 0);
               const labor = statusModalOrder.budget?.laborCost || 0;
               const subtotal = labor + partsSub;
-              const tax = subtotal * (statusModalOrder.budget?.taxRate ?? 0.16);
-              const grandTotal = statusModalOrder.budget?.grandTotal || (subtotal > 0 ? subtotal + tax : statusModalOrder.collectedAmount || 0);
+              const taxRate = statusModalOrder.budget?.taxRate !== undefined ? statusModalOrder.budget.taxRate : 0;
+              const hasTax = taxRate > 0;
+              const tax = subtotal * taxRate;
+              const grandTotal = statusModalOrder.budget?.grandTotal !== undefined && statusModalOrder.budget.grandTotal > 0
+                ? statusModalOrder.budget.grandTotal
+                : (subtotal > 0 ? subtotal + tax : statusModalOrder.collectedAmount || 0);
 
               return (
                 <div className="bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 text-slate-950 p-3.5 rounded-2xl border border-amber-600 shadow-sm space-y-2 animate-in zoom-in-95">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
                       <DollarSign className="w-5 h-5 text-slate-950 shrink-0" />
-                      <span className="font-black text-xs uppercase tracking-wider">Monto a Cobrar al Entregar:</span>
+                      <span className="font-black text-xs uppercase tracking-wider">
+                        {hasTax ? 'Monto a Cobrar (IVA Incluido):' : 'Monto a Cobrar (Neto):'}
+                      </span>
                     </div>
                     <span className="font-black text-lg text-slate-950 bg-white/90 px-3 py-1 rounded-xl border border-amber-600/30">
                       ${grandTotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
                     </span>
                   </div>
                   <div className="flex justify-between text-[11px] font-bold text-slate-800 border-t border-amber-600/30 pt-1.5 px-1">
-                    <span>Mano de obra: ${labor.toLocaleString('es-MX')}</span>
-                    <span>Refacciones: ${partsSub.toLocaleString('es-MX')}</span>
-                    <span>IVA: ${tax.toLocaleString('es-MX')}</span>
+                    <span>Mano de obra: ${labor.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                    <span>Refacciones: ${partsSub.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                    <span>IVA: {hasTax ? `$${tax.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : 'Sin IVA ($0)'}</span>
                   </div>
                 </div>
               );

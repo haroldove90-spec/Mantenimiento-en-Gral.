@@ -240,7 +240,7 @@ export const TechMobileView: React.FC = () => {
 
   // Helper to categorize status into the 3 core pillars: Pendiente, En Proceso, Terminado
   const getStatusGroup = (status: OrderStatus): 'pending' | 'in_progress' | 'completed' => {
-    if (status === 'Cobrado/Cerrado') return 'completed';
+    if (status === 'Cobrado/Cerrado' || status === 'No Aceptado' || status === 'Cancelada') return 'completed';
     if (status === 'En Diagnóstico' || status === 'En Reparación' || status === 'Pendiente de Entrega') return 'in_progress';
     return 'pending';
   };
@@ -286,6 +286,7 @@ export const TechMobileView: React.FC = () => {
     'En Diagnóstico',
     'Presupuesto Pendiente',
     'Esperando Aprobación',
+    'No Aceptado',
     'En Reparación',
     'Pendiente de Entrega',
     'Cobrado/Cerrado',
@@ -630,6 +631,8 @@ export const TechMobileView: React.FC = () => {
                             ? 'bg-amber-400 text-slate-950 font-black border-amber-500 ring-2 ring-amber-400/50 shadow-md animate-pulse'
                             : ord.status === 'Cobrado/Cerrado'
                             ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                            : ord.status === 'No Aceptado'
+                            ? 'bg-rose-100 text-rose-900 border-rose-300 font-black'
                             : ord.status === 'En Reparación'
                             ? 'bg-blue-100 text-blue-900 border-blue-300'
                             : ord.status === 'En Diagnóstico'
@@ -641,7 +644,7 @@ export const TechMobileView: React.FC = () => {
                       >
                         {ALL_STATUSES.map(st => (
                           <option key={st} value={st} className="bg-white text-slate-900 font-medium">
-                            {st === 'Pendiente de Entrega' ? '📦 Pendiente de Entrega (Cobro Activo)' : st}
+                            {st === 'Pendiente de Entrega' ? '📦 Pendiente de Entrega (Cobro Activo)' : st === 'No Aceptado' ? '❌ No Aceptado' : st}
                           </option>
                         ))}
                       </select>
@@ -1224,12 +1227,14 @@ export const TechMobileView: React.FC = () => {
                 className={`w-full border text-xs font-black rounded-xl p-3 focus:ring-2 focus:ring-emerald-500 outline-hidden transition-all ${
                   targetNewStatus === 'Pendiente de Entrega'
                     ? 'bg-amber-400 text-slate-950 border-amber-500 ring-2 ring-amber-400/40 shadow-sm'
+                    : targetNewStatus === 'No Aceptado'
+                    ? 'bg-rose-50 border-rose-300 text-rose-900 ring-2 ring-rose-400/30'
                     : 'bg-slate-50 border-slate-300 text-slate-900'
                 }`}
               >
                 {ALL_STATUSES.map(st => (
                   <option key={st} value={st} className="bg-white text-slate-900 font-medium">
-                    {st === 'Pendiente de Entrega' ? '📦 Pendiente de Entrega (Cobro Activo)' : st}
+                    {st === 'Pendiente de Entrega' ? '📦 Pendiente de Entrega (Cobro Activo)' : st === 'No Aceptado' ? '❌ No Aceptado' : st}
                   </option>
                 ))}
               </select>

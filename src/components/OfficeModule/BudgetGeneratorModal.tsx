@@ -11,7 +11,8 @@ import {
   CheckCircle2,
   DollarSign,
   Share2,
-  MessageSquare
+  MessageSquare,
+  XCircle
 } from 'lucide-react';
 
 export const BudgetGeneratorModal: React.FC<{
@@ -20,7 +21,7 @@ export const BudgetGeneratorModal: React.FC<{
   onClose: () => void;
   onOpenPdfPreview: () => void;
 }> = ({ order, isOpen, onClose, onOpenPdfPreview }) => {
-  const { saveBudget, sendBudgetToClient, spareParts } = useApp();
+  const { saveBudget, sendBudgetToClient, updateOrderStatus, currentUser, spareParts } = useApp();
 
   const initialBudget = order.budget;
   const [laborCost, setLaborCost] = useState<number>(initialBudget?.laborCost !== undefined ? initialBudget.laborCost : 1200);
@@ -91,6 +92,23 @@ export const BudgetGeneratorModal: React.FC<{
   const handleSaveAndSend = () => {
     handleSave();
     sendBudgetToClient(order.id);
+    onClose();
+  };
+
+  const handleMarkNotAccepted = () => {
+    saveBudget(order.id, {
+      laborCost,
+      parts,
+      taxRate,
+      includeTax: applyTax,
+      notes: notes ? `${notes} (Marcado como No Aceptado)` : 'Presupuesto no aceptado por el cliente'
+    });
+    updateOrderStatus(
+      order.id,
+      'No Aceptado',
+      'Presupuesto marcado como No Aceptado por el cliente',
+      currentUser?.name || 'Administración'
+    );
     onClose();
   };
 
@@ -363,6 +381,16 @@ export const BudgetGeneratorModal: React.FC<{
           </div>
 
           <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
+            <button
+              type="button"
+              onClick={handleMarkNotAccepted}
+              className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer"
+              title="Marcar cotización como No Aceptada por el cliente"
+            >
+              <XCircle className="w-4 h-4 text-rose-600" />
+              <span>No Aceptado</span>
+            </button>
+
             <button
               type="button"
               onClick={() => {

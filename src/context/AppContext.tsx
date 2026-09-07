@@ -103,6 +103,7 @@ interface AppContextType {
   saveBudget: (orderId: string, budgetData: { laborCost: number; parts: RequestedPart[]; taxRate: number; includeTax?: boolean; notes?: string }) => void;
   sendBudgetToClient: (orderId: string) => void;
   updateOrder: (id: string, orderData: Partial<ServiceOrder>) => void;
+  toggleOrderActive: (id: string) => Promise<void>;
   deleteOrder: (id: string) => void;
   addClient: (client: Omit<Client, 'id'>) => Promise<Client>;
   updateClient: (id: string, clientData: Partial<Client>) => void;
@@ -116,6 +117,7 @@ interface AppContextType {
   updateService: (id: string, serviceData: Partial<BusinessService>) => Promise<void>;
   toggleServiceStatus: (id: string) => Promise<void>;
   deleteService: (id: string) => Promise<void>;
+  addTechnician: (techData: Omit<Technician, 'id' | 'activeOrdersCount' | 'avgResponseTimeHours'>) => Promise<Technician>;
   updateTechnician: (id: string, techData: Partial<Technician>) => void;
   toggleTechStatus: (id: string) => void;
   deleteTechnician: (id: string) => void;
@@ -2415,14 +2417,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (ord.id !== orderId) return ord;
         return {
           ...ord,
-          status: 'Presupuesto Pendiente',
-          budget: ord.budget ? { ...ord.budget, status: 'Rechazado' } : undefined,
+          status: 'No Aceptado',
+          budget: ord.budget ? { ...ord.budget, status: 'Rechazado', rejectedAt: nowStr } : undefined,
           timeline: [
             ...ord.timeline,
             {
               id: `tl-${Date.now()}`,
               timestamp: nowStr,
-              title: 'Presupuesto Rechazado por Cliente',
+              title: 'Presupuesto No Aceptado por Cliente',
               author: 'Cliente',
               note: `Comentario: ${clientComment}`
             }
@@ -2436,14 +2438,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addNotification({
         targetRole: 'office',
         orderFolio: ord.folio,
-        title: 'Presupuesto Rechazado',
+        title: 'Presupuesto No Aceptado',
         message: `El cliente rechazó el presupuesto de ${ord.folio}: "${clientComment}"`
       });
 
       addNotification({
         targetRole: 'owner',
         orderFolio: ord.folio,
-        title: 'Presupuesto Rechazado',
+        title: 'Presupuesto No Aceptado',
         message: `El cliente de ${ord.folio} no aceptó la cotización.`
       });
 
@@ -2460,8 +2462,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       (async () => {
         await updateSupabaseOrder(orderId, {
-          status: 'Presupuesto Pendiente',
-          budget: ord.budget ? { ...ord.budget, status: 'Rechazado' } : undefined
+          status: 'No Aceptado',
+          budget: ord.budget ? { ...ord.budget, status: 'Rechazado', rejectedAt: nowStr } : undefined
         }, ord.folio);
       })();
     }
@@ -2758,11 +2760,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         scheduled_date: orderData.scheduledDate ?? order.scheduledDate,
         route_order: orderData.routeOrder ?? order.routeOrder
       };
-      if (isUuid(orderData.technicianId ?? order.technicianId)) {
-        updatePayload.technician_id = orderData.technicianId ?? order.technicianId;
+      if (orderData.clientName !== undefined) updatePayload.client_name = orderData.clientName;
+      if (orderData.clientEmail !== undefined) updatePayload.client_email = orderData.clientEmail;
+      if (orderData.departmentName !== undefined) updatePayload.department_name = orderData.departmentName;
+      if (orderData.status !== undefined) updatePayload.status = orderData.status;
+      if (orderData.budget !== undefined) updatePayload.budget = orderData.budget;
+      if (orderData.timeline !== undefined) updatePayload.timeline = orderData.timeline;
+      if (orderData.requestedParts !== undefined) updatePayload.requested_parts = orderData.requestedParts;
+      if (orderData.isWarranty !== undefined) updatePayload.is_warranty = orderData.isWarranty;
+      if (orderData.warrantyNotes !== undefined) updatePayload.warranty_reason = orderData.warrantyNotes;
+      if (orderData.collectedAmount !== undefined) updatePayload.collected_amount = orderData.collectedAmount;
+      if (orderData.paymentMethod !== undefined) updatePayload.payment_method = orderData.paymentMethod;
+      if (orderData.technicianId !== undefined) {
+        if (isUuid(orderData.technicianId)) {
+          updatePayload.technician_id = orderData.technicianId;
+        } else if (!orderData.technicianId) {
+          updatePayload.technician_id = null;
+        }
+      }
+      if (isUuid(orderData.clientId ?? order.clientId)) {
+        updatePayload.client_id = orderData.clientId ?? order.clientId;
+      }
+      if (isUuid(orderData.departmentId ?? order.departmentId)) {
+        updatePayload.department_id = orderData.departmentId ?? order.departmentId;
       }
       await updateSupabaseOrder(id, updatePayload, order.folio);
     }
+  };
+
+  const toggleOrderActive = async (id: string) => {
+    const ord = orders.find(o => o.id === id);
+    if (!ord) return;
+    const newIsActive = ord.isActive === false ? true : false;
+    await updateOrder(id, { isActive: newIsActive });
   };
 
   const deleteOrder = async (id: string) => {
@@ -2975,6 +3005,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.warn('Error borrando servicio en Supabase:', e);
       }
     }
+  };
+
+  const addTechnician = async (techData: Omit<Technician, 'id' | 'activeOrdersCount' | 'avgResponseTimeHours'>): Promise<Technician> => {
+    const newTech: Technician = {
+      id: `tech-${Date.now()}`,
+      ...techData,
+      activeOrdersCount: 0,
+      avgResponseTimeHours: 2.5,
+      status: techData.status || 'Activo'
+    };
+    const updated = deduplicateTechnicians([...technicians, newTech]);
+    setTechnicians(updated);
+    localStorage.setItem('app_technicians', JSON.stringify(updated));
+    try {
+      await supabase.from('technicians').insert({
+        name: newTech.name,
+        specialty: newTech.specialty,
+        phone: newTech.phone,
+        email: newTech.email,
+        status: newTech.status === 'Activo' ? 'Disponible' : newTech.status
+      });
+    } catch (err) {
+      console.warn('Error inserting technician in Supabase:', err);
+    }
+    return newTech;
   };
 
   const updateTechnician = async (id: string, techData: Partial<Technician>) => {
@@ -4014,6 +4069,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         saveBudget,
         sendBudgetToClient,
         updateOrder,
+        toggleOrderActive,
         deleteOrder,
         addClient,
         updateClient,
@@ -4027,6 +4083,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateService,
         toggleServiceStatus,
         deleteService,
+        addTechnician,
         updateTechnician,
         toggleTechStatus,
         deleteTechnician,

@@ -35,10 +35,12 @@ export type OrderStatus =
   | 'En Diagnóstico'
   | 'Presupuesto Pendiente'
   | 'Esperando Aprobación'
+  | 'No Aceptado'
   | 'En Reparación'
   | 'Pendiente de Entrega'
   | 'Cobrado/Cerrado'
-  | 'Garantía Reabierta';
+  | 'Garantía Reabierta'
+  | 'Cancelada';
 
 export interface Department {
   id: string;
@@ -110,9 +112,10 @@ export interface Budget {
   includeTax?: boolean;
   grandTotal?: number;
   notes?: string;
-  status: 'Borrador' | 'Enviado' | 'Aprobado' | 'Rechazado';
+  status: 'Borrador' | 'Enviado' | 'Aprobado' | 'Rechazado' | 'No Aceptado';
   sentAt?: string;
   approvedAt?: string;
+  rejectedAt?: string;
 }
 
 export interface TimelineEvent {
@@ -131,9 +134,13 @@ export interface ServiceOrder {
   departmentId: string;
   departmentName: string;
   equipmentType?: string; // e.g. "Climatización HVAC", "Compresor Industrial", "Tablero Eléctrico"
+  brand?: string;
+  model?: string;
+  serialNumber?: string;
   description: string;
   priority: PriorityType;
   status: OrderStatus;
+  isActive?: boolean; // false when deactivated/archived by admin
   technicianId?: string;
   technicianName?: string;
   createdAt: string;

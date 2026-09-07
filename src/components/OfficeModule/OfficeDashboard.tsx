@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useApp, deduplicateTechnicians, normalizeStr, getOrderClientInfo } from '../../context/AppContext';
 import { OrderStatus, ServiceOrder } from '../../types';
 import { CreateOrderModal } from './CreateOrderModal';
+import { EditOrderModal } from './EditOrderModal';
 import { BudgetGeneratorModal } from './BudgetGeneratorModal';
 import { PdfQuoteModal } from '../PdfQuoteModal';
 import { ClientsAndCatalog } from './ClientsAndCatalog';
@@ -50,7 +51,9 @@ import {
   Square,
   Download,
   RefreshCw,
-  MessageSquare
+  MessageSquare,
+  Edit3,
+  Power
 } from 'lucide-react';
 
 const STAGES: OrderStatus[] = [
@@ -58,10 +61,12 @@ const STAGES: OrderStatus[] = [
   'En Diagnóstico',
   'Presupuesto Pendiente',
   'Esperando Aprobación',
+  'No Aceptado',
   'En Reparación',
   'Pendiente de Entrega',
   'Cobrado/Cerrado',
-  'Garantía Reabierta'
+  'Garantía Reabierta',
+  'Cancelada'
 ];
 
 export const OfficeDashboard: React.FC = () => {
@@ -79,6 +84,7 @@ export const OfficeDashboard: React.FC = () => {
     clearSampleData,
     resetToDemoData,
     deleteOrder,
+    toggleOrderActive,
     syncAllDataToSupabase
   } = useApp();
 
@@ -142,12 +148,16 @@ export const OfficeDashboard: React.FC = () => {
 
   // Modals state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<ServiceOrder | null>(null);
   const [budgetOrder, setBudgetOrder] = useState<ServiceOrder | null>(null);
   const [pdfOrder, setPdfOrder] = useState<ServiceOrder | null>(null);
   const [detailOrder, setDetailOrder] = useState<ServiceOrder | null>(null);
 
   // Delete modal state
   const [orderToDelete, setOrderToDelete] = useState<ServiceOrder | null>(null);
+
+  // Active / Inactive filter
+  const [activeStateFilter, setActiveStateFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
   // Warranty reopen modal
   const [warrantyOrder, setWarrantyOrder] = useState<ServiceOrder | null>(null);
@@ -156,7 +166,8 @@ export const OfficeDashboard: React.FC = () => {
   const q = (searchQuery || '').toLowerCase();
   const filteredOrders = orders.filter(
     o =>
-      ((statusFilter === 'ALL' || o.status === statusFilter)) &&
+      (activeStateFilter === 'all' || (activeStateFilter === 'active' ? o.isActive !== false : o.isActive === false)) &&
+      (statusFilter === 'ALL' || o.status === statusFilter) &&
       ((o.folio || '').toLowerCase().includes(q) ||
       (o.clientName || '').toLowerCase().includes(q) ||
       (o.departmentName || '').toLowerCase().includes(q) ||
@@ -517,8 +528,24 @@ export const OfficeDashboard: React.FC = () => {
                   >
                     <option value="ALL">Todos los Estados</option>
                     {STAGES.map(s => (
-                      <option key={s} value={s}>{s}</option>
+                      <option key={s} value={s}>
+                        {s === 'No Aceptado' ? '❌ No Aceptado' : s}
+                      </option>
                     ))}
+                  </select>
+                </div>
+
+                {/* Active / Inactive filter */}
+                <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs">
+                  <span className="font-bold text-slate-500">Registro:</span>
+                  <select
+                    value={activeStateFilter}
+                    onChange={e => setActiveStateFilter(e.target.value as any)}
+                    className="bg-transparent font-bold text-slate-800 outline-hidden cursor-pointer"
+                  >
+                    <option value="all">Todas (Activas y Desactivadas)</option>
+                    <option value="active">Solo Activas</option>
+                    <option value="inactive">Solo Desactivadas</option>
                   </select>
                 </div>
 
@@ -698,6 +725,12 @@ export const OfficeDashboard: React.FC = () => {
                                 <span>{ord.equipmentType}</span>
                               </span>
                             )}
+                            {ord.isActive === false && (
+                              <span className="bg-rose-100 text-rose-800 border border-rose-200 text-xs font-bold px-2 py-0.5 rounded-md flex items-center space-x-1">
+                                <Power className="w-3 h-3" />
+                                <span>Desactivada</span>
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -713,10 +746,12 @@ export const OfficeDashboard: React.FC = () => {
                             className={`px-3 py-1.5 rounded-xl text-xs font-black border cursor-pointer focus:outline-hidden transition-all shadow-2xs ${
                               ord.status === 'Pendiente de Entrega'
                                 ? 'bg-amber-300 text-slate-950 border-amber-500 ring-1 ring-amber-400'
-                                : ord.status === 'Garantía Reabierta'
-                                ? 'bg-amber-100 text-amber-900 border-amber-300'
+                                : ord.status === 'No Aceptado'
+                                ? 'bg-rose-100 text-rose-900 border-rose-300 font-black'
                                 : ord.status === 'Cobrado/Cerrado'
                                 ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                : ord.status === 'Garantía Reabierta'
+                                ? 'bg-amber-100 text-amber-900 border-amber-300'
                                 : ord.status === 'En Reparación'
                                 ? 'bg-blue-100 text-blue-800 border-blue-300'
                                 : ord.status === 'Esperando Aprobación'
@@ -731,7 +766,7 @@ export const OfficeDashboard: React.FC = () => {
                           >
                             {STAGES.map(stage => (
                               <option key={stage} value={stage} className="bg-white text-slate-900 font-medium">
-                                {stage}
+                                {stage === 'No Aceptado' ? '❌ No Aceptado' : stage}
                               </option>
                             ))}
                           </select>
@@ -871,6 +906,28 @@ export const OfficeDashboard: React.FC = () => {
                           )}
 
                           <button
+                            onClick={() => setEditingOrder(ord)}
+                            className="bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold px-3 py-2 rounded-xl transition-colors flex items-center space-x-1 border border-slate-200 cursor-pointer shadow-2xs active:scale-95"
+                            title="Editar todos los datos de la orden (Administrador)"
+                          >
+                            <Edit3 className="w-3.5 h-3.5 text-blue-600" />
+                            <span>Editar</span>
+                          </button>
+
+                          <button
+                            onClick={() => toggleOrderActive(ord.id)}
+                            className={`text-xs font-bold px-2.5 py-2 rounded-xl border transition-colors flex items-center space-x-1 cursor-pointer active:scale-95 ${
+                              ord.isActive !== false
+                                ? 'bg-slate-50 hover:bg-rose-50 text-slate-600 hover:text-rose-700 border-slate-200'
+                                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300'
+                            }`}
+                            title={ord.isActive !== false ? 'Desactivar orden (Archivar)' : 'Reactivar orden'}
+                          >
+                            <Power className="w-3.5 h-3.5" />
+                            <span className="hidden xl:inline">{ord.isActive !== false ? 'Desactivar' : 'Activar'}</span>
+                          </button>
+
+                          <button
                             onClick={() => setDetailOrder(ord)}
                             className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold px-3.5 py-2 rounded-xl transition-colors flex items-center space-x-1 cursor-pointer active:scale-95"
                           >
@@ -995,8 +1052,17 @@ export const OfficeDashboard: React.FC = () => {
 
                               <div className="flex items-center space-x-2">
                                 <button
+                                  onClick={() => setEditingOrder(ord)}
+                                  className="text-slate-600 hover:text-blue-600 font-bold flex items-center space-x-0.5 cursor-pointer text-[11px]"
+                                  title="Editar orden"
+                                >
+                                  <Edit3 className="w-3 h-3 text-blue-600" />
+                                  <span>Editar</span>
+                                </button>
+
+                                <button
                                   onClick={() => setDetailOrder(ord)}
-                                  className="text-blue-600 hover:text-blue-800 font-bold flex items-center space-x-0.5 cursor-pointer"
+                                  className="text-blue-600 hover:text-blue-800 font-bold flex items-center space-x-0.5 cursor-pointer text-[11px]"
                                 >
                                   <span>Ver</span>
                                   <ChevronRight className="w-3.5 h-3.5" />
@@ -1643,7 +1709,7 @@ export const OfficeDashboard: React.FC = () => {
                 >
                   {STAGES.map(s => (
                     <option key={s} value={s}>
-                      {s}
+                      {s === 'No Aceptado' ? '❌ No Aceptado' : s}
                     </option>
                   ))}
                 </select>
@@ -1794,16 +1860,70 @@ export const OfficeDashboard: React.FC = () => {
             </div>
 
             {/* Footer */}
-            <div className="p-3.5 border-t border-slate-100 bg-slate-50 shrink-0 flex justify-end">
+            <div className="p-3.5 border-t border-slate-100 bg-slate-50 shrink-0 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const toEdit = detailOrder;
+                    setDetailOrder(null);
+                    setEditingOrder(toEdit);
+                  }}
+                  className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-colors cursor-pointer"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Editar Orden Completa</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    toggleOrderActive(detailOrder.id);
+                    setDetailOrder(prev => prev ? { ...prev, isActive: prev.isActive === false ? true : false } : null);
+                  }}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold border transition-colors flex items-center space-x-1.5 cursor-pointer ${
+                    detailOrder.isActive !== false
+                      ? 'bg-white hover:bg-rose-50 text-slate-700 hover:text-rose-700 border-slate-200'
+                      : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300'
+                  }`}
+                >
+                  <Power className="w-3.5 h-3.5" />
+                  <span>{detailOrder.isActive !== false ? 'Desactivar Orden' : 'Reactivar Orden'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const toDel = detailOrder;
+                    setDetailOrder(null);
+                    setOrderToDelete(toDel);
+                  }}
+                  className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold flex items-center space-x-1 border border-rose-200 transition-colors cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Eliminar</span>
+                </button>
+              </div>
+
               <button
+                type="button"
                 onClick={() => setDetailOrder(null)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold"
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold cursor-pointer"
               >
                 Cerrar Detalle
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Edit Order Modal */}
+      {editingOrder && (
+        <EditOrderModal
+          isOpen={!!editingOrder}
+          order={editingOrder}
+          onClose={() => setEditingOrder(null)}
+        />
       )}
 
       {/* Reusable Confirm Delete Modal */}

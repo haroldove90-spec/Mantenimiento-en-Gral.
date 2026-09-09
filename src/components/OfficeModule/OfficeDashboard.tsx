@@ -53,8 +53,21 @@ import {
   RefreshCw,
   MessageSquare,
   Edit3,
-  Power
+  Power,
+  Truck,
+  AlertTriangle,
+  DollarSign
 } from 'lucide-react';
+
+export type StatusCategory = 'ALL' | 'PENDING' | 'IN_PROGRESS' | 'DELIVERY' | 'CLOSED' | 'REJECTED';
+
+export const getOrderCategory = (status: OrderStatus): StatusCategory => {
+  if (status === 'Cobrado/Cerrado') return 'CLOSED';
+  if (status === 'No Aceptado' || status === 'Cancelada') return 'REJECTED';
+  if (status === 'Pendiente de Entrega') return 'DELIVERY';
+  if (status === 'En Reparación') return 'IN_PROGRESS';
+  return 'PENDING';
+};
 
 const STAGES: OrderStatus[] = [
   'Pendiente de Visita',
@@ -159,19 +172,52 @@ export const OfficeDashboard: React.FC = () => {
   // Active / Inactive filter
   const [activeStateFilter, setActiveStateFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
+  // Status Category Tab filter (Todas, Pendientes, En Reparación, Por Entregar, Cobradas/Cerradas, No Aceptado)
+  const [statusCategoryFilter, setStatusCategoryFilter] = useState<StatusCategory>('ALL');
+
+  // Category counts computed in real time for auto-classification
+  const categoryCounts = useMemo(() => {
+    const counts: Record<StatusCategory, number> = {
+      ALL: orders.length,
+      PENDING: 0,
+      IN_PROGRESS: 0,
+      DELIVERY: 0,
+      CLOSED: 0,
+      REJECTED: 0
+    };
+    orders.forEach(o => {
+      const cat = getOrderCategory(o.status);
+      if (counts[cat] !== undefined) counts[cat]++;
+    });
+    return counts;
+  }, [orders]);
+
   // Warranty reopen modal
   const [warrantyOrder, setWarrantyOrder] = useState<ServiceOrder | null>(null);
   const [warrantyReason, setWarrantyReason] = useState('');
 
   const q = (searchQuery || '').toLowerCase();
   const filteredOrders = orders.filter(
-    o =>
-      (activeStateFilter === 'all' || (activeStateFilter === 'active' ? o.isActive !== false : o.isActive === false)) &&
-      (statusFilter === 'ALL' || o.status === statusFilter) &&
-      ((o.folio || '').toLowerCase().includes(q) ||
-      (o.clientName || '').toLowerCase().includes(q) ||
-      (o.departmentName || '').toLowerCase().includes(q) ||
-      (o.equipmentType || '').toLowerCase().includes(q))
+    o => {
+      const matchesActive = activeStateFilter === 'all' || (activeStateFilter === 'active' ? o.isActive !== false : o.isActive === false);
+      if (!matchesActive) return false;
+
+      // 1. Exact stage filter from select dropdown (if specific)
+      if (statusFilter !== 'ALL' && o.status !== statusFilter) return false;
+
+      // 2. High-level category tab filter
+      if (statusCategoryFilter !== 'ALL' && getOrderCategory(o.status) !== statusCategoryFilter) return false;
+
+      // 3. Search query match
+      const matchesSearch =
+        (o.folio || '').toLowerCase().includes(q) ||
+        (o.clientName || '').toLowerCase().includes(q) ||
+        (o.departmentName || '').toLowerCase().includes(q) ||
+        (o.equipmentType || '').toLowerCase().includes(q) ||
+        (o.technicianName || '').toLowerCase().includes(q);
+
+      return matchesSearch;
+    }
   );
 
   // Multi-Selection helpers for Orders
@@ -612,6 +658,110 @@ export const OfficeDashboard: React.FC = () => {
               </div>
             </div>
 
+            {/* Status Categories Auto-Classification Tabs */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-3 border-t border-slate-100">
+              <button
+                onClick={() => { setStatusCategoryFilter('ALL'); setStatusFilter('ALL'); }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                  statusCategoryFilter === 'ALL' && statusFilter === 'ALL'
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-100 bg-slate-50 border border-slate-200/70'
+                }`}
+              >
+                <span>📋 Todas</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                  statusCategoryFilter === 'ALL' && statusFilter === 'ALL' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                }`}>
+                  {orders.length}
+                </span>
+              </button>
+
+              <button
+                onClick={() => { setStatusCategoryFilter('PENDING'); setStatusFilter('ALL'); }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                  statusCategoryFilter === 'PENDING'
+                    ? 'bg-amber-500 text-white shadow-xs'
+                    : 'text-amber-800 hover:bg-amber-100/70 bg-amber-50 border border-amber-200/60'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>⏳ Pendientes</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                  statusCategoryFilter === 'PENDING' ? 'bg-white text-amber-600' : 'bg-amber-200/80 text-amber-900'
+                }`}>
+                  {categoryCounts.PENDING}
+                </span>
+              </button>
+
+              <button
+                onClick={() => { setStatusCategoryFilter('IN_PROGRESS'); setStatusFilter('ALL'); }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                  statusCategoryFilter === 'IN_PROGRESS'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-blue-800 hover:bg-blue-100/70 bg-blue-50 border border-blue-200/60'
+                }`}
+              >
+                <Wrench className="w-3.5 h-3.5" />
+                <span>🔧 En Reparación</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                  statusCategoryFilter === 'IN_PROGRESS' ? 'bg-white text-blue-600' : 'bg-blue-200/80 text-blue-900'
+                }`}>
+                  {categoryCounts.IN_PROGRESS}
+                </span>
+              </button>
+
+              <button
+                onClick={() => { setStatusCategoryFilter('DELIVERY'); setStatusFilter('ALL'); }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                  statusCategoryFilter === 'DELIVERY'
+                    ? 'bg-purple-600 text-white shadow-xs'
+                    : 'text-purple-800 hover:bg-purple-100/70 bg-purple-50 border border-purple-200/60'
+                }`}
+              >
+                <Truck className="w-3.5 h-3.5" />
+                <span>📦 Por Entregar / Cobrar</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                  statusCategoryFilter === 'DELIVERY' ? 'bg-white text-purple-600' : 'bg-purple-200/80 text-purple-900'
+                }`}>
+                  {categoryCounts.DELIVERY}
+                </span>
+              </button>
+
+              <button
+                onClick={() => { setStatusCategoryFilter('CLOSED'); setStatusFilter('ALL'); }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                  statusCategoryFilter === 'CLOSED'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-emerald-800 hover:bg-emerald-100/70 bg-emerald-50 border border-emerald-200/60'
+                }`}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>💰 Cobradas / Cerradas (Pagadas)</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                  statusCategoryFilter === 'CLOSED' ? 'bg-white text-emerald-600' : 'bg-emerald-200/80 text-emerald-900'
+                }`}>
+                  {categoryCounts.CLOSED}
+                </span>
+              </button>
+
+              <button
+                onClick={() => { setStatusCategoryFilter('REJECTED'); setStatusFilter('ALL'); }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                  statusCategoryFilter === 'REJECTED'
+                    ? 'bg-rose-600 text-white shadow-xs'
+                    : 'text-rose-800 hover:bg-rose-100/70 bg-rose-50 border border-rose-200/60'
+                }`}
+              >
+                <AlertTriangle className="w-3.5 h-3.5" />
+                <span>❌ No Aceptadas / Canceladas</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                  statusCategoryFilter === 'REJECTED' ? 'bg-white text-rose-600' : 'bg-rose-200/80 text-rose-900'
+                }`}>
+                  {categoryCounts.REJECTED}
+                </span>
+              </button>
+            </div>
+
             {/* Sync Result Banner */}
             {syncResult && (
               <div className={`p-3 rounded-xl border flex items-center justify-between text-xs font-bold ${
@@ -734,8 +884,27 @@ export const OfficeDashboard: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* Admin Status Selector */}
-                        <div className="flex items-center space-x-1.5 ml-auto">
+                        {/* Admin Status Selector & Badges */}
+                        <div className="flex flex-wrap items-center gap-1.5 ml-auto">
+                          {ord.status === 'Cobrado/Cerrado' && (
+                            <span className="inline-flex items-center space-x-1 bg-emerald-600 text-white text-xs font-bold px-2.5 py-1 rounded-xl shadow-xs">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Cobrada / Pagada</span>
+                              {((ord.collectedAmount && ord.collectedAmount > 0) || (ord.budget?.grandTotal && ord.budget.grandTotal > 0)) && (
+                                <span className="ml-1 bg-white/20 px-1.5 py-0.5 rounded-md font-black">
+                                  ${(ord.collectedAmount || ord.budget?.grandTotal || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                </span>
+                              )}
+                            </span>
+                          )}
+
+                          {ord.status === 'No Aceptado' && (
+                            <span className="inline-flex items-center space-x-1 bg-rose-600 text-white text-xs font-bold px-2.5 py-1 rounded-xl shadow-xs">
+                              <AlertTriangle className="w-3.5 h-3.5" />
+                              <span>Presupuesto No Aceptado</span>
+                            </span>
+                          )}
+
                           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider hidden sm:inline">Estatus:</span>
                           <select
                             value={ord.status}

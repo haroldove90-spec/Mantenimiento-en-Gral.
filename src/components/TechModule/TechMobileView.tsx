@@ -171,35 +171,26 @@ export const TechMobileView: React.FC = () => {
     });
   }, [orders]);
 
+  // Helper to categorize status into the 3 core pillars: Pendiente, En Proceso, Terminado
+  const getStatusGroup = (status: OrderStatus): 'pending' | 'in_progress' | 'completed' => {
+    if (status === 'Cobrado/Cerrado' || status === 'No Aceptado' || status === 'Cancelada') return 'completed';
+    if (status === 'En Diagnóstico' || status === 'En Reparación' || status === 'Pendiente de Entrega') return 'in_progress';
+    return 'pending';
+  };
+
   const effectiveOrders = assignedOrders;
 
-  // Filter by lifecycle category
+  // Filter by lifecycle category (Pendiente, En Proceso, Terminado/Cerrado/No Aceptado)
   const filteredByStatus = effectiveOrders.filter(o => {
-    if (statusFilter === 'pending') {
-      return (
-        o.status === 'Pendiente de Visita' ||
-        o.status === 'Presupuesto Pendiente' ||
-        o.status === 'Esperando Aprobación' ||
-        o.status === 'Pendiente de Entrega' ||
-        o.status === 'Garantía Reabierta' ||
-        (o.status as any) === 'Recepción Inicial' ||
-        (o.status as any) === 'Asignada'
-      );
-    }
-    if (statusFilter === 'in_progress') {
-      return o.status === 'En Diagnóstico' || o.status === 'En Reparación' || (o.status as any) === 'En proceso';
-    }
-    if (statusFilter === 'completed') {
-      return o.status === 'Cobrado/Cerrado' || (o.status as any) === 'Terminado' || (o.status as any) === 'Finalizada';
-    }
-    return true;
+    if (statusFilter === 'all') return true;
+    return getStatusGroup(o.status) === statusFilter;
   });
 
   // Sort orders: Newest & Active (Non-closed) orders strictly in primer plano (top)
   const sortedOrders = [...filteredByStatus].sort((a, b) => {
     // 1. Put active orders before closed orders
-    const aClosed = a.status === 'Cobrado/Cerrado' ? 1 : 0;
-    const bClosed = b.status === 'Cobrado/Cerrado' ? 1 : 0;
+    const aClosed = a.status === 'Cobrado/Cerrado' || a.status === 'No Aceptado' || a.status === 'Cancelada' ? 1 : 0;
+    const bClosed = b.status === 'Cobrado/Cerrado' || b.status === 'No Aceptado' || b.status === 'Cancelada' ? 1 : 0;
     if (aClosed !== bClosed) return aClosed - bClosed;
 
     // 2. Custom sort
@@ -237,13 +228,6 @@ export const TechMobileView: React.FC = () => {
 
     return true;
   });
-
-  // Helper to categorize status into the 3 core pillars: Pendiente, En Proceso, Terminado
-  const getStatusGroup = (status: OrderStatus): 'pending' | 'in_progress' | 'completed' => {
-    if (status === 'Cobrado/Cerrado' || status === 'No Aceptado' || status === 'Cancelada') return 'completed';
-    if (status === 'En Diagnóstico' || status === 'En Reparación' || status === 'Pendiente de Entrega') return 'in_progress';
-    return 'pending';
-  };
 
   // Open modal to confirm status change
   const handleOpenStatusModal = (order: ServiceOrder, newSt: OrderStatus) => {
@@ -826,8 +810,8 @@ export const TechMobileView: React.FC = () => {
                         <div className="bg-gradient-to-br from-amber-500 via-amber-400 to-yellow-500 text-slate-950 p-4 sm:p-5 rounded-2xl border-2 border-amber-600 shadow-md space-y-3 animate-in fade-in slide-in-from-top-2">
                           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-600/30 pb-2.5">
                             <div className="flex items-center space-x-2.5">
-                              <div className="w-9 h-9 rounded-xl bg-slate-950 text-amber-400 flex items-center justify-center font-black shadow-xs shrink-0">
-                                <DollarSign className="w-5 h-5" />
+                              <div className="w-10 h-10 rounded-xl bg-slate-950 text-amber-400 flex items-center justify-center font-black shadow-xs shrink-0">
+                                <DollarSign className="w-6 h-6" />
                               </div>
                               <div>
                                 <div className="text-[10px] uppercase font-black tracking-wider text-slate-900 flex items-center space-x-1">
@@ -835,56 +819,37 @@ export const TechMobileView: React.FC = () => {
                                   <span>Estatus: Pendiente de Entrega</span>
                                 </div>
                                 <h4 className="text-base sm:text-lg font-black text-slate-950 leading-tight">
-                                  💵 Cuánto Cobrar al Cliente al Entregar
+                                  💵 Cobro Requerido al Entregar
                                 </h4>
                               </div>
                             </div>
-                            <div className="text-right bg-slate-950 text-amber-300 px-4 py-2 rounded-xl border border-amber-400/40 shadow-inner">
-                              <span className="text-[10px] font-bold block text-amber-200/80 uppercase">
-                                {hasTax ? 'Total a Cobrar (IVA Incl.)' : 'Total a Cobrar (Neto)'}
-                              </span>
-                              <span className="text-xl sm:text-2xl font-black tracking-tight">
-                                ${grandTotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs font-bold text-amber-400">MXN</span>
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Desglose rápido del cobro */}
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                            <div className="bg-white/90 backdrop-blur-xs p-2.5 rounded-xl border border-amber-600/20">
-                              <span className="text-[10px] font-bold text-slate-600 uppercase block">Mano de Obra</span>
-                              <span className="font-extrabold text-slate-900 text-sm">
-                                ${labor.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                              </span>
-                            </div>
-                            <div className="bg-white/90 backdrop-blur-xs p-2.5 rounded-xl border border-amber-600/20">
-                              <span className="text-[10px] font-bold text-slate-600 uppercase block">Refacciones ({ord.budget?.parts?.length || 0})</span>
-                              <span className="font-extrabold text-slate-900 text-sm">
-                                ${partsSub.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                              </span>
-                            </div>
-                            <div className="bg-white/90 backdrop-blur-xs p-2.5 rounded-xl border border-amber-600/20">
-                              <span className="text-[10px] font-bold text-slate-600 uppercase block">
-                                {hasTax ? `IVA (${Math.round(taxRate * 100)}%)` : 'IVA (Impuesto)'}
-                              </span>
-                              <span className="font-extrabold text-slate-900 text-sm">
-                                {hasTax ? `$${tax.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : 'Sin IVA ($0)'}
-                              </span>
-                            </div>
-                            <div className="bg-slate-950 text-amber-300 p-2.5 rounded-xl border border-amber-500/30 flex flex-col justify-center">
-                              <span className="text-[10px] font-bold text-amber-200/70 uppercase block">Cobro en Entrega</span>
-                              <span className="font-black text-sm text-emerald-400 flex items-center space-x-1">
-                                <Receipt className="w-3.5 h-3.5 text-emerald-400" />
-                                <span>Por Liquidar</span>
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="flex flex-wrap items-center justify-between text-xs font-bold text-slate-950 pt-1">
-                            <span className="flex items-center space-x-1.5">
-                              <PackageCheck className="w-4 h-4 text-slate-900 shrink-0" />
-                              <span>Equipo reparado listo para entrega. Cobra este monto exacto al cliente y registra el cierre.</span>
+                            <span className="inline-flex items-center space-x-1.5 bg-slate-950 text-emerald-400 text-xs font-black px-3 py-1.5 rounded-xl border border-amber-400/40 shadow-xs">
+                              <Receipt className="w-3.5 h-3.5 text-emerald-400" />
+                              <span>Cobro en Entrega</span>
                             </span>
+                          </div>
+
+                          {/* Monto Total Único a Cobrar - Sin desglose de mano de obra ni refacciones */}
+                          <div className="bg-slate-950 text-amber-300 p-4 sm:p-5 rounded-xl border border-amber-400/40 shadow-inner flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <span className="text-[11px] font-black block text-amber-200 uppercase tracking-wider">
+                                {hasTax ? 'Total a Cobrar al Cliente (IVA Incluido):' : 'Total a Cobrar al Cliente:'}
+                              </span>
+                              <span className="text-xs text-amber-400/90 font-medium">
+                                Importe total final autorizado para liquidación
+                              </span>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-2xl sm:text-3xl font-black tracking-tight text-amber-300">
+                                ${grandTotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                              <span className="text-xs font-black text-amber-400 ml-1.5">MXN</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center space-x-2 text-xs font-bold text-slate-950 pt-0.5">
+                            <PackageCheck className="w-4 h-4 text-slate-900 shrink-0" />
+                            <span>Equipo reparado listo para entrega. Cobra este monto total único al cliente y registra la entrega.</span>
                           </div>
                         </div>
                       );
@@ -1253,23 +1218,21 @@ export const TechMobileView: React.FC = () => {
                 : (subtotal > 0 ? subtotal + tax : statusModalOrder.collectedAmount || 0);
 
               return (
-                <div className="bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 text-slate-950 p-3.5 rounded-2xl border border-amber-600 shadow-sm space-y-2 animate-in zoom-in-95">
+                <div className="bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 text-slate-950 p-3.5 rounded-2xl border border-amber-600 shadow-sm space-y-1.5 animate-in zoom-in-95">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
                       <DollarSign className="w-5 h-5 text-slate-950 shrink-0" />
                       <span className="font-black text-xs uppercase tracking-wider">
-                        {hasTax ? 'Monto a Cobrar (IVA Incluido):' : 'Monto a Cobrar (Neto):'}
+                        {hasTax ? 'Monto a Cobrar (IVA Incluido):' : 'Monto a Cobrar:'}
                       </span>
                     </div>
                     <span className="font-black text-lg text-slate-950 bg-white/90 px-3 py-1 rounded-xl border border-amber-600/30">
                       ${grandTotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
                     </span>
                   </div>
-                  <div className="flex justify-between text-[11px] font-bold text-slate-800 border-t border-amber-600/30 pt-1.5 px-1">
-                    <span>Mano de obra: ${labor.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-                    <span>Refacciones: ${partsSub.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-                    <span>IVA: {hasTax ? `$${tax.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : 'Sin IVA ($0)'}</span>
-                  </div>
+                  <p className="text-[11px] font-bold text-slate-900 px-1">
+                    Cobra este importe total autorizado al cliente al entregar el equipo reparado.
+                  </p>
                 </div>
               );
             })()}

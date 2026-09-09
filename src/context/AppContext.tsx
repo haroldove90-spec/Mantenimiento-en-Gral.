@@ -1478,11 +1478,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
 
+      // If foreign key constraint failed (e.g. technician_id or client_id or department_id not in DB)
+      if (resError && (resError.message?.includes('violates foreign key constraint') || resError.code === '23503')) {
+        const noFkPayload = { ...cleanPayload };
+        delete noFkPayload.technician_id;
+        delete noFkPayload.client_id;
+        delete noFkPayload.department_id;
+        if (isUuid(orderIdOrFolio)) {
+          const { data, error } = await supabase.from('service_orders').update(noFkPayload).eq('id', orderIdOrFolio).select();
+          if (!error && data && data.length > 0) {
+            resData = data;
+            resError = null;
+          }
+        }
+        if (!resData && folio) {
+          const { data, error } = await supabase.from('service_orders').update(noFkPayload).eq('folio', folio).select();
+          if (!error && data && data.length > 0) {
+            resData = data;
+            resError = null;
+          }
+        }
+      }
+
+      // If check constraint failed (e.g. status constraint in an older DB schema)
+      if (resError && (resError.message?.includes('violates check constraint') || resError.code === '23514')) {
+        const noStatusPayload = { ...cleanPayload };
+        if (noStatusPayload.status === 'No Aceptado') {
+          noStatusPayload.status = 'Cancelada';
+        } else {
+          delete noStatusPayload.status;
+        }
+        delete noStatusPayload.technician_id;
+        if (isUuid(orderIdOrFolio)) {
+          const { data, error } = await supabase.from('service_orders').update(noStatusPayload).eq('id', orderIdOrFolio).select();
+          if (!error && data && data.length > 0) {
+            resData = data;
+            resError = null;
+          }
+        }
+        if (!resData && folio) {
+          const { data, error } = await supabase.from('service_orders').update(noStatusPayload).eq('folio', folio).select();
+          if (!error && data && data.length > 0) {
+            resData = data;
+            resError = null;
+          }
+        }
+      }
+
       // Retry with minimal safe columns if full payload failed
       if (!resData) {
         const minimalPayload: any = {};
         if ('technician_name' in cleanPayload) minimalPayload.technician_name = cleanPayload.technician_name;
-        if ('status' in cleanPayload) minimalPayload.status = cleanPayload.status;
         if ('scheduled_date' in cleanPayload) minimalPayload.scheduled_date = cleanPayload.scheduled_date;
         if ('route_order' in cleanPayload) minimalPayload.route_order = cleanPayload.route_order;
 
@@ -1500,6 +1546,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               resData = data;
               resError = null;
             }
+          }
+        }
+      }
+
+      // If order doesn't exist in Supabase yet (0 rows updated without error)
+      if (!resData && !resError) {
+        const existingLocalOrder = orders.find(o => o.id === orderIdOrFolio || o.folio === folio || o.folio === orderIdOrFolio);
+        if (existingLocalOrder) {
+          const insertResult = await insertSupabaseOrder(existingLocalOrder);
+          if (insertResult.data && insertResult.data.length > 0) {
+            resData = insertResult.data;
+            resError = null;
           }
         }
       }
@@ -2057,6 +2115,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       let finalDate = scheduledDate || targetOrd?.scheduledDate || new Date().toISOString().split('T')[0];
       if (finalDate && !/^\d{4}-\d{2}-\d{2}$/.test(finalDate)) {
         finalDate = new Date().toISOString().split('T')[0];
+      }
+
+      // Proactively ensure technician exists in Supabase technicians table if UUID
+      if (isUuid(tech.id)) {
+        try {
+          await supabase.from('technicians').upsert({
+            id: tech.id,
+            name: tech.name,
+            phone: tech.phone || undefined,
+            specialty: tech.specialty || 'General',
+            status: tech.status || 'Activo'
+          }, { onConflict: 'id' });
+        } catch {
+          // Ignore if technicians table has different schema
+        }
       }
 
       const updatePayload: any = {

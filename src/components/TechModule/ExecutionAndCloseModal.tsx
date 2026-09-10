@@ -258,7 +258,7 @@ export const ExecutionAndCloseModal: React.FC<{
               <div>
                 <span className="font-bold block text-emerald-950">¡Presupuesto Aprobado por el Cliente!</span>
                 <p className="text-emerald-800 text-[11px]">
-                  Mano de obra y refacciones fueron autorizadas. Registra la solución y el cobro para concluir.
+                  El presupuesto total fue autorizado por el cliente. Registra la solución y el cobro para concluir.
                 </p>
               </div>
             </div>

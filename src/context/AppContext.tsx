@@ -2850,6 +2850,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } else if (!orderData.technicianId) {
           updatePayload.technician_id = null;
         }
+        if (orderData.technicianId && orderData.technicianId !== order.technicianId) {
+          const assignedTech = technicians.find(t => t.id === orderData.technicianId);
+          if (assignedTech) {
+            addNotification({
+              targetRole: 'tech',
+              targetTechnicianId: assignedTech.id,
+              targetTechnicianName: assignedTech.name,
+              orderFolio: order.folio,
+              title: '📋 Nueva Orden Asignada',
+              message: `Se te ha asignado la orden ${order.folio} (${order.clientName}) para ${order.equipmentType}.`
+            });
+          }
+        }
       }
       if (isUuid(orderData.clientId ?? order.clientId)) {
         updatePayload.client_id = orderData.clientId ?? order.clientId;

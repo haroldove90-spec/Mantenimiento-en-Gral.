@@ -220,6 +220,12 @@ export const OfficeDashboard: React.FC = () => {
     }
   );
 
+  // Visible stages in Kanban according to active category tab
+  const visibleStages = useMemo(() => {
+    if (statusCategoryFilter === 'ALL') return STAGES;
+    return STAGES.filter(s => getOrderCategory(s) === statusCategoryFilter);
+  }, [statusCategoryFilter]);
+
   // Multi-Selection helpers for Orders
   const isAllOrdersSelected =
     filteredOrders.length > 0 && filteredOrders.every(o => selectedOrderIds.includes(o.id));
@@ -1121,7 +1127,7 @@ export const OfficeDashboard: React.FC = () => {
           ) : (
             /* KANBAN BOARD VIEW */
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {STAGES.map(stage => {
+              {visibleStages.map(stage => {
                 const stageOrders = filteredOrders.filter(o => o.status === stage);
 
                 return (

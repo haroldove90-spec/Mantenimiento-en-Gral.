@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useApp, deduplicateTechnicians } from '../../context/AppContext';
-import { SystemUser, OperatingExpense, RoleType } from '../../types';
+import { SystemUser, OperatingExpense, RoleType, ServiceOrder } from '../../types';
 import { ConfirmDeleteModal } from '../ConfirmDeleteModal';
 import { SendCredentialsWhatsAppModal } from '../SendCredentialsWhatsAppModal';
 import { ClientsModule } from '../OfficeModule/ClientsModule';
@@ -181,11 +181,15 @@ export const OwnerDashboard: React.FC = () => {
 
   // Collection by Technician
   const techCollectionStats = deduplicateTechnicians(technicians).map(tech => {
-    const techClosed = closedOrders.filter(o => o.technicianId === tech.id);
-    const totalCollected = techClosed.reduce((sum, o) => sum + (o.collectedAmount || 0), 0);
-    const cashTotal = techClosed.filter(o => o.paymentMethod === 'Efectivo').reduce((sum, o) => sum + (o.collectedAmount || 0), 0);
-    const cardTotal = techClosed.filter(o => o.paymentMethod === 'Tarjeta').reduce((sum, o) => sum + (o.collectedAmount || 0), 0);
-    const transferTotal = techClosed.filter(o => o.paymentMethod === 'Transferencia').reduce((sum, o) => sum + (o.collectedAmount || 0), 0);
+    const techNameClean = tech.name.toLowerCase().trim();
+    const techClosed = closedOrders.filter(
+      o => o.technicianId === tech.id || (o.technicianName && o.technicianName.toLowerCase().trim() === techNameClean)
+    );
+    const getOrderAmount = (o: ServiceOrder) => o.collectedAmount || o.budget?.grandTotal || 0;
+    const totalCollected = techClosed.reduce((sum, o) => sum + getOrderAmount(o), 0);
+    const cashTotal = techClosed.filter(o => o.paymentMethod === 'Efectivo').reduce((sum, o) => sum + getOrderAmount(o), 0);
+    const cardTotal = techClosed.filter(o => o.paymentMethod === 'Tarjeta').reduce((sum, o) => sum + getOrderAmount(o), 0);
+    const transferTotal = techClosed.filter(o => o.paymentMethod === 'Transferencia').reduce((sum, o) => sum + getOrderAmount(o), 0);
 
     return {
       tech,

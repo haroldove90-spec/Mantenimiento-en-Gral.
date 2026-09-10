@@ -21,40 +21,10 @@ import {
   Phone,
   User,
   Building,
-  ExternalLink
+  ExternalLink,
+  ImageOff
 } from 'lucide-react';
-
-// Helper to compress image and convert to Base64
-const compressImageFile = (file: File, maxWidth = 1280, maxHeight = 1280, quality = 0.82): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        let { width, height } = img;
-        if (width > maxWidth || height > maxHeight) {
-          const ratio = Math.min(maxWidth / width, maxHeight / height);
-          width = Math.round(width * ratio);
-          height = Math.round(height * ratio);
-        }
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          resolve(e.target?.result as string);
-          return;
-        }
-        ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', quality));
-      };
-      img.onerror = () => resolve(e.target?.result as string);
-      img.src = e.target?.result as string;
-    };
-    reader.onerror = (err) => reject(err);
-    reader.readAsDataURL(file);
-  });
-};
+import { compressImageFile } from '../../lib/imageUtils';
 
 export const InspectionDiagnosticsModal: React.FC<{
   order: ServiceOrder;
@@ -106,7 +76,9 @@ export const InspectionDiagnosticsModal: React.FC<{
     for (let i = 0; i < files.length; i++) {
       try {
         const compressedBase64 = await compressImageFile(files[i]);
-        newPhotos.push(compressedBase64);
+        if (compressedBase64 && (compressedBase64.startsWith('data:image') || compressedBase64.startsWith('http'))) {
+          newPhotos.push(compressedBase64);
+        }
       } catch (err) {
         console.error('Error al procesar imagen:', err);
       }
@@ -126,7 +98,9 @@ export const InspectionDiagnosticsModal: React.FC<{
 
     try {
       const compressedBase64 = await compressImageFile(files[0]);
-      setPhotos(prev => [...prev, compressedBase64]);
+      if (compressedBase64 && (compressedBase64.startsWith('data:image') || compressedBase64.startsWith('http'))) {
+        setPhotos(prev => [...prev, compressedBase64]);
+      }
     } catch (err) {
       console.error('Error al procesar foto de cámara:', err);
     }

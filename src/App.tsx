@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
+import { normalizeRole } from './types';
 import { Navbar } from './components/Navbar';
 import { HomeDashboard } from './components/HomeDashboard';
 import { OfficeDashboard } from './components/OfficeModule/OfficeDashboard';
@@ -18,11 +19,12 @@ function MainContent() {
   // RBAC Guard: Restrict views based on currentUser role
   let effectiveRole = activeRole;
   if (currentUser) {
-    if (currentUser.role === 'tech' && (activeRole === 'owner' || activeRole === 'office')) {
+    const normRole = normalizeRole(currentUser.role);
+    if (normRole === 'tech' && (activeRole === 'owner' || activeRole === 'office')) {
       effectiveRole = 'tech';
-    } else if (currentUser.role === 'office' && activeRole === 'owner') {
+    } else if (normRole === 'office' && activeRole === 'owner') {
       effectiveRole = 'office';
-    } else if (currentUser.role === 'client' && (activeRole === 'owner' || activeRole === 'office' || activeRole === 'tech')) {
+    } else if (normRole === 'client' && (activeRole === 'owner' || activeRole === 'office' || activeRole === 'tech')) {
       effectiveRole = 'client';
     }
   }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp, deduplicateTechnicians } from '../../context/AppContext';
-import { PriorityType } from '../../types';
+import { PriorityType, normalizeRole, Technician } from '../../types';
 import { SendCredentialsWhatsAppModal } from '../SendCredentialsWhatsAppModal';
 import {
   X,
@@ -23,7 +23,32 @@ export const CreateOrderModal: React.FC<{ isOpen: boolean; onClose: () => void }
   isOpen,
   onClose
 }) => {
-  const { clients, technicians, createOrder, addClient, setSelectedClientOrderFolio } = useApp();
+  const { clients, technicians, systemUsers, createOrder, addClient, setSelectedClientOrderFolio } = useApp();
+
+  const availableTechnicians = useMemo(() => {
+    const rawList: Technician[] = [...technicians];
+    if (systemUsers && Array.isArray(systemUsers)) {
+      systemUsers.forEach(u => {
+        if (normalizeRole(u.role) === 'tech') {
+          rawList.push({
+            id: u.id,
+            name: u.name || 'Técnico',
+            phone: u.phone || '',
+            email: u.email || '',
+            specialty: 'Técnico de Campo',
+            activeOrdersCount: 0,
+            avgResponseTimeHours: 2.5,
+            status: u.status === 'Inactivo' ? 'Inactivo' : 'Activo'
+          });
+        }
+      });
+    }
+    return deduplicateTechnicians(rawList).filter(
+      t =>
+        t.status !== 'Inactivo' &&
+        !['tecnico 1', 'tecnico 2', 'técnico 1', 'técnico 2'].includes(t.name.toLowerCase().trim())
+    );
+  }, [technicians, systemUsers]);
 
   // Mode: existing vs new client
   const [clientMode, setClientMode] = useState<'existing' | 'new'>(
@@ -660,17 +685,11 @@ export const CreateOrderModal: React.FC<{ isOpen: boolean; onClose: () => void }
                     className="w-full bg-slate-50 border border-slate-300 text-slate-800 text-xs sm:text-sm rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-hidden transition-all font-medium"
                   >
                     <option value="">-- Sin asignar por ahora --</option>
-                    {deduplicateTechnicians(technicians)
-                      .filter(
-                        t =>
-                          t.status !== 'Inactivo' &&
-                          !['tecnico 1', 'tecnico 2', 'técnico 1', 'técnico 2'].includes(t.name.toLowerCase().trim())
-                      )
-                      .map(t => (
-                        <option key={t.id} value={t.id}>
-                          👨‍🔧 {t.name} ({t.specialty || 'Técnico de Campo'})
-                        </option>
-                      ))}
+                    {availableTechnicians.map(t => (
+                      <option key={t.id} value={t.id}>
+                        👨‍🔧 {t.name} ({t.specialty || 'Técnico de Campo'})
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>

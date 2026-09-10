@@ -3,16 +3,54 @@ export type RoleType = 'home' | 'owner' | 'office' | 'tech' | 'client';
 export const normalizeRole = (rawRole: any): 'owner' | 'office' | 'tech' | 'client' => {
   if (!rawRole) return 'client';
   const str = String(rawRole).trim().toLowerCase();
-  if (str === 'admin' || str === 'administrador' || str === 'dueño' || str === 'dueno' || str === 'owner') {
-    return 'owner';
-  }
-  if (str === 'oficina' || str === 'office' || str === 'recepcion' || str === 'recepción' || str === 'administrativo') {
-    return 'office';
-  }
-  if (str === 'tecnico' || str === 'técnico' || str === 'tech' || str === 'campo') {
+  // Check technician first to prevent "tecnico" being caught by general patterns
+  if (
+    str === 'tech' ||
+    str.includes('tecnic') ||
+    str.includes('técnic') ||
+    str.includes('technic') ||
+    str.includes('campo') ||
+    str.includes('operativ')
+  ) {
     return 'tech';
   }
+  if (
+    str === 'owner' ||
+    str.includes('dueñ') ||
+    str.includes('duen') ||
+    str.includes('admin') ||
+    str === 'gerente' ||
+    str === 'director'
+  ) {
+    return 'owner';
+  }
+  if (
+    str === 'office' ||
+    str.includes('oficin') ||
+    str.includes('recepc') ||
+    str.includes('administra') ||
+    str === 'secretaria' ||
+    str === 'despacho'
+  ) {
+    return 'office';
+  }
   return 'client';
+};
+
+export const normalizeOrderStatus = (rawStatus?: string | null): OrderStatus => {
+  if (!rawStatus) return 'Pendiente de Visita';
+  const s = String(rawStatus).trim().toLowerCase();
+  if (s.includes('cobrad') || s.includes('cerrad') || s.includes('pagad') || s.includes('completad') || s.includes('finaliz')) return 'Cobrado/Cerrado';
+  if (s.includes('no aceptad') || s.includes('rechazad')) return 'No Aceptado';
+  if (s.includes('cancelad')) return 'Cancelada';
+  if (s.includes('entreg') || s.includes('por entregar')) return 'Pendiente de Entrega';
+  if (s.includes('reparac') || s.includes('en reparacion')) return 'En Reparación';
+  if (s.includes('aprobac') || s.includes('esperando')) return 'Esperando Aprobación';
+  if (s.includes('presupuest') || s.includes('cotizac')) return 'Presupuesto Pendiente';
+  if (s.includes('diagnost')) return 'En Diagnóstico';
+  if (s.includes('garant')) return 'Garantía Reabierta';
+  if (s.includes('visita') || s.includes('pendient')) return 'Pendiente de Visita';
+  return 'Pendiente de Visita';
 };
 
 export const getRoleDisplayName = (role: string): string => {

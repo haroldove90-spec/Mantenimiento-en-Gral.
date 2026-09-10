@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase, SUPABASE_PROJECT_URL } from '../lib/supabase';
+import { parsePhotosSafe } from '../lib/imageUtils';
 import {
   RoleType,
   ServiceOrder,
@@ -202,7 +203,7 @@ export const deduplicateTechnicians = (techs: Technician[]): Technician[] => {
         email: existing.email || t.email || '',
         phone: existing.phone || t.phone || '',
         specialty: existing.specialty || t.specialty || 'Técnico de Campo',
-        status: (t.status === 'Inactivo' || existing.status === 'Inactivo') ? 'Inactivo' : 'Activo'
+        status: (t.status === 'Inactivo' && existing.status === 'Inactivo') ? 'Inactivo' : 'Activo'
       };
 
       byKey.set(matchedKey, merged);
@@ -673,7 +674,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [selectedClientOrderFolio]);
 
   useEffect(() => {
-    localStorage.setItem('app_service_orders', JSON.stringify(orders));
+    try {
+      localStorage.setItem('app_service_orders', JSON.stringify(orders));
+    } catch (err) {
+      console.warn('Alerta de cuota en localStorage al guardar órdenes, guardando snapshot ligero:', err);
+      try {
+        const lightweight = orders.map(o => ({
+          ...o,
+          diagnosticPhotos: (o.diagnosticPhotos || []).slice(0, 3).map(p => p.length > 50000 ? p.slice(0, 100) : p),
+          solutionPhotos: (o.solutionPhotos || []).slice(0, 3).map(p => p.length > 50000 ? p.slice(0, 100) : p)
+        }));
+        localStorage.setItem('app_service_orders', JSON.stringify(lightweight));
+      } catch {}
+    }
   }, [orders]);
 
   useEffect(() => {
@@ -997,11 +1010,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
       }
 
+      // Also ensure all users from allUsersMap with role === 'tech' are added to rawTechCandidates
+      for (const u of allUsersMap.values()) {
+        if (u.role === 'tech' && u.status !== 'Inactivo' && !forbiddenDemoNames.has(u.name.toLowerCase())) {
+          rawTechCandidates.push({
+            id: u.id,
+            name: u.name,
+            phone: u.phone || '',
+            email: u.email || '',
+            specialty: 'Técnico de Campo',
+            activeOrdersCount: 0,
+            avgResponseTimeHours: 2.5,
+            status: 'Activo'
+          });
+        }
+      }
+
       fetchedTechs = deduplicateTechnicians(
         rawTechCandidates.filter(t => !forbiddenDemoNames.has(t.name.toLowerCase()) && t.status !== 'Inactivo')
       );
-      setTechnicians(fetchedTechs);
-      localStorage.setItem('app_technicians', JSON.stringify(fetchedTechs));
+
+      setTechnicians(prev => {
+        const merged = deduplicateTechnicians([...prev, ...fetchedTechs]).filter(
+          t => !forbiddenDemoNames.has(t.name.toLowerCase()) && t.status !== 'Inactivo'
+        );
+        const finalTechs = merged.length > 0 ? merged : (fetchedTechs.length > 0 ? fetchedTechs : prev);
+        localStorage.setItem('app_technicians', JSON.stringify(finalTechs));
+        return finalTechs;
+      });
 
       if (fetchedTechs.length > 0) {
         // Background auto-sync to Supabase technicians table if missing
@@ -1050,10 +1086,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             scheduledDate: o.scheduled_date || new Date().toISOString().split('T')[0],
             routeOrder: Number(o.route_order || 1),
             diagnosticNotes: o.diagnostic_notes || '',
-            diagnosticPhotos: Array.isArray(o.diagnostic_photos) ? o.diagnostic_photos : [],
+            diagnosticPhotos: parsePhotosSafe(o.diagnostic_photos),
             requestedParts: Array.isArray(o.requested_parts) ? o.requested_parts : [],
             solutionNotes: o.solution_notes || '',
-            solutionPhotos: Array.isArray(o.solution_photos) ? o.solution_photos : [],
+            solutionPhotos: parsePhotosSafe(o.solution_photos),
             clientAddress: o.client_address || o.delivery_address || o.address || undefined,
             clientPhone: o.client_phone || o.phone || o.whatsapp || undefined,
             clientEmail: o.client_email || o.email || o.contact_email || undefined,
@@ -1813,6 +1849,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         )
       : undefined;
 
+    if (!tech && technicianId) {
+      const userMatch = systemUsers.find(
+        u =>
+          u.id === technicianId ||
+          normalizeStr(u.name) === normalizeStr(technicianId) ||
+          (u.email && normalizeStr(u.email) === normalizeStr(technicianId))
+      );
+      if (userMatch) {
+        tech = {
+          id: userMatch.id,
+          name: userMatch.name,
+          email: userMatch.email || '',
+          phone: userMatch.phone || '',
+          specialty: 'Técnico de Campo',
+          status: 'Activo',
+          activeOrdersCount: 0,
+          avgResponseTimeHours: 2.5
+        };
+      }
+    }
+
     const maxNum = orders.reduce((max, o) => {
       const match = o.folio?.match(/OS-(\d+)/i);
       if (match) {
@@ -2033,12 +2090,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const assignTechnician = (orderId: string, technicianId: string, routeOrder?: number, scheduledDate?: string) => {
-    const tech = technicians.find(
+    let tech = technicians.find(
       t =>
         t.id === technicianId ||
         normalizeStr(t.name) === normalizeStr(technicianId) ||
         (t.email && normalizeStr(t.email) === normalizeStr(technicianId))
     );
+    if (!tech) {
+      const userMatch = systemUsers.find(
+        u =>
+          u.id === technicianId ||
+          normalizeStr(u.name) === normalizeStr(technicianId) ||
+          (u.email && normalizeStr(u.email) === normalizeStr(technicianId))
+      );
+      if (userMatch) {
+        tech = {
+          id: userMatch.id,
+          name: userMatch.name,
+          email: userMatch.email || '',
+          phone: userMatch.phone || '',
+          specialty: 'Técnico de Campo',
+          status: 'Activo',
+          activeOrdersCount: 0,
+          avgResponseTimeHours: 2.5
+        };
+        setTechnicians(prev => deduplicateTechnicians([...prev, tech!]));
+      }
+    }
+
     if (!tech) {
       console.warn('Técnico no encontrado para ID/Nombre:', technicianId);
       return;
@@ -2579,7 +2658,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           status: 'Cobrado/Cerrado',
           completedAt: nowStr,
           solutionNotes,
-          solutionPhotos: [...ord.solutionPhotos, ...solutionPhotos],
+          solutionPhotos: Array.isArray(solutionPhotos) && solutionPhotos.length > 0 ? solutionPhotos : (ord.solutionPhotos || []),
           clientSignature: signature || ord.clientSignature,
           paymentMethod,
           collectedAmount: total,
@@ -2631,7 +2710,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           status: 'Cobrado/Cerrado',
           completed_at: nowStr,
           solution_notes: solutionNotes,
-          solution_photos: [...ord.solutionPhotos, ...solutionPhotos],
+          solution_photos: Array.isArray(solutionPhotos) && solutionPhotos.length > 0 ? solutionPhotos : (ord.solutionPhotos || []),
           client_signature: signature || ord.clientSignature,
           payment_method: paymentMethod,
           collected_amount: total

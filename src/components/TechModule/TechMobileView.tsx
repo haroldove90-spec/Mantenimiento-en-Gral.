@@ -40,7 +40,11 @@ import {
   DollarSign,
   Truck,
   PackageCheck,
-  Receipt
+  Receipt,
+  Lock,
+  Eye,
+  Image as ImageIcon,
+  X
 } from 'lucide-react';
 
 export const TechMobileView: React.FC = () => {
@@ -54,6 +58,8 @@ export const TechMobileView: React.FC = () => {
     assignTechnician,
     clearSampleData
   } = useApp();
+
+  const isTechUser = currentUser?.role === 'tech';
 
   // Identify logged in technician if user role is 'tech'
   const loggedInTech = useMemo(() => {
@@ -72,31 +78,56 @@ export const TechMobileView: React.FC = () => {
     );
   }, [currentUser, technicians]);
 
-  // Persistent activeTechId
+  // Collect all valid IDs and name variations for the logged in technician to strictly prevent leaking other folios
+  const myTechIds = useMemo(() => {
+    const ids: string[] = [];
+    if (currentUser?.id) ids.push(currentUser.id);
+    if (loggedInTech?.id && !ids.includes(loggedInTech.id)) ids.push(loggedInTech.id);
+    technicians.forEach(t => {
+      if (
+        (currentUser?.email && t.email && normalizeStr(t.email) === normalizeStr(currentUser.email)) ||
+        (currentUser?.name && t.name && normalizeStr(t.name) === normalizeStr(currentUser.name)) ||
+        (currentUser?.username && t.name && normalizeStr(t.name) === normalizeStr(currentUser.username))
+      ) {
+        if (!ids.includes(t.id)) ids.push(t.id);
+      }
+    });
+    return ids;
+  }, [currentUser, loggedInTech, technicians]);
+
+  const myTechNames = useMemo(() => {
+    const names: string[] = [];
+    if (currentUser?.name) names.push(normalizeStr(currentUser.name));
+    if (currentUser?.username) names.push(normalizeStr(currentUser.username));
+    if (loggedInTech?.name) names.push(normalizeStr(loggedInTech.name));
+    technicians.forEach(t => {
+      if (myTechIds.includes(t.id)) {
+        const n = normalizeStr(t.name);
+        if (n && !names.includes(n)) names.push(n);
+      }
+    });
+    return names.filter(Boolean);
+  }, [currentUser, loggedInTech, technicians, myTechIds]);
+
+  // Persistent activeTechId (locked if technician)
   const [activeTechId, setActiveTechId] = useState<string>(() => {
     if (currentUser?.role === 'tech') {
-      const curEmail = normalizeStr(currentUser.email);
-      const curName = normalizeStr(currentUser.name);
-      const matched = technicians.find(
-        t =>
-          (curEmail && t.email && normalizeStr(t.email) === curEmail) ||
-          (t.id && t.id === currentUser.id) ||
-          (curName && t.name && normalizeStr(t.name) === curName)
-      );
-      if (matched) return matched.id;
+      return loggedInTech?.id || currentUser.id || 'tech_current';
     }
     const saved = localStorage.getItem('sij_tech_active_filter');
-    if (saved) return saved;
-    return currentUser?.role === 'tech' && technicians.length > 0 ? technicians[0].id : 'all';
+    if (saved && saved !== 'all') return saved;
+    return 'all';
   });
 
   useEffect(() => {
-    if (currentUser?.role === 'tech' && loggedInTech) {
-      setActiveTechId(loggedInTech.id);
+    if (isTechUser) {
+      const myId = loggedInTech?.id || currentUser?.id || 'tech_current';
+      setActiveTechId(myId);
     }
-  }, [currentUser, loggedInTech]);
+  }, [isTechUser, currentUser, loggedInTech]);
 
   const handleSelectTechView = (val: string) => {
+    if (isTechUser) return; // Strict lock: field technicians cannot inspect other technicians
     setActiveTechId(val);
     localStorage.setItem('sij_tech_active_filter', val);
   };
@@ -120,53 +151,93 @@ export const TechMobileView: React.FC = () => {
   // Modals state
   const [diagOrder, setDiagOrder] = useState<ServiceOrder | null>(null);
   const [execOrder, setExecOrder] = useState<ServiceOrder | null>(null);
+  const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
 
-  // Assigned orders for selected technician (Normalized accent and case insensitive matching)
+  // Check whether an order belongs exclusively to the current logged-in technician
+  const isOrderAssignedToMe = useMemo(() => {
+    return (o: ServiceOrder): boolean => {
+      const orderTechId = (o.technicianId || '').trim();
+      const orderTechName = normalizeStr(o.technicianName);
+
+      // If order has no technician assigned, it is not assigned to me
+      if (
+        !orderTechId &&
+        (!orderTechName ||
+          orderTechName === 'sin asignar' ||
+          orderTechName === 'sin asignar por ahora' ||
+          orderTechName === 'disponible' ||
+          orderTechName === 'pendiente' ||
+          orderTechName === 'por asignar')
+      ) {
+        return false;
+      }
+
+      // 1. If order has an explicit technician ID:
+      // Must match myTechIds. If it has an ID and does NOT match my IDs, it belongs to another technician!
+      if (orderTechId) {
+        return myTechIds.includes(orderTechId);
+      }
+
+      // 2. If order has NO technicianId, match strictly by name:
+      if (orderTechName) {
+        // If the name belongs to another technician in the team, strictly exclude it
+        const isAssignedToOther = technicians.some(
+          t => !myTechIds.includes(t.id) && normalizeStr(t.name) === orderTechName
+        );
+        if (isAssignedToOther) return false;
+
+        return myTechNames.includes(orderTechName);
+      }
+
+      // 3. Email match (fallback)
+      if (currentUser?.email && (o as any).technicianEmail && normalizeStr((o as any).technicianEmail) === normalizeStr(currentUser.email)) {
+        return true;
+      }
+
+      return false;
+    };
+  }, [myTechIds, myTechNames, currentUser, technicians]);
+
+  // Assigned orders for selected technician (STRICT ISOLATION)
   const assignedOrders = useMemo(() => {
-    // If a specific technician is selected (or when logged in as technician)
+    // If the logged in user is a field technician: STRICT DATA ISOLATION
+    if (isTechUser) {
+      return orders.filter(isOrderAssignedToMe);
+    }
+
+    // For Office / Admin / Owner supervising the field module:
     if (activeTechId !== 'all') {
       const targetTech = currentTech || technicians.find(t => t.id === activeTechId);
       const targetId = targetTech ? targetTech.id : activeTechId;
-      const targetNameNorm = targetTech ? normalizeStr(targetTech.name) : normalizeStr(currentUser?.name);
-      const targetEmailNorm = targetTech?.email ? normalizeStr(targetTech.email) : normalizeStr(currentUser?.email);
+      const targetNameNorm = targetTech ? normalizeStr(targetTech.name) : '';
 
       return orders.filter(o => {
-        // Direct ID match
-        if (targetId && o.technicianId && (o.technicianId === targetId || (targetTech && o.technicianId === targetTech.id))) return true;
-
-        // Normalized Name match (case and accent insensitive)
+        if (targetId && o.technicianId && o.technicianId === targetId) return true;
         if (targetNameNorm && o.technicianName && normalizeStr(o.technicianName) === targetNameNorm) return true;
-
-        // Exact Email match
-        if (targetEmailNorm && (o as any).technicianEmail && normalizeStr((o as any).technicianEmail) === targetEmailNorm) return true;
-
         return false;
       });
     }
 
-    // If 'all' is selected:
-    // If logged in as technician, match with loggedInTech
-    if (currentUser?.role === 'tech' && loggedInTech) {
-      const myId = loggedInTech.id;
-      const myNameNorm = normalizeStr(loggedInTech.name);
-      return orders.filter(o => {
-        if (o.technicianId && o.technicianId === myId) return true;
-        if (myNameNorm && o.technicianName && normalizeStr(o.technicianName) === myNameNorm) return true;
-        return false;
-      });
-    }
-
-    // Admins and Office seeing global list
+    // Global view for Office / Admin
     return orders;
-  }, [orders, activeTechId, currentTech, technicians, currentUser, loggedInTech]);
+  }, [orders, isTechUser, isOrderAssignedToMe, activeTechId, currentTech, technicians]);
 
-  // Unassigned / Available pool of orders (Órdenes pendientes de técnico)
+  // Unassigned / Available pool of orders (Órdenes pendientes de asignación)
   const unassignedOrders = useMemo(() => {
     return orders.filter(o => {
-      if (o.status === 'Cobrado/Cerrado') return false;
+      if (o.status === 'Cobrado/Cerrado' || o.status === 'Cancelada' || o.status === 'No Aceptado') return false;
       const tId = (o.technicianId || '').trim();
       const tNameNorm = normalizeStr(o.technicianName);
-      const hasValidTech = Boolean(tId || (tNameNorm && tNameNorm !== 'sin asignar' && tNameNorm !== 'sin asignar por ahora' && tNameNorm !== 'disponible' && tNameNorm !== 'pendiente'));
+      const hasValidTech = Boolean(
+        tId ||
+        (tNameNorm &&
+          tNameNorm !== 'sin asignar' &&
+          tNameNorm !== 'sin asignar por ahora' &&
+          tNameNorm !== 'disponible' &&
+          tNameNorm !== 'pendiente' &&
+          tNameNorm !== 'por asignar')
+      );
+      // STRICT: Only orders with NO assigned technician
       return !hasValidTech;
     });
   }, [orders]);
@@ -323,32 +394,39 @@ export const TechMobileView: React.FC = () => {
 
         {/* Technician Selector & Sorting */}
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto justify-end">
-          <div className="flex items-center space-x-2">
-            <label className="text-xs font-semibold text-slate-600 whitespace-nowrap">Vista Técnico:</label>
-            <select
-              value={activeTechId}
-              onChange={e => handleSelectTechView(e.target.value)}
-              className="bg-slate-50 border border-slate-300 text-slate-900 text-xs font-bold rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-hidden cursor-pointer"
-            >
-              <option value="all">🌐 Ver Todas las Órdenes ({orders.length})</option>
-              {deduplicateTechnicians(technicians)
-                .filter(
-                  t =>
-                    t.status !== 'Inactivo' &&
-                    !['tecnico 1', 'tecnico 2', 'técnico 1', 'técnico 2'].includes(t.name.toLowerCase().trim())
-                )
-                .map(t => {
-                  const count = orders.filter(
-                    o => o.technicianId === t.id || (o.technicianName && o.technicianName.toLowerCase() === t.name.toLowerCase())
-                  ).length;
-                  return (
-                    <option key={t.id} value={t.id}>
-                      👨‍🔧 {t.name} ({count} asignadas)
-                    </option>
-                  );
-                })}
-            </select>
-          </div>
+          {isTechUser ? (
+            <div className="flex items-center space-x-1.5 bg-emerald-50 text-emerald-900 border border-emerald-300 px-3 py-1.5 rounded-xl text-xs font-bold shadow-xs">
+              <Lock className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+              <span>Mis Folios Exclusivos ({assignedOrders.length})</span>
+            </div>
+          ) : (
+            <div className="flex items-center space-x-2">
+              <label className="text-xs font-semibold text-slate-600 whitespace-nowrap">Vista Técnico:</label>
+              <select
+                value={activeTechId}
+                onChange={e => handleSelectTechView(e.target.value)}
+                className="bg-slate-50 border border-slate-300 text-slate-900 text-xs font-bold rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 outline-hidden cursor-pointer"
+              >
+                <option value="all">🌐 Ver Todas las Órdenes ({orders.length})</option>
+                {deduplicateTechnicians(technicians)
+                  .filter(
+                    t =>
+                      t.status !== 'Inactivo' &&
+                      !['tecnico 1', 'tecnico 2', 'técnico 1', 'técnico 2'].includes(t.name.toLowerCase().trim())
+                  )
+                  .map(t => {
+                    const count = orders.filter(
+                      o => o.technicianId === t.id || (o.technicianName && o.technicianName.toLowerCase() === t.name.toLowerCase())
+                    ).length;
+                    return (
+                      <option key={t.id} value={t.id}>
+                        👨‍🔧 {t.name} ({count} asignadas)
+                      </option>
+                    );
+                  })}
+              </select>
+            </div>
+          )}
 
           <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-semibold">
             <button
@@ -519,7 +597,7 @@ export const TechMobileView: React.FC = () => {
                     </button>
                   )}
 
-                  {orders.length > 0 && (
+                  {!isTechUser && orders.length > 0 && (
                     <button
                       onClick={() => {
                         handleSelectTechView('all');
@@ -532,7 +610,7 @@ export const TechMobileView: React.FC = () => {
                     </button>
                   )}
 
-                  {technicians
+                  {!isTechUser && technicians
                     .filter(
                       t =>
                         t.id !== activeTechId &&
@@ -936,6 +1014,41 @@ export const TechMobileView: React.FC = () => {
                           )}
                         </div>
                       )}
+
+                      {/* Photo Thumbnail Gallery on Card */}
+                      {((ord.diagnosticPhotos && ord.diagnosticPhotos.length > 0) || (ord.solutionPhotos && ord.solutionPhotos.length > 0)) && (
+                        <div className="flex flex-wrap items-center gap-2 mt-2 pt-2 border-t border-slate-100">
+                          {ord.diagnosticPhotos?.slice(0, 4).map((photo, pIdx) => (
+                            <button
+                              key={`diag-thumb-${pIdx}`}
+                              type="button"
+                              onClick={() => setPreviewPhoto(photo)}
+                              className="relative w-10 h-10 rounded-lg overflow-hidden border border-slate-300 hover:ring-2 hover:ring-blue-500 transition-all cursor-pointer group shrink-0"
+                              title="Ver foto de diagnóstico"
+                            >
+                              <img src={photo} alt={`Diagnóstico ${pIdx + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                              <span className="absolute bottom-0 right-0 bg-blue-600 text-white text-[7px] font-bold px-1 rounded-tl">Diag</span>
+                            </button>
+                          ))}
+                          {ord.solutionPhotos?.slice(0, 4).map((photo, pIdx) => (
+                            <button
+                              key={`sol-thumb-${pIdx}`}
+                              type="button"
+                              onClick={() => setPreviewPhoto(photo)}
+                              className="relative w-10 h-10 rounded-lg overflow-hidden border border-slate-300 hover:ring-2 hover:ring-emerald-500 transition-all cursor-pointer group shrink-0"
+                              title="Ver foto de solución"
+                            >
+                              <img src={photo} alt={`Solución ${pIdx + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                              <span className="absolute bottom-0 right-0 bg-emerald-600 text-white text-[7px] font-bold px-1 rounded-tl">Sol</span>
+                            </button>
+                          ))}
+                          {((ord.diagnosticPhotos?.length || 0) + (ord.solutionPhotos?.length || 0)) > 8 && (
+                            <span className="text-[10px] font-bold text-slate-500 self-center">
+                              +{((ord.diagnosticPhotos?.length || 0) + (ord.solutionPhotos?.length || 0)) - 8} más
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-end">
@@ -1303,6 +1416,29 @@ export const TechMobileView: React.FC = () => {
           isOpen={!!execOrder}
           onClose={() => setExecOrder(null)}
         />
+      )}
+
+      {/* FULL-SIZE PHOTO PREVIEW MODAL */}
+      {previewPhoto && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setPreviewPhoto(null)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setPreviewPhoto(null)}
+              className="absolute -top-12 right-0 bg-white/20 hover:bg-white/40 text-white p-2 rounded-full transition-colors cursor-pointer"
+              title="Cerrar vista previa"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <img
+              src={previewPhoto}
+              alt="Evidencia fotográfica"
+              className="max-h-[80vh] max-w-full rounded-2xl object-contain shadow-2xl border border-white/20"
+            />
+          </div>
+        </div>
       )}
 
     </div>

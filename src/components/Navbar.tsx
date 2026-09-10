@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp, normalizeStr } from '../context/AppContext';
+import { normalizeRole } from '../types';
 import { SupabaseSmartButton } from './SupabaseSmartButton';
 import {
   Building2,
@@ -88,7 +89,7 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
     }
   };
 
-  const userRole = currentUser?.role;
+  const userRole = currentUser?.role ? normalizeRole(currentUser.role) : undefined;
   const canSeeOwner = !userRole || userRole === 'owner';
   const canSeeOffice = !userRole || userRole === 'owner' || userRole === 'office';
   const canSeeTech = !userRole || userRole === 'owner' || userRole === 'tech';

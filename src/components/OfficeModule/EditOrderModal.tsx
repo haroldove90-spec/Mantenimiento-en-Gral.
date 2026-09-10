@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useApp, deduplicateTechnicians } from '../../context/AppContext';
-import { ServiceOrder, OrderStatus, PriorityType, Technician } from '../../types';
+import { ServiceOrder, OrderStatus, PriorityType, Technician, normalizeRole } from '../../types';
 import {
   X,
   Edit3,
@@ -39,7 +39,7 @@ interface EditOrderModalProps {
 }
 
 export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, onClose }) => {
-  const { updateOrder, technicians, clients, currentUser } = useApp();
+  const { updateOrder, technicians, clients, currentUser, systemUsers } = useApp();
 
   // Form states initialized with current order values
   const [clientName, setClientName] = useState(order.clientName || '');
@@ -88,8 +88,43 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ order, isOpen, o
 
   if (!isOpen) return null;
 
-  // Deduplicate technicians list
-  const uniqueTechs: Technician[] = deduplicateTechnicians(technicians);
+  // Deduplicate technicians list and merge tech users from systemUsers
+  const uniqueTechs: Technician[] = useMemo(() => {
+    const rawList: Technician[] = [...technicians];
+    if (systemUsers && Array.isArray(systemUsers)) {
+      systemUsers.forEach(u => {
+        if (normalizeRole(u.role) === 'tech') {
+          rawList.push({
+            id: u.id,
+            name: u.name || 'Técnico',
+            phone: u.phone || '',
+            email: u.email || '',
+            specialty: 'Técnico de Campo',
+            activeOrdersCount: 0,
+            avgResponseTimeHours: 2.5,
+            status: u.status === 'Inactivo' ? 'Inactivo' : 'Activo'
+          });
+        }
+      });
+    }
+    if (order.technicianId && order.technicianName && !rawList.some(t => t.id === order.technicianId)) {
+      rawList.push({
+        id: order.technicianId,
+        name: order.technicianName,
+        phone: '',
+        email: '',
+        specialty: 'Técnico de Campo',
+        activeOrdersCount: 0,
+        avgResponseTimeHours: 2.5,
+        status: 'Activo'
+      });
+    }
+    return deduplicateTechnicians(rawList).filter(
+      t =>
+        t.status !== 'Inactivo' &&
+        !['tecnico 1', 'tecnico 2', 'técnico 1', 'técnico 2'].includes(t.name.toLowerCase().trim())
+    );
+  }, [technicians, systemUsers, order.technicianId, order.technicianName]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

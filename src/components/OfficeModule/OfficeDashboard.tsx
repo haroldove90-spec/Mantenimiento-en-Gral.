@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useApp, deduplicateTechnicians, normalizeStr, getOrderClientInfo } from '../../context/AppContext';
-import { OrderStatus, ServiceOrder } from '../../types';
+import { OrderStatus, ServiceOrder, normalizeOrderStatus, normalizeRole, Technician } from '../../types';
 import { CreateOrderModal } from './CreateOrderModal';
 import { EditOrderModal } from './EditOrderModal';
 import { BudgetGeneratorModal } from './BudgetGeneratorModal';
@@ -18,6 +18,8 @@ import {
   List,
   PlusCircle,
   FileSpreadsheet,
+  FileText,
+  Layers,
   Users,
   BarChart3,
   Search,
@@ -61,11 +63,12 @@ import {
 
 export type StatusCategory = 'ALL' | 'PENDING' | 'IN_PROGRESS' | 'DELIVERY' | 'CLOSED' | 'REJECTED';
 
-export const getOrderCategory = (status: OrderStatus): StatusCategory => {
-  if (status === 'Cobrado/Cerrado') return 'CLOSED';
-  if (status === 'No Aceptado' || status === 'Cancelada') return 'REJECTED';
-  if (status === 'Pendiente de Entrega') return 'DELIVERY';
-  if (status === 'En Reparación') return 'IN_PROGRESS';
+export const getOrderCategory = (status: OrderStatus | string): StatusCategory => {
+  const norm = normalizeOrderStatus(status);
+  if (norm === 'Cobrado/Cerrado') return 'CLOSED';
+  if (norm === 'No Aceptado' || norm === 'Cancelada') return 'REJECTED';
+  if (norm === 'Pendiente de Entrega') return 'DELIVERY';
+  if (norm === 'En Reparación' || norm === 'En Diagnóstico') return 'IN_PROGRESS';
   return 'PENDING';
 };
 
@@ -86,6 +89,7 @@ export const OfficeDashboard: React.FC = () => {
   const {
     orders,
     technicians,
+    systemUsers,
     clients,
     currentUser,
     assignTechnician,
@@ -101,15 +105,30 @@ export const OfficeDashboard: React.FC = () => {
     syncAllDataToSupabase
   } = useApp();
 
-  const uniqueTechnicians = useMemo(
-    () =>
-      deduplicateTechnicians(technicians).filter(
-        t =>
-          t.status !== 'Inactivo' &&
-          !['tecnico 1', 'tecnico 2', 'técnico 1', 'técnico 2'].includes(t.name.toLowerCase().trim())
-      ),
-    [technicians]
-  );
+  const uniqueTechnicians = useMemo(() => {
+    const rawList: Technician[] = [...technicians];
+    if (systemUsers && Array.isArray(systemUsers)) {
+      systemUsers.forEach(u => {
+        if (normalizeRole(u.role) === 'tech') {
+          rawList.push({
+            id: u.id,
+            name: u.name || 'Técnico',
+            phone: u.phone || '',
+            email: u.email || '',
+            specialty: 'Técnico de Campo',
+            activeOrdersCount: 0,
+            avgResponseTimeHours: 2.5,
+            status: u.status === 'Inactivo' ? 'Inactivo' : 'Activo'
+          });
+        }
+      });
+    }
+    return deduplicateTechnicians(rawList).filter(
+      t =>
+        t.status !== 'Inactivo' &&
+        !['tecnico 1', 'tecnico 2', 'técnico 1', 'técnico 2'].includes(t.name.toLowerCase().trim())
+    );
+  }, [technicians, systemUsers]);
 
   const activeTab = officeSubTab;
   const setActiveTab = setOfficeSubTab;
@@ -202,11 +221,13 @@ export const OfficeDashboard: React.FC = () => {
       const matchesActive = activeStateFilter === 'all' || (activeStateFilter === 'active' ? o.isActive !== false : o.isActive === false);
       if (!matchesActive) return false;
 
+      const normStatus = normalizeOrderStatus(o.status);
+
       // 1. Exact stage filter from select dropdown (if specific)
-      if (statusFilter !== 'ALL' && o.status !== statusFilter) return false;
+      if (statusFilter !== 'ALL' && normStatus !== normalizeOrderStatus(statusFilter)) return false;
 
       // 2. High-level category tab filter
-      if (statusCategoryFilter !== 'ALL' && getOrderCategory(o.status) !== statusCategoryFilter) return false;
+      if (statusCategoryFilter !== 'ALL' && getOrderCategory(normStatus) !== statusCategoryFilter) return false;
 
       // 3. Search query match
       const matchesSearch =
@@ -551,6 +572,43 @@ export const OfficeDashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Submodule Navigation Bar */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar border-b border-slate-200">
+        {[
+          { id: 'orders', label: 'Órdenes de Servicio', count: orders.length, icon: FileText },
+          { id: 'routes', label: 'Ruta y Asignaciones', icon: Truck },
+          { id: 'budgets', label: 'Presupuestos', icon: DollarSign },
+          { id: 'services', label: 'Servicios Frecuentes', icon: Wrench },
+          { id: 'clients', label: 'Clientes', count: clients.length, icon: Users },
+          { id: 'catalog', label: 'Catálogo Refacciones', icon: Layers },
+          { id: 'reports', label: 'Reportes e Historial', icon: BarChart3 }
+        ].map(tab => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                isActive
+                  ? 'bg-blue-600 text-white shadow-xs ring-2 ring-blue-600/20'
+                  : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              <span>{tab.label}</span>
+              {tab.count !== undefined && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                  isActive ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-700'
+                }`}>
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
       {/* SUBMODULE 1: GESTIÓN DE ÓRDENES DE SERVICIO (OS) */}
       {activeTab === 'orders' && (
         <div className="space-y-4">
@@ -833,8 +891,22 @@ export const OfficeDashboard: React.FC = () => {
           {viewType === 'list' ? (
             <div className="space-y-3.5">
               {filteredOrders.length === 0 ? (
-                <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center text-slate-500 font-medium text-base">
-                  No se encontraron órdenes de servicio con los criterios especificados.
+                <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center text-slate-500 font-medium text-base space-y-3">
+                  <p>No se encontraron órdenes de servicio con los criterios especificados.</p>
+                  {orders.length > 0 && (
+                    <button
+                      onClick={() => {
+                        setSearchQuery('');
+                        setStatusFilter('ALL');
+                        setStatusCategoryFilter('ALL');
+                        setActiveStateFilter('all');
+                      }}
+                      className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-xs cursor-pointer"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                      <span>Restablecer Filtros y Ver Todas ({orders.length} órdenes)</span>
+                    </button>
+                  )}
                 </div>
               ) : (
                 filteredOrders.map(ord => {
@@ -1905,7 +1977,7 @@ export const OfficeDashboard: React.FC = () => {
                   value={detailOrder.technicianId || uniqueTechnicians.find(t => normalizeStr(t.name) === normalizeStr(detailOrder.technicianName))?.id || ''}
                   onChange={e => {
                     const targetTechId = e.target.value;
-                    const tech = technicians.find(t => t.id === targetTechId);
+                    const tech = uniqueTechnicians.find(t => t.id === targetTechId) || technicians.find(t => t.id === targetTechId);
                     if (tech) {
                       assignTechnician(detailOrder.id, tech.id, detailOrder.routeOrder || 1, detailOrder.scheduledDate);
                       const nowStr = new Date().toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });

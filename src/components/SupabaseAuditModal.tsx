@@ -19,8 +19,17 @@ import {
   TrendingUp,
   Hash,
   Filter,
-  CheckCheck
+  CheckCheck,
+  Key,
+  Settings,
+  RotateCcw
 } from 'lucide-react';
+import {
+  SUPABASE_PROJECT_URL,
+  isUsingCustomSupabase,
+  saveCustomSupabaseConfig,
+  resetSupabaseConfig
+} from '../lib/supabase';
 
 export const SupabaseAuditModal: React.FC = () => {
   const {
@@ -39,11 +48,16 @@ export const SupabaseAuditModal: React.FC = () => {
     expenses
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'diagnostic' | 'history' | 'sql'>('diagnostic');
+  const [activeTab, setActiveTab] = useState<'diagnostic' | 'history' | 'sql' | 'config'>('diagnostic');
   const [filterAction, setFilterAction] = useState<string>('ALL');
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
+
+  // Custom Supabase credentials form state
+  const [inputUrl, setInputUrl] = useState(() => localStorage.getItem('custom_supabase_url') || '');
+  const [inputKey, setInputKey] = useState(() => localStorage.getItem('custom_supabase_key') || '');
+  const [configFeedback, setConfigFeedback] = useState<string | null>(null);
 
   if (!isAuditModalOpen) return null;
 
@@ -400,6 +414,23 @@ CREATE INDEX IF NOT EXISTS idx_telemetry_created_at ON public.telemetry_audit_lo
             <FileCode className="w-4 h-4" />
             <span>3. Esquema SQL & Estructura</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('config')}
+            className={`pb-3 px-3 text-xs sm:text-sm font-bold flex items-center space-x-2 border-b-2 transition-all cursor-pointer ${
+              activeTab === 'config'
+                ? 'border-emerald-400 text-emerald-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Key className="w-4 h-4 text-amber-400" />
+            <span>4. Configurar Credenciales</span>
+            {isUsingCustomSupabase && (
+              <span className="bg-amber-500/20 text-amber-400 text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-amber-500/40">
+                Custom
+              </span>
+            )}
+          </button>
         </div>
 
         {/* Modal Content */}
@@ -475,6 +506,30 @@ CREATE INDEX IF NOT EXISTS idx_telemetry_created_at ON public.telemetry_audit_lo
                   </button>
                 </div>
               </div>
+
+              {/* Quota / Credentials Notice */}
+              {!supabaseStatus.isConnected && (
+                <div className="bg-amber-950/40 border border-amber-500/50 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in">
+                  <div className="flex items-center space-x-3">
+                    <Key className="w-5 h-5 text-amber-400 shrink-0" />
+                    <div>
+                      <p className="text-xs font-bold text-amber-200">
+                        ¿El proyecto gratuito alcanzó su cuota de transferencia (egress_quota)?
+                      </p>
+                      <p className="text-[11px] text-slate-300">
+                        Puedes ingresar las credenciales de tu propio proyecto de Supabase en la pestaña 4 para sincronizar en tiempo real.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setActiveTab('config')}
+                    className="cursor-pointer bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black px-4 py-2 rounded-xl transition-all shrink-0 flex items-center space-x-1.5 shadow-sm"
+                  >
+                    <Settings className="w-3.5 h-3.5" />
+                    <span>Configurar Credenciales</span>
+                  </button>
+                </div>
+              )}
 
               {/* Status Grid Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -769,6 +824,132 @@ CREATE INDEX IF NOT EXISTS idx_telemetry_created_at ON public.telemetry_audit_lo
               {/* Code Container */}
               <div className="relative bg-slate-950 rounded-2xl border border-slate-800 p-4 font-mono text-[11px] text-slate-300 max-h-[50vh] overflow-y-auto leading-relaxed shadow-inner">
                 <pre className="whitespace-pre-wrap">{fullSqlScript}</pre>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: CONFIGURAR CREDENCIALES SUPABASE */}
+          {activeTab === 'config' && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              {/* Status Header */}
+              <div className="bg-slate-950/60 p-5 rounded-2xl border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                    <Key className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm sm:text-base text-white">
+                      Conexión a tu Propio Proyecto Supabase
+                    </h4>
+                    <p className="text-xs text-slate-400">
+                      {isUsingCustomSupabase
+                        ? 'Estás utilizando credenciales personalizadas guardadas en este navegador.'
+                        : 'Actualmente usando el proyecto predeterminado del sistema.'}
+                    </p>
+                  </div>
+                </div>
+
+                {isUsingCustomSupabase && (
+                  <button
+                    onClick={() => {
+                      if (confirm('¿Restablecer al proyecto predeterminado?')) {
+                        resetSupabaseConfig();
+                      }
+                    }}
+                    className="cursor-pointer bg-slate-800 hover:bg-slate-700 text-rose-300 hover:text-rose-200 text-xs font-bold px-4 py-2 rounded-xl transition-all flex items-center space-x-2 border border-slate-700 shrink-0"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Restablecer a Predeterminado</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Form */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!inputUrl.trim().startsWith('http')) {
+                    setConfigFeedback('Error: La URL debe comenzar con https://');
+                    return;
+                  }
+                  if (!inputKey.trim() || inputKey.trim().length < 40) {
+                    setConfigFeedback('Error: La Clave Anon (API Key) parece inválida o demasiado corta.');
+                    return;
+                  }
+                  saveCustomSupabaseConfig(inputUrl.trim(), inputKey.trim());
+                }}
+                className="bg-slate-950/80 p-5 rounded-2xl border border-slate-800 space-y-4"
+              >
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    URL del Proyecto Supabase (Project URL)
+                  </label>
+                  <input
+                    type="url"
+                    value={inputUrl}
+                    onChange={(e) => {
+                      setInputUrl(e.target.value);
+                      setConfigFeedback(null);
+                    }}
+                    placeholder="https://tu-proyecto.supabase.co"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-mono text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                    required
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Encuéntralo en Supabase &gt; Project Settings &gt; API &gt; Project URL.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    Clave Pública Anónima (anon public key)
+                  </label>
+                  <input
+                    type="text"
+                    value={inputKey}
+                    onChange={(e) => {
+                      setInputKey(e.target.value);
+                      setConfigFeedback(null);
+                    }}
+                    placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-mono text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                    required
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Encuéntralo en Supabase &gt; Project Settings &gt; API &gt; Project API keys &gt; anon public.
+                  </p>
+                </div>
+
+                {configFeedback && (
+                  <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs font-bold">
+                    {configFeedback}
+                  </div>
+                )}
+
+                <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3">
+                  <button
+                    type="submit"
+                    className="cursor-pointer bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs sm:text-sm px-6 py-3 rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center space-x-2"
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-slate-950" />
+                    <span>Guardar Credenciales y Conectar</span>
+                  </button>
+                </div>
+              </form>
+
+              {/* Instructions Box */}
+              <div className="bg-slate-950/40 border border-slate-800/80 rounded-2xl p-4 text-xs text-slate-400 space-y-2">
+                <h5 className="font-bold text-slate-200 flex items-center space-x-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  <span>Guía para crear tu proyecto Supabase gratis:</span>
+                </h5>
+                <ol className="list-decimal list-inside space-y-1 text-slate-400 pl-1 leading-relaxed">
+                  <li>Crea una cuenta gratuita en <strong className="text-white">supabase.com</strong> si no tienes una.</li>
+                  <li>Crea un nuevo proyecto (puedes nombrarlo <strong className="text-white">SIJ Servicios</strong>).</li>
+                  <li>Ve a <strong className="text-white">Project Settings &gt; API</strong> y copia el <strong className="text-white">Project URL</strong> y la <strong className="text-white">anon key</strong>.</li>
+                  <li>Pégalos en el formulario de arriba y haz clic en <strong className="text-white">Guardar Credenciales y Conectar</strong>.</li>
+                  <li>Ve a la pestaña <strong className="text-white">3. Esquema SQL</strong>, copia el script y ejecútalo en el <strong className="text-white">SQL Editor</strong> de Supabase para generar todas las tablas e índices.</li>
+                </ol>
               </div>
             </div>
           )}

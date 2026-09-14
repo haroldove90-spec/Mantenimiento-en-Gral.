@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useApp, deduplicateTechnicians } from '../../context/AppContext';
-import { SystemUser, OperatingExpense, RoleType, ServiceOrder } from '../../types';
+import { SystemUser, OperatingExpense, RoleType, ServiceOrder, normalizeOrderStatus, normalizeRole, Technician } from '../../types';
 import { ConfirmDeleteModal } from '../ConfirmDeleteModal';
 import { SendCredentialsWhatsAppModal } from '../SendCredentialsWhatsAppModal';
 import { ClientsModule } from '../OfficeModule/ClientsModule';
@@ -158,8 +158,8 @@ export const OwnerDashboard: React.FC = () => {
   const [expAmount, setExpAmount] = useState('');
 
   // Calculations for Sales & Analytics
-  const closedOrders = orders.filter(o => o.status === 'Cobrado/Cerrado');
-  const pendingOrders = orders.filter(o => o.status !== 'Cobrado/Cerrado');
+  const closedOrders = orders.filter(o => normalizeOrderStatus(o.status) === 'Cobrado/Cerrado');
+  const pendingOrders = orders.filter(o => normalizeOrderStatus(o.status) !== 'Cobrado/Cerrado');
 
   const totalSalesAllTime = closedOrders.reduce((sum, o) => {
     if (o.collectedAmount) return sum + o.collectedAmount;
@@ -179,8 +179,30 @@ export const OwnerDashboard: React.FC = () => {
   const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
   const netIncome = monthSales - totalExpenses;
 
+  // All technicians across technicians table and systemUsers with role tech
+  const allTeamTechs = useMemo(() => {
+    const list: Technician[] = [...technicians];
+    if (systemUsers && Array.isArray(systemUsers)) {
+      systemUsers.forEach(u => {
+        if (normalizeRole(u.role) === 'tech') {
+          list.push({
+            id: u.id,
+            name: u.name || 'Técnico',
+            phone: u.phone || '',
+            email: u.email || '',
+            specialty: 'Técnico de Campo',
+            activeOrdersCount: 0,
+            avgResponseTimeHours: 2.5,
+            status: u.status === 'Inactivo' ? 'Inactivo' : 'Activo'
+          });
+        }
+      });
+    }
+    return deduplicateTechnicians(list);
+  }, [technicians, systemUsers]);
+
   // Collection by Technician
-  const techCollectionStats = deduplicateTechnicians(technicians).map(tech => {
+  const techCollectionStats = allTeamTechs.map(tech => {
     const techNameClean = tech.name.toLowerCase().trim();
     const techClosed = closedOrders.filter(
       o => o.technicianId === tech.id || (o.technicianName && o.technicianName.toLowerCase().trim() === techNameClean)
@@ -202,7 +224,7 @@ export const OwnerDashboard: React.FC = () => {
   });
 
   // Filtered internal employees (excluding purely clients)
-  const internalEmployees = systemUsers.filter(u => u.role !== 'client');
+  const internalEmployees = systemUsers.filter(u => normalizeRole(u.role) !== 'client');
 
   const filteredEmployees = internalEmployees.filter(emp => {
     const q = employeeSearch.toLowerCase().trim();

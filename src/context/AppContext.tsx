@@ -1922,6 +1922,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       description,
       priority,
       status: 'Pendiente de Visita',
+      isActive: true,
+      routeOrder: 1,
       technicianId: tech?.id,
       technicianName: tech?.name,
       createdAt: nowStr,
@@ -3645,7 +3647,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // 2. Sync Service Orders to 'service_orders'
       for (const ord of orders) {
         try {
-          if (!ord || !ord.folio || ord.folio.startsWith('SAMPLE-') || ['OS-1001', 'OS-1002', 'OS-1003', 'OS-1004'].includes(ord.folio)) {
+          if (!ord || !ord.folio || ord.folio.startsWith('SAMPLE-')) {
             continue;
           }
           const { data: existingOrd } = await supabase.from('service_orders').select('id').eq('folio', ord.folio);

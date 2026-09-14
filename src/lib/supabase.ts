@@ -22,12 +22,47 @@ const isValidKey = (key: any): boolean => {
   return key.trim().startsWith('eyJ') && key.trim().length > 50;
 };
 
-const rawUrl = env.VITE_SUPABASE_URL;
-const rawKey = env.VITE_SUPABASE_ANON_KEY;
+const getStoredUrl = (): string | null => {
+  try {
+    const custom = localStorage.getItem('custom_supabase_url');
+    if (custom && custom.trim().startsWith('http')) return custom.trim();
+  } catch {}
+  return null;
+};
+
+const getStoredKey = (): string | null => {
+  try {
+    const custom = localStorage.getItem('custom_supabase_key');
+    if (custom && isValidKey(custom)) return custom.trim();
+  } catch {}
+  return null;
+};
+
+const storedUrl = getStoredUrl();
+const storedKey = getStoredKey();
+
+const rawUrl = storedUrl || env.VITE_SUPABASE_URL;
+const rawKey = storedKey || env.VITE_SUPABASE_ANON_KEY;
 
 const SUPABASE_URL = sanitizeUrl(rawUrl);
 const SUPABASE_ANON_KEY = isValidKey(rawKey) ? rawKey : FALLBACK_KEY;
 
 export const SUPABASE_PROJECT_URL = SUPABASE_URL;
+export const isUsingCustomSupabase = Boolean(storedUrl && storedKey);
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+export const saveCustomSupabaseConfig = (url: string, key: string) => {
+  if (url && key) {
+    localStorage.setItem('custom_supabase_url', url.trim());
+    localStorage.setItem('custom_supabase_key', key.trim());
+    window.location.reload();
+  }
+};
+
+export const resetSupabaseConfig = () => {
+  localStorage.removeItem('custom_supabase_url');
+  localStorage.removeItem('custom_supabase_key');
+  window.location.reload();
+};
+
 

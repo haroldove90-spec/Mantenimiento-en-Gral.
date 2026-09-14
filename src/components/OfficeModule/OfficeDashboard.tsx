@@ -54,6 +54,7 @@ import {
   Download,
   RefreshCw,
   MessageSquare,
+  Filter,
   Edit3,
   Power,
   Truck,
@@ -887,6 +888,30 @@ export const OfficeDashboard: React.FC = () => {
             </div>
           </div>
 
+          {/* Active Filter Notification Banner */}
+          {(statusFilter !== 'ALL' || statusCategoryFilter !== 'ALL' || activeStateFilter !== 'all' || searchQuery.trim() !== '') && (
+            <div className="bg-blue-50 border border-blue-200 text-blue-950 px-4 py-2.5 rounded-xl text-xs flex flex-wrap items-center justify-between gap-2 shadow-2xs">
+              <div className="flex items-center space-x-2">
+                <Filter className="w-4 h-4 text-blue-600 shrink-0" />
+                <span>
+                  Filtro activo: Mostrando <strong className="text-blue-800 font-bold">{filteredOrders.length}</strong> de <strong className="text-slate-900 font-bold">{orders.length}</strong> órdenes registradas.
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setStatusFilter('ALL');
+                  setStatusCategoryFilter('ALL');
+                  setActiveStateFilter('all');
+                }}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-bold text-xs flex items-center space-x-1.5 cursor-pointer transition-colors shadow-2xs"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Mostrar Todas las Órdenes</span>
+              </button>
+            </div>
+          )}
+
           {/* LIST VIEW (CLEAN RESPONSIVE CARDS) */}
           {viewType === 'list' ? (
             <div className="space-y-3.5">
@@ -1200,7 +1225,9 @@ export const OfficeDashboard: React.FC = () => {
             /* KANBAN BOARD VIEW */
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {visibleStages.map(stage => {
-                const stageOrders = filteredOrders.filter(o => o.status === stage);
+                const stageOrders = filteredOrders.filter(
+                  o => normalizeOrderStatus(o.status) === normalizeOrderStatus(stage)
+                );
 
                 return (
                   <div
@@ -1830,7 +1857,17 @@ export const OfficeDashboard: React.FC = () => {
       {activeTab === 'reports' && <ReportsAndMetrics />}
 
       {/* MODALS */}
-      <CreateOrderModal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} />
+      <CreateOrderModal
+        isOpen={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        onOrderCreated={() => {
+          setActiveTab('orders');
+          setStatusCategoryFilter('ALL');
+          setStatusFilter('ALL');
+          setActiveStateFilter('all');
+          setSearchQuery('');
+        }}
+      />
 
       {budgetOrder && (
         <BudgetGeneratorModal

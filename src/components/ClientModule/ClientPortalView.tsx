@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
+import { normalizeRole } from '../../types';
 import {
   UserCheck,
   CheckCircle2,
@@ -20,6 +21,7 @@ import {
 export const ClientPortalView: React.FC = () => {
   const {
     orders,
+    currentUser,
     approveBudget,
     rejectBudget,
     clearSampleData,
@@ -27,7 +29,29 @@ export const ClientPortalView: React.FC = () => {
     setSelectedClientOrderFolio
   } = useApp();
 
-  const selectedFolio = selectedClientOrderFolio || orders[0]?.folio || '';
+  const isClientRole = normalizeRole(currentUser?.role) === 'client';
+
+  const clientOrders = useMemo(() => {
+    if (!isClientRole || !currentUser) return orders;
+    const curEmail = (currentUser.email || '').toLowerCase().trim();
+    const curName = (currentUser.name || '').toLowerCase().trim();
+    const curUser = (currentUser.username || '').toLowerCase().trim();
+    const filtered = orders.filter(o => {
+      const oName = (o.clientName || '').toLowerCase().trim();
+      const oEmail = (o.clientEmail || '').toLowerCase().trim();
+      const oContact = (o.clientContact || '').toLowerCase().trim();
+      return (
+        o.clientId === currentUser.id ||
+        (curEmail && oEmail === curEmail) ||
+        (curName && (oName.includes(curName) || curName.includes(oName))) ||
+        (curUser && (oName.includes(curUser) || curUser.includes(oName))) ||
+        (curName && oContact.includes(curName))
+      );
+    });
+    return filtered.length > 0 ? filtered : orders;
+  }, [orders, isClientRole, currentUser]);
+
+  const selectedFolio = selectedClientOrderFolio || clientOrders[0]?.folio || '';
   const setSelectedFolio = (f: string) => setSelectedClientOrderFolio(f);
 
   const [rejectComment, setRejectComment] = useState('');
@@ -35,9 +59,9 @@ export const ClientPortalView: React.FC = () => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const currentOrder =
-    orders.find(
+    clientOrders.find(
       o => (o.folio || '').toLowerCase() === (selectedFolio || '').toLowerCase()
-    ) || orders[0];
+    ) || clientOrders[0];
 
   const budget = currentOrder?.budget;
 
@@ -119,7 +143,7 @@ export const ClientPortalView: React.FC = () => {
               onChange={e => setSelectedFolio(e.target.value)}
               className="bg-slate-50 border border-slate-300 text-slate-800 text-xs font-bold rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 outline-hidden"
             >
-              {orders.map(o => (
+              {clientOrders.map(o => (
                 <option key={o.id} value={o.folio}>
                   {o.folio} - {o.clientName} ({o.status})
                 </option>

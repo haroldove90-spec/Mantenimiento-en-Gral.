@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp, deduplicateTechnicians, normalizeStr, getOrderClientInfo } from '../../context/AppContext';
-import { ServiceOrder, OrderStatus } from '../../types';
+import { ServiceOrder, OrderStatus, normalizeRole } from '../../types';
 import { InspectionDiagnosticsModal } from './InspectionDiagnosticsModal';
 import { ExecutionAndCloseModal } from './ExecutionAndCloseModal';
 import {
@@ -59,11 +59,11 @@ export const TechMobileView: React.FC = () => {
     clearSampleData
   } = useApp();
 
-  const isTechUser = currentUser?.role === 'tech';
+  const isTechUser = normalizeRole(currentUser?.role) === 'tech';
 
   // Identify logged in technician if user role is 'tech'
   const loggedInTech = useMemo(() => {
-    if (!currentUser || currentUser.role !== 'tech') return null;
+    if (!currentUser || normalizeRole(currentUser.role) !== 'tech') return null;
     const curEmail = normalizeStr(currentUser.email);
     const curName = normalizeStr(currentUser.name);
     const curUser = normalizeStr(currentUser.username);
@@ -111,8 +111,8 @@ export const TechMobileView: React.FC = () => {
 
   // Persistent activeTechId (locked if technician)
   const [activeTechId, setActiveTechId] = useState<string>(() => {
-    if (currentUser?.role === 'tech') {
-      return loggedInTech?.id || currentUser.id || 'tech_current';
+    if (normalizeRole(currentUser?.role) === 'tech') {
+      return loggedInTech?.id || currentUser?.id || 'tech_current';
     }
     const saved = localStorage.getItem('sij_tech_active_filter');
     if (saved && saved !== 'all') return saved;
@@ -287,7 +287,7 @@ export const TechMobileView: React.FC = () => {
       return false;
     }
 
-    if (currentUser?.role === 'tech' && loggedInTech) {
+    if (normalizeRole(currentUser?.role) === 'tech' && loggedInTech) {
       const myId = loggedInTech.id;
       const myNameNorm = normalizeStr(loggedInTech.name);
       if (!n.targetTechnicianId && !n.targetTechnicianName) return true;

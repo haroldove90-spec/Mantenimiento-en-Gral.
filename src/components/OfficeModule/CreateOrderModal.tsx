@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp, deduplicateTechnicians } from '../../context/AppContext';
-import { PriorityType, normalizeRole, Technician } from '../../types';
+import { PriorityType, normalizeRole, Technician, ServiceOrder } from '../../types';
 import { SendCredentialsWhatsAppModal } from '../SendCredentialsWhatsAppModal';
 import {
   X,
@@ -16,14 +16,22 @@ import {
   CheckCircle2,
   Calendar,
   UserPlus,
-  MessageSquare
+  MessageSquare,
+  Eye,
+  ExternalLink
 } from 'lucide-react';
 
-export const CreateOrderModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
+export const CreateOrderModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onOrderCreated?: (order: ServiceOrder) => void;
+}> = ({
   isOpen,
-  onClose
+  onClose,
+  onOrderCreated
 }) => {
   const { clients, technicians, systemUsers, createOrder, addClient, setSelectedClientOrderFolio } = useApp();
+  const [createdOrder, setCreatedOrder] = useState<ServiceOrder | null>(null);
 
   const availableTechnicians = useMemo(() => {
     const rawList: Technician[] = [...technicians];
@@ -94,6 +102,7 @@ export const CreateOrderModal: React.FC<{ isOpen: boolean; onClose: () => void }
     if (isOpen) {
       setErrorMessage(null);
       setSuccessMessage(null);
+      setCreatedOrder(null);
       if (clients.length === 0) {
         setClientMode('new');
       } else {
@@ -224,20 +233,16 @@ export const CreateOrderModal: React.FC<{ isOpen: boolean; onClose: () => void }
         setSelectedClientOrderFolio(newOrder.folio);
       }
 
+      setCreatedOrder(newOrder);
+      if (onOrderCreated) {
+        onOrderCreated(newOrder);
+      }
+
       setSuccessMessage(`¡Orden ${newOrder.folio} generada con éxito para ${finalClientName}!`);
 
       // Prepare target phone and email for WhatsApp credentials modal
       const targetPhone = clientMode === 'new' ? newClientPhone : currentClient?.phone || currentClient?.whatsapp;
       const targetEmail = clientMode === 'new' ? newClientEmail : currentClient?.email;
-
-      setWhatsAppModalData({
-        type: 'client',
-        recipientName: finalClientName,
-        recipientPhone: targetPhone,
-        recipientEmail: targetEmail,
-        recipientPassword: '1234 (o su contraseña)',
-        folio: newOrder.folio
-      });
 
       // Reset form fields
       setDescription('');
@@ -279,14 +284,111 @@ export const CreateOrderModal: React.FC<{ isOpen: boolean; onClose: () => void }
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={() => {
+              setCreatedOrder(null);
+              onClose();
+            }}
             className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl transition-colors bg-slate-50 hover:bg-slate-100 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Form with scrollable body & fixed footer */}
+        {/* Dedicated Success Screen when Order Created */}
+        {createdOrder ? (
+          <div className="p-6 overflow-y-auto flex-1 space-y-5 text-center animate-in fade-in">
+            <div className="w-16 h-16 rounded-3xl bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
+              <CheckCircle2 className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full inline-block">
+                Orden Registrada con Éxito
+              </span>
+              <h3 className="text-2xl font-black text-slate-900 mt-2">
+                Folio: <span className="text-blue-600 font-mono">{createdOrder.folio}</span>
+              </h3>
+              <p className="text-xs text-slate-500">
+                La orden de servicio ha sido guardada en el sistema y añadida a los tableros de Oficina y Técnico.
+              </p>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-left space-y-2 text-xs">
+              <div className="flex justify-between py-1 border-b border-slate-200/60">
+                <span className="text-slate-500 font-medium">Cliente:</span>
+                <span className="text-slate-900 font-bold">{createdOrder.clientName}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-200/60">
+                <span className="text-slate-500 font-medium">Sucursal / Depto:</span>
+                <span className="text-slate-900 font-bold">{createdOrder.departmentName}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-200/60">
+                <span className="text-slate-500 font-medium">Equipo Reportado:</span>
+                <span className="text-indigo-700 font-bold">{createdOrder.equipmentType}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-200/60">
+                <span className="text-slate-500 font-medium">Técnico Asignado:</span>
+                <span className="text-slate-900 font-bold">{createdOrder.technicianName || 'Sin Asignar (Disponible en Bolsa)'}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-200/60">
+                <span className="text-slate-500 font-medium">Fecha Programada:</span>
+                <span className="text-slate-900 font-bold">{createdOrder.scheduledDate}</span>
+              </div>
+              <div className="flex justify-between py-1">
+                <span className="text-slate-500 font-medium">Estatus Inicial:</span>
+                <span className="bg-blue-100 text-blue-800 font-black px-2 py-0.5 rounded-md text-[11px]">{createdOrder.status}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setCreatedOrder(null);
+                  onClose();
+                }}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs py-3 px-4 rounded-xl shadow-md transition-all flex items-center justify-center space-x-2 cursor-pointer"
+              >
+                <Eye className="w-4 h-4" />
+                <span>Ver Orden en Tablero</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const targetPhone = createdOrder.clientPhone || 'S/N';
+                  const targetEmail = createdOrder.clientEmail || '';
+                  setWhatsAppModalData({
+                    type: 'client',
+                    recipientName: createdOrder.clientName,
+                    recipientPhone: targetPhone,
+                    recipientEmail: targetEmail,
+                    recipientPassword: '1234 (o su contraseña)',
+                    folio: createdOrder.folio
+                  });
+                }}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs py-3 px-4 rounded-xl shadow-md transition-all flex items-center justify-center space-x-2 cursor-pointer"
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>Enviar por WhatsApp</span>
+              </button>
+            </div>
+
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setCreatedOrder(null);
+                  setSuccessMessage(null);
+                }}
+                className="text-xs font-bold text-slate-500 hover:text-slate-800 underline cursor-pointer"
+              >
+                + Crear otra orden de servicio
+              </button>
+            </div>
+          </div>
+        ) : (
+        /* Form with scrollable body & fixed footer */
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
           <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4 text-left">
             
@@ -720,6 +822,7 @@ export const CreateOrderModal: React.FC<{ isOpen: boolean; onClose: () => void }
             </button>
           </div>
         </form>
+        )}
       </div>
     </div>
 

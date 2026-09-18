@@ -9,7 +9,11 @@ const env = (import.meta as any).env || {};
 const sanitizeUrl = (url: any): string => {
   if (typeof url !== 'string' || !url.trim()) return FALLBACK_URL;
   try {
-    const parsed = new URL(url.trim());
+    let trimmed = url.trim().replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+      trimmed = `https://${trimmed}`;
+    }
+    const parsed = new URL(trimmed);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return FALLBACK_URL;
     return parsed.origin;
   } catch {
@@ -41,11 +45,18 @@ const getStoredKey = (): string | null => {
 const storedUrl = getStoredUrl();
 const storedKey = getStoredKey();
 
-const rawUrl = storedUrl || env.VITE_SUPABASE_URL;
-const rawKey = storedKey || env.VITE_SUPABASE_ANON_KEY;
+let rawUrl = storedUrl || env.VITE_SUPABASE_URL;
+let rawKey = storedKey || env.VITE_SUPABASE_ANON_KEY;
+
+// Auto-detect inverted/swapped environment variables (e.g. if URL received the JWT and ANON_KEY received the URL)
+if (typeof rawUrl === 'string' && rawUrl.startsWith('eyJ') && typeof rawKey === 'string' && rawKey.startsWith('http')) {
+  const temp = rawUrl;
+  rawUrl = rawKey;
+  rawKey = temp;
+}
 
 const SUPABASE_URL = sanitizeUrl(rawUrl);
-const SUPABASE_ANON_KEY = isValidKey(rawKey) ? rawKey : FALLBACK_KEY;
+const SUPABASE_ANON_KEY = isValidKey(rawKey) ? rawKey : (isValidKey(rawUrl) ? rawUrl : FALLBACK_KEY);
 
 export const SUPABASE_PROJECT_URL = SUPABASE_URL;
 export const isUsingCustomSupabase = Boolean(storedUrl && storedKey);

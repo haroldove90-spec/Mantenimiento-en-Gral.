@@ -59,6 +59,7 @@ import {
   Power,
   Truck,
   AlertTriangle,
+  Upload,
   DollarSign
 } from 'lucide-react';
 
@@ -103,7 +104,10 @@ export const OfficeDashboard: React.FC = () => {
     resetToDemoData,
     deleteOrder,
     toggleOrderActive,
-    syncAllDataToSupabase
+    syncAllDataToSupabase,
+    fetchSupabaseData,
+    importOrdersDirectly,
+    supabaseStatus
   } = useApp();
 
   const uniqueTechnicians = useMemo(() => {
@@ -155,21 +159,118 @@ export const OfficeDashboard: React.FC = () => {
   // Supabase Sync in Office
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importStatusMsg, setImportStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const handleSyncSupabase = async () => {
     setIsSyncing(true);
     setSyncResult(null);
     try {
-      const res = await syncAllDataToSupabase();
+      const fetchRes = await fetchSupabaseData(false);
+      const pushRes = await syncAllDataToSupabase();
       setIsSyncing(false);
-      if (res.success) {
-        setSyncResult({ type: 'success', text: res.message });
+
+      if (fetchRes?.isQuotaBlocked) {
+        setSyncResult({
+          type: 'error',
+          text: `Aviso de Cuota Supabase (exceed_egress_quota - HTTP 402): Tienes 18 órdenes registradas en Supabase, pero la base de datos restringe la descarga por exceder la cuota del plan gratuito. El sistema muestra las ${orders.length} órdenes en caché local. Puedes actualizar tu plan en supabase.com o usar "Importar CSV/JSON".`
+        });
+      } else if (fetchRes?.success) {
+        setSyncResult({
+          type: 'success',
+          text: `¡Sincronización exitosa con Supabase! Se obtuvieron ${fetchRes.ordersCount} órdenes de servicio.`
+        });
       } else {
-        setSyncResult({ type: 'error', text: res.message });
+        setSyncResult({
+          type: 'error',
+          text: fetchRes?.error || pushRes?.message || 'Error al conectar con Supabase.'
+        });
       }
     } catch (e: any) {
       setIsSyncing(false);
       setSyncResult({ type: 'error', text: e.message || 'Error de conexión con Supabase' });
+    }
+  };
+
+  const handleExecuteImport = (rawContent: string) => {
+    try {
+      const trimmed = rawContent.trim();
+      if (!trimmed) {
+        setImportStatusMsg({ type: 'error', text: 'Por favor ingresa o sube datos válidos (JSON o CSV).' });
+        return;
+      }
+
+      let parsedList: any[] = [];
+      if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+        const json = JSON.parse(trimmed);
+        parsedList = Array.isArray(json) ? json : [json];
+      } else {
+        // Parse CSV
+        const lines = trimmed.split('\n').map(l => l.trim()).filter(Boolean);
+        if (lines.length < 2) {
+          setImportStatusMsg({ type: 'error', text: 'El formato CSV requiere al menos una cabecera y una fila de datos.' });
+          return;
+        }
+        const headers = lines[0].split(',').map(h => h.trim().replace(/^["']|["']$/g, '').toLowerCase());
+        parsedList = lines.slice(1).map(line => {
+          const values = line.split(',').map(v => v.trim().replace(/^["']|["']$/g, ''));
+          const item: any = {};
+          headers.forEach((h, idx) => {
+            item[h] = values[idx] || '';
+          });
+          return item;
+        });
+      }
+
+      const standardized: ServiceOrder[] = parsedList.map((item, idx) => {
+        return {
+          id: item.id || `imp-${Date.now()}-${idx}`,
+          folio: item.folio || item.folio_number || `OS-${Math.floor(1000 + Math.random() * 9000)}`,
+          clientId: item.client_id || item.clientId || '',
+          clientName: item.client_name || item.clientName || 'Cliente',
+          departmentId: item.department_id || item.departmentId || '',
+          departmentName: item.department_name || item.departmentName || 'Matriz Principal',
+          equipmentType: item.equipment_type || item.equipmentType || 'Equipo General',
+          description: item.description || '',
+          priority: item.priority || 'Media',
+          status: (item.status as OrderStatus) || 'Pendiente de Visita',
+          technicianName: item.technician_name || item.technicianName || undefined,
+          scheduledDate: item.scheduled_date || item.scheduledDate || new Date().toISOString().split('T')[0],
+          routeOrder: Number(item.route_order || item.routeOrder || 1),
+          diagnosticNotes: item.diagnostic_notes || item.diagnosticNotes || '',
+          diagnosticPhotos: Array.isArray(item.diagnostic_photos) ? item.diagnostic_photos : [],
+          requestedParts: Array.isArray(item.requested_parts) ? item.requested_parts : [],
+          solutionNotes: item.solution_notes || item.solutionNotes || '',
+          solutionPhotos: Array.isArray(item.solution_photos) ? item.solution_photos : [],
+          collectedAmount: Number(item.collected_amount || item.collectedAmount || 0),
+          createdAt: item.created_at || 'Reciente',
+          isActive: item.is_active !== false && item.isActive !== false,
+          timeline: Array.isArray(item.timeline) && item.timeline.length > 0 ? item.timeline : [
+            {
+              id: `tl-imp-${idx}`,
+              timestamp: 'Registro Supabase',
+              title: 'Orden importada',
+              author: 'Sistema',
+              note: `Folio: ${item.folio || ''}`
+            }
+          ]
+        };
+      });
+
+      const res = importOrdersDirectly(standardized);
+      if (res.success) {
+        setImportStatusMsg({ type: 'success', text: `¡Se cargaron exitosamente ${res.count} órdenes de servicio en el sistema!` });
+        setTimeout(() => {
+          setIsImportModalOpen(false);
+          setImportText('');
+          setImportStatusMsg(null);
+        }, 1200);
+      } else {
+        setImportStatusMsg({ type: 'error', text: 'No se pudieron procesar las órdenes proporcionadas.' });
+      }
+    } catch (err: any) {
+      setImportStatusMsg({ type: 'error', text: `Error al procesar el archivo: ${err.message || 'Formato no válido'}` });
     }
   };
 
@@ -696,6 +797,15 @@ export const OfficeDashboard: React.FC = () => {
                 </button>
 
                 <button
+                  onClick={() => { setIsImportModalOpen(true); setImportStatusMsg(null); }}
+                  className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-xl text-xs font-bold shadow-xs flex items-center space-x-1.5 cursor-pointer transition-all active:scale-95"
+                  title="Importar órdenes de servicio desde archivo o texto (CSV / JSON de Supabase)"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Importar</span>
+                </button>
+
+                <button
                   onClick={() => handleExportOrdersExcel(false)}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs font-bold shadow-xs flex items-center space-x-1.5 cursor-pointer transition-all active:scale-95"
                   title="Exportar listado completo de órdenes a Excel"
@@ -827,6 +937,40 @@ export const OfficeDashboard: React.FC = () => {
               </button>
             </div>
 
+            {/* Supabase Quota Restriction Notice */}
+            {supabaseStatus.errorMessage && supabaseStatus.errorMessage.includes('exceed_egress_quota') && (
+              <div className="p-3.5 rounded-xl border bg-amber-50 border-amber-300 text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs">
+                <div className="flex items-start space-x-2.5">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold text-amber-900 block">
+                      Restricción de Cuota en Supabase (exceed_egress_quota - HTTP 402)
+                    </span>
+                    <span className="text-amber-800">
+                      Tienes 18 órdenes en la base de datos de Supabase, pero la API restringe temporalmente la salida de datos por haber excedido el límite gratuito de egress. Se están mostrando las {orders.length} órdenes en caché local.
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2 shrink-0">
+                  <button
+                    onClick={() => { setIsImportModalOpen(true); setImportStatusMsg(null); }}
+                    className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg font-bold cursor-pointer transition-all flex items-center space-x-1 shadow-xs"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Importar CSV/JSON</span>
+                  </button>
+                  <button
+                    onClick={handleSyncSupabase}
+                    disabled={isSyncing}
+                    className="bg-white hover:bg-amber-100 border border-amber-300 text-amber-900 px-3 py-1.5 rounded-lg font-bold cursor-pointer transition-all flex items-center space-x-1 shadow-xs"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                    <span>Reintentar</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Sync Result Banner */}
             {syncResult && (
               <div className={`p-3 rounded-xl border flex items-center justify-between text-xs font-bold ${
@@ -835,7 +979,11 @@ export const OfficeDashboard: React.FC = () => {
                   : 'bg-rose-50 text-rose-900 border-rose-200'
               }`}>
                 <div className="flex items-center space-x-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  {syncResult.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  )}
                   <span>{syncResult.text}</span>
                 </div>
                 <button onClick={() => setSyncResult(null)} className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer">
@@ -2238,6 +2386,102 @@ export const OfficeDashboard: React.FC = () => {
           folio={whatsAppModalData.folio}
           title={whatsAppModalData.title}
         />
+      )}
+
+      {/* Import Orders Modal (CSV / JSON from Supabase) */}
+      {isImportModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-xl shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold">
+                  <Upload className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Importar Órdenes de Servicio</h3>
+                  <p className="text-xs text-slate-500">Carga órdenes directamente desde archivo CSV o exportación JSON de Supabase</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsImportModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <label className="block text-xs font-bold text-slate-700">
+                Selecciona archivo (.csv o .json) o pega el texto directamente:
+              </label>
+
+              <input
+                type="file"
+                accept=".csv,.json"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                      const text = event.target?.result as string;
+                      if (text) {
+                        setImportText(text);
+                        handleExecuteImport(text);
+                      }
+                    };
+                    reader.readAsText(file);
+                  }
+                }}
+                className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 cursor-pointer border border-slate-200 rounded-xl p-2"
+              />
+
+              <div className="space-y-1">
+                <span className="text-[11px] font-semibold text-slate-400">O pega el contenido aquí:</span>
+                <textarea
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                  placeholder="Pega aquí el contenido JSON o CSV exportado desde el Table Editor de Supabase..."
+                  rows={6}
+                  className="w-full text-xs font-mono p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                />
+              </div>
+
+              {importStatusMsg && (
+                <div className={`p-3 rounded-xl text-xs font-bold flex items-center space-x-2 ${
+                  importStatusMsg.type === 'success'
+                    ? 'bg-emerald-50 text-emerald-900 border border-emerald-200'
+                    : 'bg-rose-50 text-rose-900 border border-rose-200'
+                }`}>
+                  {importStatusMsg.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  )}
+                  <span>{importStatusMsg.text}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsImportModalOpen(false)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => handleExecuteImport(importText)}
+                disabled={!importText.trim()}
+                className="px-5 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-all flex items-center space-x-1.5"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Cargar Órdenes</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

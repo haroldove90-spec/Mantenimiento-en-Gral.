@@ -131,6 +131,8 @@ interface AppContextType {
   addSystemUser: (user: Omit<SystemUser, 'id'>) => Promise<{ success: boolean; savedInDb: boolean; error?: string }>;
   syncUsersToSupabase: () => Promise<{ success: boolean; count: number; error?: string }>;
   syncAllDataToSupabase: () => Promise<{ success: boolean; message: string }>;
+  fetchSupabaseData: (silent?: boolean) => Promise<{ success: boolean; ordersCount: number; error?: string; isQuotaBlocked?: boolean }>;
+  importOrdersDirectly: (importedOrders: ServiceOrder[]) => { success: boolean; count: number };
   updateSystemUser: (id: string, userData: Partial<SystemUser>) => void;
   toggleUserStatus: (id: string) => void;
   deleteSystemUser: (id: string) => void;
@@ -374,14 +376,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
 
-  // LocalStorage initialization with empty fallbacks (so sample data never reappears across browsers)
+  // LocalStorage initialization with robust fallbacks ensuring no orders are lost
   const [orders, setOrders] = useState<ServiceOrder[]>(() => {
     try {
       const saved = localStorage.getItem('app_service_orders');
       if (!saved) return [];
       const parsed = JSON.parse(saved);
       if (!Array.isArray(parsed)) return [];
-      return parsed.filter(o => o && o.folio && !o.folio.startsWith('SAMPLE-'));
+      return parsed
+        .filter(o => Boolean(o && (o.id || o.folio || o.clientName)))
+        .map((o, idx) => ({
+          ...o,
+          id: o.id || `ord-${idx}-${Date.now()}`,
+          folio: o.folio || `OS-${Math.floor(1000 + Math.random() * 9000)}`,
+          isActive: o.isActive !== false
+        }));
     } catch {
       return [];
     }
@@ -789,8 +798,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   // Sync data from Supabase on load, on realtime events, and with live polling
-  const fetchSupabaseData = async (silent = false) => {
+  const fetchSupabaseData = async (silent = false): Promise<{ success: boolean; ordersCount: number; error?: string; isQuotaBlocked?: boolean }> => {
     let fetchedTechs: Technician[] = [];
+    let orderSyncError: string | undefined;
+    let isQuotaBlocked = false;
+    let fetchedOrderCount = 0;
 
     // 1. Fetch Employees & Technicians (from 'employees', 'technicians', and 'system_users')
     try {
@@ -1064,6 +1076,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const { data: oData, error: oErr } = await supabase.from('service_orders').select('*').order('created_at', { ascending: false });
       if (!oErr && oData && Array.isArray(oData)) {
+        fetchedOrderCount = oData.length;
         const mappedOrders: ServiceOrder[] = oData.map((o: any) => {
           let matchedTechId = o.technician_id;
           if (!matchedTechId && o.technician_name) {
@@ -1101,6 +1114,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             warrantyNotes: o.warranty_reason || o.warranty_notes || undefined,
             budget: o.budget || undefined,
             clientSignature: o.signature_data || o.client_signature || undefined,
+            isActive: o.is_active !== undefined ? Boolean(o.is_active) : (o.isActive !== undefined ? Boolean(o.isActive) : true),
             createdAt: o.created_at ? new Date(o.created_at).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : 'Reciente',
             timeline: Array.isArray(o.timeline) && o.timeline.length > 0
               ? o.timeline
@@ -1117,10 +1131,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
 
         setOrders(prev => {
-          // Merge strategy: If local 'prev' has an assigned technician that DB mappedOrder lacks (due to a recent change),
-          // preserve the local assigned technician and schedule until DB confirms it!
+          // Merge strategy: Preserve local scheduling / tech assignment while honoring database records
           const mergedList = mappedOrders.map(dbOrd => {
-            const localOrd = prev.find(p => p.folio === dbOrd.folio || p.id === dbOrd.id);
+            const localOrd = prev.find(p => (dbOrd.id && p.id === dbOrd.id) || (dbOrd.folio && p.folio === dbOrd.folio));
             if (!localOrd) return dbOrd;
 
             const resolvedTechName = dbOrd.technicianName || localOrd.technicianName;
@@ -1129,6 +1142,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
             return {
               ...dbOrd,
+              isActive: dbOrd.isActive !== undefined ? dbOrd.isActive : (localOrd.isActive !== undefined ? localOrd.isActive : true),
               clientAddress: dbOrd.clientAddress || localOrd.clientAddress,
               clientPhone: dbOrd.clientPhone || localOrd.clientPhone,
               clientEmail: dbOrd.clientEmail || localOrd.clientEmail,
@@ -1143,14 +1157,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             };
           });
 
-          const dbFolios = new Set(mergedList.map(o => o.folio));
-          const unsavedLocal = prev.filter(o => o && o.folio && !dbFolios.has(o.folio) && !o.folio.startsWith('SAMPLE-'));
-          const combined = mergedList.length > 0 ? [...mergedList, ...unsavedLocal] : unsavedLocal;
+          const dbIds = new Set(mergedList.map(o => o.id));
+          const dbFolios = new Set(mergedList.map(o => o.folio).filter(Boolean));
+          const unsavedLocal = prev.filter(o => o && !dbIds.has(o.id) && (!o.folio || !dbFolios.has(o.folio)));
+          const combined = [...mergedList, ...unsavedLocal];
           localStorage.setItem('app_service_orders', JSON.stringify(combined));
           return combined;
         });
+      } else if (oErr) {
+        orderSyncError = oErr.message;
+        isQuotaBlocked = String(oErr.message || '').includes('exceed_egress_quota') || (oErr as any).status === 402;
+        if (!silent) console.warn('Supabase service_orders sync error:', oErr);
+        if (isQuotaBlocked) {
+          setSupabaseStatus(prev => ({
+            ...prev,
+            isConnected: false,
+            errorMessage: 'Límite de cuota excedido en Supabase (exceed_egress_quota - HTTP 402). La base de datos tiene restringida la salida de datos. El sistema está operando con las órdenes en caché local.',
+            totalRecordsCount: orders.length
+          }));
+        }
       }
-    } catch (e) {
+    } catch (e: any) {
+      orderSyncError = e?.message || 'Error al conectar con Supabase';
+      isQuotaBlocked = String(e?.message || '').includes('exceed_egress_quota') || e?.status === 402;
       if (!silent) console.warn('Supabase service_orders sync notice:', e);
     }
 
@@ -1327,6 +1356,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (e) {
       // Table may not exist yet
     }
+
+    return {
+      success: !orderSyncError,
+      ordersCount: fetchedOrderCount || orders.length,
+      error: orderSyncError,
+      isQuotaBlocked
+    };
+  };
+
+  const importOrdersDirectly = (importedOrders: ServiceOrder[]) => {
+    if (!Array.isArray(importedOrders) || importedOrders.length === 0) {
+      return { success: false, count: 0 };
+    }
+    const cleanList = importedOrders.map((o, idx) => ({
+      ...o,
+      id: o.id || `imp-ord-${Date.now()}-${idx}`,
+      folio: o.folio || `OS-${Math.floor(1000 + Math.random() * 9000)}`,
+      clientName: o.clientName || 'Cliente',
+      equipmentType: o.equipmentType || 'Equipo General',
+      status: (o.status as OrderStatus) || 'Pendiente de Visita',
+      isActive: o.isActive !== false
+    }));
+
+    setOrders(prev => {
+      const incomingIds = new Set(cleanList.map(o => o.id));
+      const incomingFolios = new Set(cleanList.map(o => o.folio).filter(Boolean));
+      const remainingPrev = prev.filter(p => !incomingIds.has(p.id) && (!p.folio || !incomingFolios.has(p.folio)));
+      const merged = [...cleanList, ...remainingPrev];
+      localStorage.setItem('app_service_orders', JSON.stringify(merged));
+      return merged;
+    });
+
+    return { success: true, count: cleanList.length };
   };
 
   // Synchronize on mount + Realtime channels + Continuous Polling across computers
@@ -4259,6 +4321,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addSystemUser,
         syncUsersToSupabase,
         syncAllDataToSupabase,
+        fetchSupabaseData,
+        importOrdersDirectly,
         updateSystemUser,
         toggleUserStatus,
         deleteSystemUser,

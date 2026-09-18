@@ -92,7 +92,7 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
   const userRole = currentUser?.role ? normalizeRole(currentUser.role) : undefined;
   const canSeeOwner = !userRole || userRole === 'owner';
   const canSeeOffice = !userRole || userRole === 'owner' || userRole === 'office';
-  const canSeeTech = !userRole || userRole === 'owner' || userRole === 'tech';
+  const canSeeTech = !userRole || userRole === 'owner' || userRole === 'office' || userRole === 'tech';
   const canSeeClient = !userRole || userRole === 'owner' || userRole === 'client';
 
   if (activeRole === 'home') {

@@ -41,7 +41,8 @@ import {
   Search,
   MessageSquare,
   Share2,
-  KeyRound
+  KeyRound,
+  FileText
 } from 'lucide-react';
 
 export const OwnerDashboard: React.FC = () => {
@@ -62,7 +63,9 @@ export const OwnerDashboard: React.FC = () => {
     clearSampleData,
     resetToDemoData,
     ownerSubTab,
-    setOwnerSubTab
+    setOwnerSubTab,
+    setActiveRole,
+    setOfficeSubTab
   } = useApp();
 
   // WhatsApp Credentials Modal state
@@ -560,6 +563,18 @@ export const OwnerDashboard: React.FC = () => {
 
         {/* Action buttons */}
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => {
+              setActiveRole('office');
+              setOfficeSubTab('orders');
+            }}
+            className="bg-blue-600 hover:bg-blue-500 text-white px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-md flex items-center space-x-1.5 shrink-0 cursor-pointer ring-1 ring-blue-400/50"
+            title="Ver la lista completa de órdenes de servicio en el módulo de Oficina"
+          >
+            <FileText className="w-4 h-4" />
+            <span>📋 Ver Órdenes de Servicio ({orders.length})</span>
+          </button>
+
           <button
             onClick={handleSyncSupabase}
             disabled={isSyncing}

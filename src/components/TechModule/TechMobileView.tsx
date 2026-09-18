@@ -51,6 +51,7 @@ export const TechMobileView: React.FC = () => {
   const {
     orders,
     technicians,
+    systemUsers,
     notifications,
     clients,
     currentUser,
@@ -83,6 +84,7 @@ export const TechMobileView: React.FC = () => {
     const ids: string[] = [];
     if (currentUser?.id) ids.push(currentUser.id);
     if (loggedInTech?.id && !ids.includes(loggedInTech.id)) ids.push(loggedInTech.id);
+
     technicians.forEach(t => {
       if (
         (currentUser?.email && t.email && normalizeStr(t.email) === normalizeStr(currentUser.email)) ||
@@ -92,22 +94,47 @@ export const TechMobileView: React.FC = () => {
         if (!ids.includes(t.id)) ids.push(t.id);
       }
     });
+
+    systemUsers.forEach(u => {
+      if (
+        (currentUser?.id && u.id === currentUser.id) ||
+        (currentUser?.email && u.email && normalizeStr(u.email) === normalizeStr(currentUser.email)) ||
+        (currentUser?.username && u.username && normalizeStr(u.username) === normalizeStr(currentUser.username))
+      ) {
+        if (!ids.includes(u.id)) ids.push(u.id);
+      }
+    });
+
     return ids;
-  }, [currentUser, loggedInTech, technicians]);
+  }, [currentUser, loggedInTech, technicians, systemUsers]);
 
   const myTechNames = useMemo(() => {
     const names: string[] = [];
     if (currentUser?.name) names.push(normalizeStr(currentUser.name));
     if (currentUser?.username) names.push(normalizeStr(currentUser.username));
     if (loggedInTech?.name) names.push(normalizeStr(loggedInTech.name));
+
     technicians.forEach(t => {
       if (myTechIds.includes(t.id)) {
         const n = normalizeStr(t.name);
         if (n && !names.includes(n)) names.push(n);
       }
     });
+
+    systemUsers.forEach(u => {
+      if (
+        myTechIds.includes(u.id) ||
+        (currentUser?.email && u.email && normalizeStr(u.email) === normalizeStr(currentUser.email))
+      ) {
+        const n = normalizeStr(u.name);
+        if (n && !names.includes(n)) names.push(n);
+        const un = normalizeStr(u.username);
+        if (un && !names.includes(un)) names.push(un);
+      }
+    });
+
     return names.filter(Boolean);
-  }, [currentUser, loggedInTech, technicians, myTechIds]);
+  }, [currentUser, loggedInTech, technicians, systemUsers, myTechIds]);
 
   // Persistent activeTechId (locked if technician)
   const [activeTechId, setActiveTechId] = useState<string>(() => {
@@ -123,6 +150,7 @@ export const TechMobileView: React.FC = () => {
     if (isTechUser) {
       const myId = loggedInTech?.id || currentUser?.id || 'tech_current';
       setActiveTechId(myId);
+      setTechMainTab('assigned');
     }
   }, [isTechUser, currentUser, loggedInTech]);
 
@@ -159,38 +187,72 @@ export const TechMobileView: React.FC = () => {
       const orderTechId = (o.technicianId || '').trim();
       const orderTechName = normalizeStr(o.technicianName);
 
-      // If order has no technician assigned, it is not assigned to me
-      if (
-        !orderTechId &&
-        (!orderTechName ||
-          orderTechName === 'sin asignar' ||
-          orderTechName === 'sin asignar por ahora' ||
-          orderTechName === 'disponible' ||
-          orderTechName === 'pendiente' ||
-          orderTechName === 'por asignar')
-      ) {
+      // Check for explicit unassigned markers
+      const isUnassignedName =
+        !orderTechName ||
+        [
+          'sin asignar',
+          'sin asignar por ahora',
+          'disponible',
+          'pendiente',
+          'por asignar',
+          'none',
+          'unassigned',
+          'null',
+          'undefined'
+        ].includes(orderTechName);
+
+      const isUnassignedId =
+        !orderTechId ||
+        ['sin asignar', 'unassigned', 'none', 'null', 'undefined', '0'].includes(orderTechId.toLowerCase());
+
+      // If both ID and name indicate unassigned, it does not belong to me
+      if (isUnassignedId && isUnassignedName) {
         return false;
       }
 
-      // 1. If order has an explicit technician ID:
-      // Must match myTechIds. If it has an ID and does NOT match my IDs, it belongs to another technician!
-      if (orderTechId) {
-        return myTechIds.includes(orderTechId);
+      // 1. Direct ID match: order's techId matches my registered IDs
+      if (orderTechId && myTechIds.includes(orderTechId)) {
+        return true;
       }
 
-      // 2. If order has NO technicianId, match strictly by name:
-      if (orderTechName) {
-        // If the name belongs to another technician in the team, strictly exclude it
-        const isAssignedToOther = technicians.some(
+      // 2. Direct Name match
+      if (orderTechName && myTechNames.includes(orderTechName)) {
+        // If the order has an orderTechId pointing to a different known technician with a different name, exclude it
+        if (orderTechId) {
+          const otherTech = technicians.find(
+            t => t.id === orderTechId && !myTechIds.includes(t.id) && normalizeStr(t.name) !== orderTechName
+          );
+          if (otherTech) return false;
+        }
+        return true;
+      }
+
+      // 3. Name containment (e.g., first and last name variations)
+      const matchesPartialName = myTechNames.some(myN => {
+        if (!myN || !orderTechName) return false;
+        if (myN.length >= 4 && (orderTechName.includes(myN) || myN.includes(orderTechName))) {
+          return true;
+        }
+        return false;
+      });
+
+      if (matchesPartialName) {
+        // Ensure this doesn't actually match another technician in the team
+        const belongsToOther = technicians.some(
           t => !myTechIds.includes(t.id) && normalizeStr(t.name) === orderTechName
         );
-        if (isAssignedToOther) return false;
-
-        return myTechNames.includes(orderTechName);
+        if (!belongsToOther) {
+          return true;
+        }
       }
 
-      // 3. Email match (fallback)
-      if (currentUser?.email && (o as any).technicianEmail && normalizeStr((o as any).technicianEmail) === normalizeStr(currentUser.email)) {
+      // 4. Email match fallback
+      if (
+        currentUser?.email &&
+        (o as any).technicianEmail &&
+        normalizeStr((o as any).technicianEmail) === normalizeStr(currentUser.email)
+      ) {
         return true;
       }
 
@@ -460,41 +522,64 @@ export const TechMobileView: React.FC = () => {
         </div>
       )}
 
-      {/* Main Mode Segmented Control: Mis Asignadas vs Bolsa de Disponibles */}
-      <div className="grid grid-cols-2 gap-2 bg-slate-200/70 p-1.5 rounded-2xl border border-slate-300/80">
-        <button
-          onClick={() => setTechMainTab('assigned')}
-          className={`flex items-center justify-center space-x-2 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer ${
-            techMainTab === 'assigned'
-              ? 'bg-white text-emerald-800 shadow-md ring-1 ring-black/5'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
-          }`}
-        >
-          <Briefcase className="w-4 h-4 text-emerald-600" />
-          <span>Mis Trabajos Asignados ({assignedOrders.length})</span>
-        </button>
-
-        <button
-          onClick={() => setTechMainTab('unassigned')}
-          className={`flex items-center justify-center space-x-2 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer relative ${
-            techMainTab === 'unassigned'
-              ? 'bg-emerald-600 text-white shadow-md'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
-          }`}
-        >
-          <Zap className={`w-4 h-4 ${techMainTab === 'unassigned' ? 'text-amber-300 fill-amber-300' : 'text-amber-500'}`} />
-          <span>Bolsa de Disponibles</span>
-          {unassignedOrders.length > 0 && (
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
-              techMainTab === 'unassigned' ? 'bg-white text-emerald-800' : 'bg-amber-500 text-slate-950 animate-pulse'
-            }`}>
-              {unassignedOrders.length}
+      {/* If logged in user is a Field Tech: show dedicated assigned header; if Admin/Office: show selector */}
+      {isTechUser ? (
+        <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
+              <Briefcase className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-emerald-950">Mis Órdenes de Trabajo Asignadas</h3>
+              <p className="text-xs text-emerald-700 font-semibold flex items-center space-x-1">
+                <Lock className="w-3.5 h-3.5 text-emerald-600 inline mr-0.5" />
+                <span>Acceso exclusivo para {currentUser?.name || 'Técnico de Campo'} ({assignedOrders.length} folios)</span>
+              </p>
+            </div>
+          </div>
+          <span className="self-start sm:self-center bg-emerald-600 text-white text-xs font-black px-3 py-1 rounded-full shadow-xs">
+            {assignedOrders.length} {assignedOrders.length === 1 ? 'orden asignada' : 'órdenes asignadas'}
+          </span>
+        </div>
+      ) : (
+        /* Main Mode Segmented Control: Mis Asignadas vs Bolsa de Disponibles for Office / Admin */
+        <div className="grid grid-cols-2 gap-2 bg-slate-200/70 p-1.5 rounded-2xl border border-slate-300/80">
+          <button
+            onClick={() => setTechMainTab('assigned')}
+            className={`flex items-center justify-center space-x-2 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer ${
+              techMainTab === 'assigned'
+                ? 'bg-white text-emerald-800 shadow-md ring-1 ring-black/5'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
+            }`}
+          >
+            <Briefcase className="w-4 h-4 text-emerald-600" />
+            <span>
+              {activeTechId === 'all' ? `Todas las Órdenes (${assignedOrders.length})` : `Órdenes Asignadas (${assignedOrders.length})`}
             </span>
-          )}
-        </button>
-      </div>
+          </button>
 
-      {techMainTab === 'assigned' ? (
+          <button
+            onClick={() => setTechMainTab('unassigned')}
+            className={`flex items-center justify-center space-x-2 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer relative ${
+              techMainTab === 'unassigned'
+                ? 'bg-emerald-600 text-white shadow-md'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
+            }`}
+          >
+            <Zap className={`w-4 h-4 ${techMainTab === 'unassigned' ? 'text-amber-300 fill-amber-300' : 'text-amber-500'}`} />
+            <span>Bolsa de Disponibles</span>
+            {unassignedOrders.length > 0 && (
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
+                techMainTab === 'unassigned' ? 'bg-white text-emerald-800' : 'bg-amber-500 text-slate-950 animate-pulse'
+              }`}>
+                {unassignedOrders.length}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
+
+      {techMainTab === 'assigned' || isTechUser ? (
         <>
           {/* Status Filter Tabs (Todos, Pendientes, En Proceso, Terminados) */}
           <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-slate-200 shadow-2xs">
@@ -578,7 +663,9 @@ export const TechMobileView: React.FC = () => {
                       : 'No hay órdenes de servicio en el sistema actualmente.'}
                   </p>
                   <p className="text-xs text-slate-500">
-                    {unassignedOrders.length > 0
+                    {isTechUser
+                      ? 'Comunícate con la oficina de administración para que te asignen nuevos folios de trabajo.'
+                      : unassignedOrders.length > 0
                       ? `Hay ${unassignedOrders.length} orden(es) disponible(s) en la Bolsa de Trabajo esperando técnico.`
                       : orders.length > 0
                       ? `Existen ${orders.length} orden(es) en el sistema.`
@@ -587,7 +674,7 @@ export const TechMobileView: React.FC = () => {
                 </div>
 
                 <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
-                  {unassignedOrders.length > 0 && (
+                  {!isTechUser && unassignedOrders.length > 0 && (
                     <button
                       onClick={() => setTechMainTab('unassigned')}
                       className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-xs transition-all cursor-pointer flex items-center space-x-1.5"

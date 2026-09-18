@@ -9,6 +9,7 @@ import { ClientsAndCatalog } from './ClientsAndCatalog';
 import { ClientsModule } from './ClientsModule';
 import { ServicesModule } from './ServicesModule';
 import { ReportsAndMetrics } from './ReportsAndMetrics';
+import { DatabaseModule } from '../DatabaseModule/DatabaseModule';
 import { ConfirmDeleteModal } from '../ConfirmDeleteModal';
 import { SendCredentialsWhatsAppModal } from '../SendCredentialsWhatsAppModal';
 import { exportToExcel, exportToPDF, exportSingleOrderPDF } from '../../lib/exportUtils';
@@ -60,7 +61,8 @@ import {
   Truck,
   AlertTriangle,
   Upload,
-  DollarSign
+  DollarSign,
+  Database
 } from 'lucide-react';
 
 export type StatusCategory = 'ALL' | 'PENDING' | 'IN_PROGRESS' | 'DELIVERY' | 'CLOSED' | 'REJECTED';
@@ -665,6 +667,19 @@ export const OfficeDashboard: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-2">
           <button
+            onClick={() => setActiveTab('database')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center space-x-1.5 shrink-0 cursor-pointer ${
+              activeTab === 'database'
+                ? 'bg-emerald-500 text-slate-950 font-black ring-2 ring-emerald-400'
+                : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+            }`}
+            title="Acceso directo a Supabase, credenciales y pago del Plan Pro ($25 USD)"
+          >
+            <Database className="w-4 h-4" />
+            <span>Base de Datos Supabase & Pago</span>
+          </button>
+
+          <button
             onClick={() => setIsCreateOpen(true)}
             className="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-xs flex items-center justify-center space-x-2 shrink-0 cursor-pointer"
           >
@@ -683,7 +698,8 @@ export const OfficeDashboard: React.FC = () => {
           { id: 'services', label: 'Servicios Frecuentes', icon: Wrench },
           { id: 'clients', label: 'Clientes', count: clients.length, icon: Users },
           { id: 'catalog', label: 'Catálogo Refacciones', icon: Layers },
-          { id: 'reports', label: 'Reportes e Historial', icon: BarChart3 }
+          { id: 'reports', label: 'Reportes e Historial', icon: BarChart3 },
+          { id: 'database', label: '🗄️ Base de Datos Supabase (Pago & Acceso)', icon: Database, isSpecial: true }
         ].map(tab => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -693,7 +709,11 @@ export const OfficeDashboard: React.FC = () => {
               onClick={() => setActiveTab(tab.id as any)}
               className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
                 isActive
-                  ? 'bg-blue-600 text-white shadow-xs ring-2 ring-blue-600/20'
+                  ? (tab as any).isSpecial
+                    ? 'bg-emerald-600 text-white shadow-xs ring-2 ring-emerald-600/30'
+                    : 'bg-blue-600 text-white shadow-xs ring-2 ring-blue-600/20'
+                  : (tab as any).isSpecial
+                  ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-black'
                   : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
               }`}
             >
@@ -2003,6 +2023,9 @@ export const OfficeDashboard: React.FC = () => {
 
       {/* SUBMODULE 7: REPORTES Y MÉTRICAS */}
       {activeTab === 'reports' && <ReportsAndMetrics />}
+
+      {/* SUBMODULE 8: BASE DE DATOS Y FACTURACIÓN SUPABASE */}
+      {activeTab === 'database' && <DatabaseModule />}
 
       {/* MODALS */}
       <CreateOrderModal

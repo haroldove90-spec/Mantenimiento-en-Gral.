@@ -22,7 +22,8 @@ import {
   PieChart,
   Trash2,
   RotateCcw,
-  Layers
+  Layers,
+  Database
 } from 'lucide-react';
 
 export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCreateModal }) => {
@@ -233,6 +234,22 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
                 <Building2 className="w-4 h-4 shrink-0 text-purple-400" />
                 <span className="text-left leading-tight">Directorio de Clientes</span>
               </button>
+
+              <button
+                id="role-btn-owner-database"
+                onClick={() => {
+                  setActiveRole('owner');
+                  setOwnerSubTab('database');
+                }}
+                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold text-left transition-all cursor-pointer ${
+                  activeRole === 'owner' && ownerSubTab === 'database'
+                    ? 'bg-emerald-600 text-white shadow-md font-bold'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <Database className="w-4 h-4 shrink-0 text-emerald-400" />
+                <span className="text-left leading-tight">Base de Datos (Supabase)</span>
+              </button>
             </div>
           )}
 
@@ -347,6 +364,22 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
               >
                 <BarChart3 className="w-4 h-4 shrink-0 text-sij-cyan" />
                 <span className="text-left leading-tight">Reportes & Rendimiento</span>
+              </button>
+
+              <button
+                id="role-btn-office-database"
+                onClick={() => {
+                  setActiveRole('office');
+                  setOfficeSubTab('database');
+                }}
+                className={`w-full flex items-center space-x-3 px-3.5 py-2 rounded-xl text-xs font-semibold text-left transition-all cursor-pointer ${
+                  activeRole === 'office' && officeSubTab === 'database'
+                    ? 'bg-emerald-600 text-white shadow-md font-bold'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <Database className="w-4 h-4 shrink-0 text-emerald-400" />
+                <span className="text-left leading-tight">Base de Datos (Supabase)</span>
               </button>
             </div>
           )}
@@ -653,7 +686,7 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
 
         {/* Owner Role Bottom Bar */}
         {activeRole === 'owner' && (
-          <div className="grid grid-cols-5 gap-1 text-center">
+          <div className="grid grid-cols-6 gap-1 text-center">
             <button
               onClick={() => setOwnerSubTab('analytics')}
               className={`flex flex-col items-center justify-center py-1.5 px-0.5 rounded-xl transition-all ${
@@ -703,6 +736,18 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
             </button>
 
             <button
+              onClick={() => setOwnerSubTab('database')}
+              className={`flex flex-col items-center justify-center py-1.5 px-0.5 rounded-xl transition-all ${
+                ownerSubTab === 'database'
+                  ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                  : 'text-slate-300 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              <Database className="w-4 h-4 mb-0.5 text-emerald-400" />
+              <span className="text-[9px] truncate w-full">Base Datos</span>
+            </button>
+
+            <button
               onClick={() => setActiveRole('home')}
               className="flex flex-col items-center justify-center py-1.5 px-0.5 rounded-xl text-slate-300 hover:text-white hover:bg-white/10"
             >
@@ -714,7 +759,7 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
 
         {/* Office Role Sub-modules Tabs */}
         {activeRole === 'office' && (
-          <div className="grid grid-cols-7 gap-0.5 text-center">
+          <div className="grid grid-cols-8 gap-0.5 text-center">
             <button
               onClick={() => setOfficeSubTab('orders')}
               className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-lg transition-all ${
@@ -785,6 +830,18 @@ export const Navbar: React.FC<{ onOpenCreateModal?: () => void }> = ({ onOpenCre
             >
               <BarChart3 className="w-3.5 h-3.5 mb-0.5 text-sij-cyan" />
               <span className="text-[8px] truncate w-full">Reporte</span>
+            </button>
+
+            <button
+              onClick={() => setOfficeSubTab('database')}
+              className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-lg transition-all ${
+                officeSubTab === 'database'
+                  ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                  : 'text-slate-300 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              <Database className="w-3.5 h-3.5 mb-0.5 text-emerald-400" />
+              <span className="text-[8px] truncate w-full">Base Datos</span>
             </button>
 
             <button

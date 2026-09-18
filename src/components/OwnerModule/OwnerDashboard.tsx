@@ -5,6 +5,7 @@ import { ConfirmDeleteModal } from '../ConfirmDeleteModal';
 import { SendCredentialsWhatsAppModal } from '../SendCredentialsWhatsAppModal';
 import { ClientsModule } from '../OfficeModule/ClientsModule';
 import { ServicesModule } from '../OfficeModule/ServicesModule';
+import { DatabaseModule } from '../DatabaseModule/DatabaseModule';
 import { exportToExcel, exportToPDF } from '../../lib/exportUtils';
 import {
   Crown,
@@ -42,12 +43,14 @@ import {
   MessageSquare,
   Share2,
   KeyRound,
-  FileText
+  FileText,
+  Layers
 } from 'lucide-react';
 
 export const OwnerDashboard: React.FC = () => {
   const {
     orders,
+    clients,
     technicians,
     systemUsers,
     currentUser,
@@ -576,13 +579,26 @@ export const OwnerDashboard: React.FC = () => {
           </button>
 
           <button
+            onClick={() => setActiveTab('database')}
+            className={`px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-md flex items-center space-x-1.5 shrink-0 cursor-pointer ${
+              activeTab === 'database'
+                ? 'bg-emerald-500 text-slate-950 font-black ring-2 ring-emerald-400'
+                : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+            }`}
+            title="Acceso directo a Supabase, credenciales y pago del Plan Pro ($25 USD)"
+          >
+            <Database className="w-4 h-4" />
+            <span>Base de Datos Supabase & Pago</span>
+          </button>
+
+          <button
             onClick={handleSyncSupabase}
             disabled={isSyncing}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-md flex items-center space-x-1.5 shrink-0 cursor-pointer"
+            className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-xs flex items-center space-x-1.5 shrink-0 cursor-pointer"
             title="Sincronizar todos los datos locales con Supabase"
           >
             <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-            <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar con Supabase'}</span>
+            <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar'}</span>
           </button>
 
           <button
@@ -591,7 +607,7 @@ export const OwnerDashboard: React.FC = () => {
             title="Ver Script SQL y Migración para Supabase"
           >
             <Database className="w-4 h-4" />
-            <span>Script SQL Supabase</span>
+            <span>Script SQL</span>
           </button>
 
           <button
@@ -602,6 +618,46 @@ export const OwnerDashboard: React.FC = () => {
             <span>Exportar Balance PDF</span>
           </button>
         </div>
+      </div>
+
+      {/* Owner Submodule Navigation Bar */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar border-b border-slate-200">
+        {[
+          { id: 'analytics', label: 'Analítica & Cobranza', icon: BarChart3 },
+          { id: 'financials', label: 'Reportes Financieros', icon: FileSpreadsheet },
+          { id: 'services', label: 'Catálogo de Servicios', icon: Layers },
+          { id: 'employees', label: 'Gestión de Empleados', count: systemUsers.length, icon: Users },
+          { id: 'clients', label: 'Directorio de Clientes', count: clients.length, icon: Building2 },
+          { id: 'database', label: '🗄️ Base de Datos Supabase (Acceso & Pago)', icon: Database, isSpecial: true }
+        ].map(tab => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                isActive
+                  ? tab.isSpecial
+                    ? 'bg-emerald-600 text-white shadow-md ring-2 ring-emerald-500/30'
+                    : 'bg-sij-orange text-white shadow-md ring-2 ring-amber-500/30'
+                  : tab.isSpecial
+                  ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300'
+                  : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              <span>{tab.label}</span>
+              {tab.count !== undefined && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                  isActive ? 'bg-black/20 text-white' : 'bg-slate-100 text-slate-700'
+                }`}>
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {syncResult && (
@@ -1291,6 +1347,9 @@ export const OwnerDashboard: React.FC = () => {
 
       {/* ------------------- TAB 5: DIRECTORIO DE CLIENTES ------------------- */}
       {activeTab === 'clients' && <ClientsModule />}
+
+      {/* ------------------- TAB 6: BASE DE DATOS Y FACTURACIÓN SUPABASE ------------------- */}
+      {activeTab === 'database' && <DatabaseModule />}
 
       {/* ================= MODAL REGISTRAR EMPLEADO ================= */}
       {isAddUserOpen && (

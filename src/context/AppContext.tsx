@@ -33,10 +33,10 @@ import {
 interface AppContextType {
   activeRole: RoleType;
   setActiveRole: (role: RoleType) => void;
-  officeSubTab: 'orders' | 'routes' | 'budgets' | 'services' | 'clients' | 'catalogs' | 'reports';
-  setOfficeSubTab: (tab: 'orders' | 'routes' | 'budgets' | 'services' | 'clients' | 'catalogs' | 'reports') => void;
-  ownerSubTab: 'analytics' | 'financials' | 'services' | 'employees' | 'users' | 'clients';
-  setOwnerSubTab: (tab: 'analytics' | 'financials' | 'services' | 'employees' | 'users' | 'clients') => void;
+  officeSubTab: 'orders' | 'routes' | 'budgets' | 'services' | 'clients' | 'catalogs' | 'reports' | 'database';
+  setOfficeSubTab: (tab: 'orders' | 'routes' | 'budgets' | 'services' | 'clients' | 'catalogs' | 'reports' | 'database') => void;
+  ownerSubTab: 'analytics' | 'financials' | 'services' | 'employees' | 'users' | 'clients' | 'database';
+  setOwnerSubTab: (tab: 'analytics' | 'financials' | 'services' | 'employees' | 'users' | 'clients' | 'database') => void;
   orders: ServiceOrder[];
   clients: Client[];
   spareParts: SparePart[];
@@ -345,7 +345,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
 
-  const [officeSubTab, setOfficeSubTab] = useState<'orders' | 'routes' | 'budgets' | 'clients' | 'catalogs' | 'reports'>(() => {
+  const [officeSubTab, setOfficeSubTab] = useState<'orders' | 'routes' | 'budgets' | 'services' | 'clients' | 'catalogs' | 'reports' | 'database'>(() => {
     try {
       const saved = localStorage.getItem('app_office_subtab');
       return (saved as any) || 'orders';
@@ -354,7 +354,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
 
-  const [ownerSubTab, setOwnerSubTab] = useState<'analytics' | 'financials' | 'employees' | 'users' | 'clients' | 'services'>(() => {
+  const [ownerSubTab, setOwnerSubTab] = useState<'analytics' | 'financials' | 'employees' | 'users' | 'clients' | 'services' | 'database'>(() => {
     try {
       const saved = localStorage.getItem('app_owner_subtab');
       return (saved as any) || 'analytics';

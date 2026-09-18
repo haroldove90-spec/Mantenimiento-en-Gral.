@@ -22,7 +22,10 @@ import {
   CheckCheck,
   Key,
   Settings,
-  RotateCcw
+  RotateCcw,
+  DollarSign,
+  CreditCard,
+  ExternalLink
 } from 'lucide-react';
 import {
   SUPABASE_PROJECT_URL,
@@ -48,11 +51,12 @@ export const SupabaseAuditModal: React.FC = () => {
     expenses
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'diagnostic' | 'history' | 'sql' | 'config'>('diagnostic');
+  const [activeTab, setActiveTab] = useState<'diagnostic' | 'history' | 'sql' | 'config' | 'billing'>('diagnostic');
   const [filterAction, setFilterAction] = useState<string>('ALL');
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
   // Custom Supabase credentials form state
   const [inputUrl, setInputUrl] = useState(() => localStorage.getItem('custom_supabase_url') || '');
@@ -430,6 +434,19 @@ CREATE INDEX IF NOT EXISTS idx_telemetry_created_at ON public.telemetry_audit_lo
                 Custom
               </span>
             )}
+          </button>
+
+          <button
+            id="tab-btn-billing"
+            onClick={() => setActiveTab('billing')}
+            className={`pb-3 px-3 text-xs sm:text-sm font-bold flex items-center space-x-2 border-b-2 transition-all cursor-pointer ${
+              activeTab === 'billing'
+                ? 'border-emerald-400 text-emerald-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <DollarSign className="w-4 h-4 text-emerald-400" />
+            <span>5. Cuenta Cliente & Plan Pro ($25)</span>
           </button>
         </div>
 
@@ -950,6 +967,189 @@ CREATE INDEX IF NOT EXISTS idx_telemetry_created_at ON public.telemetry_audit_lo
                   <li>Pégalos en el formulario de arriba y haz clic en <strong className="text-white">Guardar Credenciales y Conectar</strong>.</li>
                   <li>Ve a la pestaña <strong className="text-white">3. Esquema SQL</strong>, copia el script y ejecútalo en el <strong className="text-white">SQL Editor</strong> de Supabase para generar todas las tablas e índices.</li>
                 </ol>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: ACCESO CLIENTE & PAGO PLAN PRO ($25) */}
+          {activeTab === 'billing' && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              {/* Top Banner Alert */}
+              <div className="bg-gradient-to-r from-amber-500/20 via-orange-500/10 to-transparent border border-amber-500/40 rounded-2xl p-5">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-start space-x-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0 mt-0.5">
+                      <CreditCard className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-extrabold text-base text-white">
+                        Límite Gratuito Excedido — Activar Plan Pro ($25 USD / mes)
+                      </h4>
+                      <p className="text-xs text-slate-300 mt-1 max-w-xl">
+                        Has superado la cuota de transferencia o capacidad gratuita de Supabase. Al contratar el <strong>Plan Pro de $25 USD/mes</strong>, tu base de datos mantendrá sincronización en tiempo real sin pausas ni bloqueos.
+                      </p>
+                    </div>
+                  </div>
+
+                  <a
+                    href="https://supabase.com/dashboard/sign-in"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="cursor-pointer bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-xs sm:text-sm px-5 py-3 rounded-xl shadow-lg transition-all flex items-center space-x-2 shrink-0"
+                  >
+                    <span>Ir a Supabase Dashboard</span>
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                </div>
+              </div>
+
+              {/* Direct Access Credentials Card */}
+              <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-sm text-white flex items-center space-x-2">
+                    <Key className="w-4 h-4 text-emerald-400" />
+                    <span>Tus Datos de Acceso a la Cuenta de Supabase</span>
+                  </h4>
+                  <span className="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                    Cuenta Cliente Verificada
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Email */}
+                  <div className="bg-slate-900/90 border border-slate-700/70 rounded-xl p-3.5 space-y-1.5">
+                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                      Usuario / Email de Acceso:
+                    </span>
+                    <div className="flex items-center justify-between bg-slate-950 px-3 py-2 rounded-lg border border-slate-800">
+                      <span className="font-mono text-xs sm:text-sm text-amber-300 select-all truncate">
+                        sij@appdesignproyectos.com
+                      </span>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText('sij@appdesignproyectos.com');
+                          setCopiedField('email');
+                          setTimeout(() => setCopiedField(null), 2000);
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-white transition-colors shrink-0 ml-2"
+                        title="Copiar email"
+                      >
+                        {copiedField === 'email' ? (
+                          <Check className="w-4 h-4 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Password */}
+                  <div className="bg-slate-900/90 border border-slate-700/70 rounded-xl p-3.5 space-y-1.5">
+                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                      Contraseña / Password:
+                    </span>
+                    <div className="flex items-center justify-between bg-slate-950 px-3 py-2 rounded-lg border border-slate-800">
+                      <span className="font-mono text-xs sm:text-sm text-emerald-300 select-all truncate font-bold">
+                        Chevropar#1970
+                      </span>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText('Chevropar#1970');
+                          setCopiedField('pass');
+                          setTimeout(() => setCopiedField(null), 2000);
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-white transition-colors shrink-0 ml-2"
+                        title="Copiar contraseña"
+                      >
+                        {copiedField === 'pass' ? (
+                          <Check className="w-4 h-4 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 5-Step Simple Guide */}
+              <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-5 space-y-4">
+                <h4 className="font-bold text-sm text-white flex items-center space-x-2">
+                  <DollarSign className="w-4 h-4 text-emerald-400" />
+                  <span>Pasos Sencillos para Activar el Plan Pro ($25 USD)</span>
+                </h4>
+
+                <div className="space-y-3">
+                  <div className="flex items-start space-x-3.5 bg-slate-900/60 p-3.5 rounded-xl border border-slate-800/80">
+                    <span className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 font-black text-xs flex items-center justify-center shrink-0 border border-emerald-500/30">
+                      1
+                    </span>
+                    <div>
+                      <p className="text-xs font-bold text-white">
+                        Entra al panel de Supabase
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Abre <a href="https://supabase.com/dashboard/sign-in" target="_blank" rel="noopener noreferrer" className="text-emerald-400 underline font-semibold">supabase.com/dashboard/sign-in</a> e inicia sesión con las credenciales de arriba.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start space-x-3.5 bg-slate-900/60 p-3.5 rounded-xl border border-slate-800/80">
+                    <span className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 font-black text-xs flex items-center justify-center shrink-0 border border-emerald-500/30">
+                      2
+                    </span>
+                    <div>
+                      <p className="text-xs font-bold text-white">
+                        Selecciona tu Organización o Proyecto
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Haz clic en tu proyecto activo de la lista (por ejemplo, el proyecto de SIJ).
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start space-x-3.5 bg-slate-900/60 p-3.5 rounded-xl border border-slate-800/80">
+                    <span className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 font-black text-xs flex items-center justify-center shrink-0 border border-emerald-500/30">
+                      3
+                    </span>
+                    <div>
+                      <p className="text-xs font-bold text-white">
+                        Ingresa a la sección "Billing" (Facturación)
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        En el menú lateral izquierdo, haz clic en <strong>Project Settings &gt; Billing / Subscription</strong> (o en Organization &gt; Billing).
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start space-x-3.5 bg-slate-900/60 p-3.5 rounded-xl border border-slate-800/80">
+                    <span className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 font-black text-xs flex items-center justify-center shrink-0 border border-emerald-500/30">
+                      4
+                    </span>
+                    <div>
+                      <p className="text-xs font-bold text-white">
+                        Haz clic en "Upgrade to Pro" ($25 / month)
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Selecciona el <strong>Plan Pro</strong> de $25 USD al mes. Este plan incluye 100,000 usuarios, 8 GB de almacenamiento en BD, y 250 GB de transferencia sin pausas.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start space-x-3.5 bg-slate-900/60 p-3.5 rounded-xl border border-slate-800/80">
+                    <span className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 font-black text-xs flex items-center justify-center shrink-0 border border-emerald-500/30">
+                      5
+                    </span>
+                    <div>
+                      <p className="text-xs font-bold text-white">
+                        Agrega tu tarjeta y confirma
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Ingresa el método de pago con tarjeta de crédito o débito internacional. Una vez aprobado, tu base de datos se restablece de inmediato y queda protegida 24/7.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}

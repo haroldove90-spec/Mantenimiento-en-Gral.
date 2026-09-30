@@ -105,16 +105,32 @@ export const DatabaseModule: React.FC = () => {
 
   const handleSaveCustomConfig = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputUrl.trim() || !inputKey.trim()) {
-      setConfigFeedback('Por favor ingresa tanto la URL como la Anon Key de Supabase.');
+    const cleanUrl = inputUrl.trim();
+    const cleanKey = inputKey.trim();
+
+    if (!cleanUrl && !cleanKey) {
+      setConfigFeedback('Por favor ingresa tanto la URL del proyecto como la Anon Public API Key.');
       return;
     }
-    if (!inputUrl.trim().startsWith('http')) {
-      setConfigFeedback('Error: La URL debe comenzar con https://');
+    if (!cleanUrl) {
+      setConfigFeedback('Por favor ingresa la URL de tu proyecto Supabase (ejemplo: https://battwitnhrezwotkcvbc.supabase.co).');
       return;
     }
-    saveCustomSupabaseConfig(inputUrl.trim(), inputKey.trim());
-    setConfigFeedback('¡Credenciales guardadas con éxito! Comprobando enlace...');
+    if (!cleanKey) {
+      setConfigFeedback('Por favor ingresa la Anon Public API Key (clave JWT pública de Supabase que inicia con "eyJ...").');
+      return;
+    }
+    if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+      setConfigFeedback('Error de formato: La URL debe comenzar con https:// (ejemplo: https://battwitnhrezwotkcvbc.supabase.co).');
+      return;
+    }
+    if (!cleanKey.startsWith('eyJ') || cleanKey.length < 40) {
+      setConfigFeedback('Aviso: La clave Anon de Supabase suele ser un token JWT que inicia con "eyJ..." y tiene más de 40 caracteres. Verifica que no hayas copiado texto incompleto.');
+      return;
+    }
+
+    saveCustomSupabaseConfig(cleanUrl, cleanKey);
+    setConfigFeedback('¡Credenciales guardadas con éxito! Actualizando conexión en tiempo real...');
   };
 
   const handleResetConfig = () => {
@@ -764,11 +780,26 @@ CREATE POLICY "Public Update Orders" ON public.orders FOR UPDATE USING (true);
       {/* ========================================================================= */}
       {subTab === 'credentials' && (
         <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-6 animate-in fade-in duration-200">
-          <div>
-            <h3 className="text-base font-black text-slate-900">Configuración de Credenciales de Supabase</h3>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Si en el futuro deseas migrar o conectar un nuevo proyecto de Supabase, puedes ingresar aquí las nuevas claves de conexión.
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+            <div>
+              <h3 className="text-base font-black text-slate-900">Configuración de Credenciales de Supabase</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Si en el futuro deseas migrar o conectar un nuevo proyecto de Supabase, puedes ingresar aquí las nuevas claves de conexión.
+              </p>
+            </div>
+            <div className="shrink-0">
+              {isUsingCustomSupabase ? (
+                <span className="inline-flex items-center space-x-1.5 bg-amber-50 text-amber-800 border border-amber-300 px-3 py-1 rounded-xl text-xs font-bold">
+                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                  <span>Configuración Personalizada Activa</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center space-x-1.5 bg-emerald-50 text-emerald-800 border border-emerald-300 px-3 py-1 rounded-xl text-xs font-bold">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>Proyecto Oficial SIJ Activo (battwitnhrezwotkcvbc)</span>
+                </span>
+              )}
+            </div>
           </div>
 
           <form onSubmit={handleSaveCustomConfig} className="space-y-4">

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { ConfirmDeleteModal } from '../ConfirmDeleteModal';
 import { BusinessService } from '../../types';
+import { exportCatalogToPDF, exportToExcel, exportToPDF } from '../../lib/exportUtils';
 
 const DEFAULT_CATEGORIES = [
   'Mantenimiento Preventivo',
@@ -126,30 +127,52 @@ export const ServicesModule: React.FC = () => {
 
   const handleExportCSV = () => {
     if (services.length === 0) return;
+    const targetList = filteredServices.length > 0 ? filteredServices : services;
     const headers = ['Código', 'Nombre del Servicio', 'Categoría', 'Precio Base (MXN)', 'Duración Estimada (Horas)', 'Garantía (Días)', 'Estado', 'Descripción'];
-    const rows = services.map(s => [
-      `"${s.code}"`,
-      `"${s.name.replace(/"/g, '""')}"`,
-      `"${s.category}"`,
+    const rows = targetList.map(s => [
+      s.code,
+      s.name,
+      s.category,
       s.basePrice,
       s.estimatedDurationHours || 1,
       s.warrantyDays || 30,
       s.status,
-      `"${(s.description || '').replace(/"/g, '""')}"`
+      s.description || ''
     ]);
-
-    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Catalogo_Servicios_SIJ_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    exportToExcel(`Catalogo_Servicios_SIJ_${new Date().toISOString().split('T')[0]}`, headers, rows);
   };
 
   const handlePrint = () => {
-    window.print();
+    const targetList = filteredServices.length > 0 ? filteredServices : services;
+    if (targetList.length === 0) return;
+    exportCatalogToPDF(targetList);
+  };
+
+  const handleExportSingleService = (s: BusinessService) => {
+    const headers = ['Concepto', 'Detalle'];
+    const rows = [
+      ['Código de Servicio', s.code],
+      ['Nombre Oficial', s.name],
+      ['Categoría', s.category],
+      ['Tarifa Base', `$${Number(s.basePrice || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN`],
+      ['Tiempo Estimado de Ejecución', `${s.estimatedDurationHours || 1} horas`],
+      ['Garantía del Servicio', `${s.warrantyDays || 30} días naturales`],
+      ['Estado en Catálogo', s.status],
+      ['Alcance y Descripción', s.description || 'Sin descripción detallada']
+    ];
+
+    exportToPDF({
+      title: `Ficha Técnica de Servicio: ${s.name}`,
+      subtitle: `Catálogo Oficial de Servicios Técnicos • Código: ${s.code}`,
+      headers,
+      rows,
+      metadata: {
+        'Código': s.code,
+        'Categoría': s.category,
+        'Tarifa Base': `$${Number(s.basePrice || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN`,
+        'Garantía': `${s.warrantyDays || 30} días`
+      }
+    });
   };
 
   return (
@@ -370,6 +393,13 @@ export const ServicesModule: React.FC = () => {
                 </div>
 
                 <div className="flex items-center space-x-1.5">
+                  <button
+                    onClick={() => handleExportSingleService(service)}
+                    className="p-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                    title="Imprimir Ficha de Servicio en PDF"
+                  >
+                    <Printer className="w-4 h-4" />
+                  </button>
                   <button
                     onClick={() => handleOpenEditModal(service)}
                     className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-colors cursor-pointer"

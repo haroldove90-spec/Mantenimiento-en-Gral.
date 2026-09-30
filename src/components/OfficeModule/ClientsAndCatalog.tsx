@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Building2, Package, Plus, MapPin, Phone, Mail, Search, Tag, Database, Edit, Trash2, CheckCircle2, XCircle, UserX, UserCheck } from 'lucide-react';
+import { Building2, Package, Plus, MapPin, Phone, Mail, Search, Tag, Database, Edit, Trash2, CheckCircle2, XCircle, UserX, UserCheck, Printer, FileSpreadsheet } from 'lucide-react';
 import { ConfirmDeleteModal } from '../ConfirmDeleteModal';
 import { Client, SparePart } from '../../types';
+import { exportSparePartsToPDF, exportToExcel, exportToPDF } from '../../lib/exportUtils';
 
 export const ClientsAndCatalog: React.FC<{ initialTab?: 'clients' | 'catalog' }> = ({ initialTab = 'catalog' }) => {
   const { clients, spareParts, addClient, updateClient, deleteClient, toggleClientStatus, addSparePart, updateSparePart, toggleSparePartStatus, deleteSparePart } = useApp();

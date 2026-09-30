@@ -15,8 +15,14 @@ import {
   ExternalLink,
   ThumbsUp,
   ThumbsDown,
-  Trash2
+  Trash2,
+  Printer,
+  ReceiptText,
+  FileText,
+  Download
 } from 'lucide-react';
+import { exportNotaDeVentaPDF, exportToPDF } from '../../lib/exportUtils';
+import { PdfQuoteModal } from '../PdfQuoteModal';
 
 export const ClientPortalView: React.FC = () => {
   const {
@@ -57,6 +63,7 @@ export const ClientPortalView: React.FC = () => {
   const [rejectComment, setRejectComment] = useState('');
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
 
   const currentOrder =
     clientOrders.find(
@@ -80,6 +87,38 @@ export const ClientPortalView: React.FC = () => {
     setRejectComment('');
     setToastMessage(`Solicitud de ajuste enviada para la orden ${currentOrder.folio}.`);
     setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  const handlePrintCurrentNota = () => {
+    if (!currentOrder) return;
+    exportNotaDeVentaPDF(currentOrder, {
+      documentType: currentOrder.status === 'Cobrado/Cerrado' ? 'nota_venta' : 'cotizacion'
+    });
+  };
+
+  const handlePrintClientHistory = () => {
+    if (!currentOrder) return;
+    const headers = ['Folio', 'Servicio / Equipo', 'Fecha', 'Estatus', 'Técnico Asignado', 'Total ($)'];
+    const rows = clientOrders.map(o => [
+      o.folio,
+      o.equipmentType || 'Mantenimiento General',
+      o.scheduledDate || o.createdAt || 'N/A',
+      o.status,
+      o.technicianName || 'Técnico SIJ',
+      `$${(o.budget?.grandTotal || o.collectedAmount || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN`
+    ]);
+
+    exportToPDF({
+      title: `Historial de Servicios - ${currentOrder.clientName}`,
+      subtitle: `Registro de Órdenes y Servicios Técnicos (${clientOrders.length} servicios)`,
+      headers,
+      rows,
+      summaryCards: [
+        { label: 'Total Servicios', value: clientOrders.length },
+        { label: 'Servicios Concluidos', value: clientOrders.filter(o => o.status === 'Cobrado/Cerrado').length },
+        { label: 'Servicios Activos', value: clientOrders.filter(o => o.status !== 'Cobrado/Cerrado').length }
+      ]
+    });
   };
 
   if (!currentOrder) {
@@ -116,90 +155,97 @@ export const ClientPortalView: React.FC = () => {
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
             <span>{toastMessage}</span>
           </div>
-          <button onClick={() => setToastMessage(null)} className="text-slate-400 hover:text-white">
+          <button onClick={() => setToastMessage(null)} className="text-slate-400 hover:text-white cursor-pointer">
             ✕
           </button>
         </div>
       )}
 
-      {/* Top Folio Switcher (Simulates direct link access without complex login) */}
+      {/* Top Folio Switcher & Print Controls */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold">
+          <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold shrink-0">
             <UserCheck className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-slate-900">Portal de Aprobación de Clientes</h2>
-            <p className="text-xs text-slate-500">Acceso transparente mediante enlace directo a la orden</p>
+            <h2 className="text-base font-bold text-slate-900">Portal del Cliente • SIJ Servicios</h2>
+            <p className="text-xs text-slate-500">Consulta de estatus, notas de venta y aprobación de presupuestos</p>
           </div>
         </div>
 
-        {/* Quick Folio Selector & Admin action */}
+        {/* Quick Folio Selector & Global Print Actions */}
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
           <div className="flex items-center space-x-2">
-            <label className="text-xs font-semibold text-slate-600 whitespace-nowrap">Ver Orden (Folio):</label>
+            <label className="text-xs font-semibold text-slate-600 whitespace-nowrap">Ver Folio:</label>
             <select
               value={selectedFolio}
               onChange={e => setSelectedFolio(e.target.value)}
-              className="bg-slate-50 border border-slate-300 text-slate-800 text-xs font-bold rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 outline-hidden"
+              className="bg-slate-50 border border-slate-300 text-slate-800 text-xs font-bold rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 outline-hidden cursor-pointer"
             >
               {clientOrders.map(o => (
                 <option key={o.id} value={o.folio}>
-                  {o.folio} - {o.clientName} ({o.status})
+                  {o.folio} - {o.equipmentType || 'General'} ({o.status})
                 </option>
               ))}
             </select>
           </div>
+
+          {clientOrders.length > 1 && (
+            <button
+              onClick={handlePrintClientHistory}
+              className="bg-slate-800 hover:bg-slate-900 text-white px-3 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer shadow-xs active:scale-95"
+              title="Imprimir listado completo de todos los servicios registrados"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Imprimir Historial ({clientOrders.length})</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Main Approval Card */}
+      {/* Main Order Card */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
         
-        {/* Banner */}
-        <div className="bg-slate-900 text-white p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        {/* Banner with Direct Print Buttons */}
+        <div className="bg-slate-900 text-white p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-mono font-bold text-purple-400 bg-purple-950/80 px-2.5 py-1 rounded-md border border-purple-800">
                 {currentOrder.folio}
               </span>
               <span className="text-xs font-bold bg-white/10 text-white px-2.5 py-1 rounded-md">
                 Estatus: {currentOrder.status}
               </span>
+              {currentOrder.status === 'Cobrado/Cerrado' && (
+                <span className="text-xs font-bold bg-emerald-500 text-white px-2.5 py-1 rounded-md flex items-center space-x-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Cobrado / Concluido</span>
+                </span>
+              )}
             </div>
             <h3 className="text-xl font-bold mt-2">{currentOrder.clientName}</h3>
-            <p className="text-xs text-slate-400 mt-0.5">{currentOrder.departmentName}</p>
+            <p className="text-xs text-slate-400 mt-0.5">{currentOrder.departmentName || 'Matriz Principal'}</p>
           </div>
 
-          <div className="text-right flex flex-col items-start sm:items-end gap-1.5">
-            <span
-              className={`inline-block px-3.5 py-1.5 rounded-full text-xs font-black shadow-xs ${
-                currentOrder.status === 'Cobrado/Cerrado'
-                  ? 'bg-emerald-500 text-white'
-                  : currentOrder.status === 'Pendiente de Entrega'
-                  ? 'bg-amber-400 text-slate-950 ring-2 ring-amber-400/50 animate-pulse'
-                  : currentOrder.status === 'En Reparación' || currentOrder.status === 'En Diagnóstico'
-                  ? 'bg-blue-500 text-white'
-                  : budget?.status === 'Aprobado'
-                  ? 'bg-emerald-500 text-white'
-                  : budget?.status === 'Rechazado'
-                  ? 'bg-rose-500 text-white'
-                  : 'bg-amber-400 text-slate-950'
-              }`}
+          {/* Quick Print & Action Buttons for the Client */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handlePrintCurrentNota}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-md transition-all cursor-pointer active:scale-95"
+              title="Imprimir o guardar en PDF la Nota de Venta de este servicio"
             >
-              {currentOrder.status === 'Cobrado/Cerrado' 
-                ? '✅ Servicio Terminado' 
-                : currentOrder.status === 'Pendiente de Entrega'
-                ? '📦 Pendiente de Entrega / Cobro'
-                : currentOrder.status === 'En Reparación' 
-                ? '⚡ En Reparación' 
-                : currentOrder.status === 'En Diagnóstico' 
-                ? '🔍 En Diagnóstico' 
-                : budget?.status 
-                ? `Presupuesto ${budget.status}` 
-                : '⏳ ' + currentOrder.status}
-            </span>
-            <span className="text-[11px] text-slate-400">Técnico Asignado: <strong>{currentOrder.technicianName || 'Por Asignar'}</strong></span>
+              <Printer className="w-4 h-4" />
+              <span>Imprimir Nota de Venta (PDF)</span>
+            </button>
+
+            <button
+              onClick={() => setPdfModalOpen(true)}
+              className="bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer active:scale-95"
+              title="Ver formato oficial completo en pantalla"
+            >
+              <ReceiptText className="w-4 h-4 text-blue-400" />
+              <span>Ver Documento</span>
+            </button>
           </div>
         </div>
 
@@ -283,9 +329,18 @@ export const ClientPortalView: React.FC = () => {
           {/* Itemized Budget Breakdown */}
           {budget ? (
             <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50/50">
-              <div className="bg-slate-100 px-4 py-3 border-b border-slate-200 font-bold text-xs text-slate-800 uppercase tracking-wider flex items-center space-x-2">
-                <FileSpreadsheet className="w-4 h-4 text-purple-600" />
-                <span>Desglose del Presupuesto</span>
+              <div className="bg-slate-100 px-4 py-3 border-b border-slate-200 font-bold text-xs text-slate-800 uppercase tracking-wider flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <FileSpreadsheet className="w-4 h-4 text-purple-600" />
+                  <span>Desglose de Cotización / Nota de Venta</span>
+                </div>
+                <button
+                  onClick={handlePrintCurrentNota}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center space-x-1 transition-colors cursor-pointer"
+                >
+                  <Printer className="w-3 h-3" />
+                  <span>Imprimir Carta</span>
+                </button>
               </div>
 
               <div className="p-4 space-y-3 text-xs">
@@ -330,8 +385,15 @@ export const ClientPortalView: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="p-6 text-center border border-dashed border-amber-300 bg-amber-50 rounded-xl text-amber-900 text-xs font-semibold">
-              El presupuesto está siendo elaborado por el equipo administrativo de oficina.
+            <div className="p-6 text-center border border-dashed border-amber-300 bg-amber-50 rounded-xl text-amber-900 text-xs font-semibold flex flex-col items-center justify-center gap-2">
+              <span>El presupuesto formal está siendo procesado por el equipo de administración.</span>
+              <button
+                onClick={handlePrintCurrentNota}
+                className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1 cursor-pointer"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Imprimir Ficha de Orden en PDF</span>
+              </button>
             </div>
           )}
 
@@ -342,7 +404,7 @@ export const ClientPortalView: React.FC = () => {
                 <div className="flex flex-col sm:flex-row items-center justify-end gap-3">
                   <button
                     onClick={() => setShowRejectForm(true)}
-                    className="w-full sm:w-auto px-5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl font-bold text-xs flex items-center justify-center space-x-1.5 transition-colors"
+                    className="w-full sm:w-auto px-5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl font-bold text-xs flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
                   >
                     <ThumbsDown className="w-4 h-4" />
                     <span>Rechazar / Solicitar Ajuste</span>
@@ -350,7 +412,7 @@ export const ClientPortalView: React.FC = () => {
 
                   <button
                     onClick={handleApprove}
-                    className="w-full sm:w-auto px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center space-x-1.5"
+                    className="w-full sm:w-auto px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center space-x-1.5 cursor-pointer active:scale-95"
                   >
                     <ThumbsUp className="w-4 h-4" />
                     <span>Aprobar Presupuesto</span>
@@ -371,13 +433,13 @@ export const ClientPortalView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setShowRejectForm(false)}
-                      className="px-3 py-1.5 border border-slate-300 rounded-lg text-slate-700 font-semibold"
+                      className="px-3 py-1.5 border border-slate-300 rounded-lg text-slate-700 font-semibold cursor-pointer"
                     >
                       Cancelar
                     </button>
                     <button
                       type="submit"
-                      className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold"
+                      className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold cursor-pointer"
                     >
                       Enviar Ajuste
                     </button>
@@ -391,14 +453,24 @@ export const ClientPortalView: React.FC = () => {
             <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl text-center text-xs text-emerald-900 space-y-1">
               <div className="font-bold text-sm text-emerald-800 flex items-center justify-center space-x-1">
                 <ShieldCheck className="w-5 h-5 text-emerald-600" />
-                <span>Presupuesto Autorizado</span>
+                <span>Presupuesto Autorizado por el Cliente</span>
               </div>
-              <p>El técnico ha sido notificado para continuar con los trabajos de reparación.</p>
+              <p>El técnico responsable ha sido notificado para concluir la ejecución del servicio.</p>
             </div>
           )}
 
         </div>
       </div>
+
+      {/* Full Screen PDF / Nota de Venta Modal */}
+      {pdfModalOpen && currentOrder && (
+        <PdfQuoteModal
+          order={currentOrder}
+          isOpen={pdfModalOpen}
+          onClose={() => setPdfModalOpen(false)}
+          defaultDocType={currentOrder.status === 'Cobrado/Cerrado' ? 'nota_venta' : 'cotizacion'}
+        />
+      )}
 
     </div>
   );

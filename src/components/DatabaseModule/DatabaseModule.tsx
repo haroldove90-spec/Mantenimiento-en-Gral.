@@ -141,64 +141,134 @@ export const DatabaseModule: React.FC = () => {
     checkSupabaseConnection(true);
   };
 
-  const fullSqlScript = `-- =========================================================
--- ESQUEMA COMPLETO Y ROBUSTO SUPABASE: SIJ SERVICIOS TÉCNICOS
--- =========================================================
+  const fullSqlScript = `-- =======================================================================
+-- MIGRACIÓN SEGURA PARA SUPABASE (SIJ SERVICIOS TÉCNICOS)
+-- ¡NO BORRA NI REEMPLAZA REGISTROS ACTUALES! (100% NO DESTRUCTIVO)
+-- =======================================================================
 
+-- 1. HABILITAR EXTENSIONES
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
-CREATE TABLE IF NOT EXISTS public.employees (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+-- 2. TABLA SYSTEM_USERS (Crear si no existe y asegurar columnas sin alterar datos)
+CREATE TABLE IF NOT EXISTS public.system_users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
-    email TEXT UNIQUE,
-    username TEXT UNIQUE,
-    role TEXT NOT NULL DEFAULT 'tech' CHECK (role IN ('owner', 'office', 'tech', 'client')),
+    username TEXT,
+    email TEXT,
+    password TEXT,
     phone TEXT,
-    pin TEXT DEFAULT '1234',
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+    role TEXT NOT NULL DEFAULT 'tech',
+    status TEXT NOT NULL DEFAULT 'Activo',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+ALTER TABLE public.system_users ADD COLUMN IF NOT EXISTS username TEXT;
+ALTER TABLE public.system_users ADD COLUMN IF NOT EXISTS password TEXT;
+ALTER TABLE public.system_users ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE public.system_users ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Activo';
 
-CREATE TABLE IF NOT EXISTS public.clients (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+-- 3. TABLA TECHNICIANS (Técnicos de Campo)
+CREATE TABLE IF NOT EXISTS public.technicians (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID,
     name TEXT NOT NULL,
-    contact_name TEXT,
     phone TEXT,
     email TEXT,
-    address TEXT,
-    tax_id TEXT,
-    client_type TEXT DEFAULT 'Particular',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+    specialty TEXT DEFAULT 'Técnico de Campo',
+    status TEXT DEFAULT 'Disponible',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+ALTER TABLE public.technicians ADD COLUMN IF NOT EXISTS user_id UUID;
+ALTER TABLE public.technicians ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE public.technicians ADD COLUMN IF NOT EXISTS specialty TEXT DEFAULT 'Técnico de Campo';
+ALTER TABLE public.technicians ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Disponible';
+
+-- 4. TABLA SERVICE_ORDERS (Asegurar columnas para asignación bidireccional)
+CREATE TABLE IF NOT EXISTS public.service_orders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    folio TEXT NOT NULL UNIQUE,
+    client_name TEXT NOT NULL,
+    department_name TEXT DEFAULT 'Matriz Principal',
+    equipment_type TEXT DEFAULT 'Equipo General',
+    description TEXT NOT NULL,
+    priority TEXT DEFAULT 'Media',
+    status TEXT DEFAULT 'Pendiente de Visita',
+    technician_id UUID,
+    technician_name TEXT,
+    scheduled_date DATE DEFAULT CURRENT_DATE,
+    route_order INT DEFAULT 1,
+    diagnostic_notes TEXT,
+    diagnostic_photos TEXT[] DEFAULT '{}',
+    solution_notes TEXT,
+    solution_photos TEXT[] DEFAULT '{}',
+    collected_amount NUMERIC(12,2) DEFAULT 0.00,
+    payment_method TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS public.orders (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    folio TEXT UNIQUE NOT NULL,
-    status TEXT NOT NULL DEFAULT 'Pendiente',
-    client_id UUID REFERENCES public.clients(id) ON DELETE SET NULL,
-    technician_id UUID REFERENCES public.employees(id) ON DELETE SET NULL,
-    brand TEXT,
-    model TEXT,
-    serial_number TEXT,
-    issue_description TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
+-- Agregar columnas necesarias a service_orders de forma segura (sin tocar datos)
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS technician_name TEXT;
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS technician_id UUID;
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS client_name TEXT;
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS department_name TEXT;
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS equipment_type TEXT;
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS scheduled_date DATE DEFAULT CURRENT_DATE;
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS route_order INT DEFAULT 1;
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS diagnostic_notes TEXT;
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS diagnostic_photos TEXT[] DEFAULT '{}';
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS solution_notes TEXT;
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS solution_photos TEXT[] DEFAULT '{}';
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS collected_amount NUMERIC(12,2) DEFAULT 0.00;
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS payment_method TEXT;
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS is_warranty BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS warranty_notes TEXT;
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
 
-ALTER TABLE public.employees ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
+-- 5. SINCRONIZACIÓN AUTOMÁTICA DE REGISTROS EXISTENTES (Sólo completa campos vacíos)
+-- A. Si una orden tiene technician_id pero technician_name está vacío, autocompletar con el nombre del técnico
+UPDATE public.service_orders so
+SET technician_name = t.name
+FROM public.technicians t
+WHERE so.technician_id = t.id
+  AND (so.technician_name IS NULL OR TRIM(so.technician_name) = '');
 
-CREATE POLICY "Public Read Employees" ON public.employees FOR SELECT USING (true);
-CREATE POLICY "Public Insert Employees" ON public.employees FOR INSERT WITH CHECK (true);
-CREATE POLICY "Public Update Employees" ON public.employees FOR UPDATE USING (true);
+-- B. Si una orden tiene technician_name pero technician_id está vacío, enlazar el ID del técnico correspondiente
+UPDATE public.service_orders so
+SET technician_id = t.id
+FROM public.technicians t
+WHERE so.technician_id IS NULL
+  AND so.technician_name IS NOT NULL
+  AND LOWER(TRIM(so.technician_name)) = LOWER(TRIM(t.name));
 
-CREATE POLICY "Public Read Clients" ON public.clients FOR SELECT USING (true);
-CREATE POLICY "Public Insert Clients" ON public.clients FOR INSERT WITH CHECK (true);
-CREATE POLICY "Public Update Clients" ON public.clients FOR UPDATE USING (true);
+-- C. Enlazar técnicos con usuarios del sistema si user_id está vacío
+UPDATE public.technicians t
+SET user_id = u.id, email = COALESCE(t.email, u.email)
+FROM public.system_users u
+WHERE t.user_id IS NULL
+  AND (LOWER(TRIM(t.name)) = LOWER(TRIM(u.name)) OR (t.email IS NOT NULL AND LOWER(TRIM(t.email)) = LOWER(TRIM(u.email))));
 
-CREATE POLICY "Public Read Orders" ON public.orders FOR SELECT USING (true);
-CREATE POLICY "Public Insert Orders" ON public.orders FOR INSERT WITH CHECK (true);
-CREATE POLICY "Public Update Orders" ON public.orders FOR UPDATE USING (true);
+-- 6. POLÍTICAS DE ACCESO RLS (Permisos de lectura y escritura para el sistema)
+ALTER TABLE public.system_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.technicians ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.service_orders ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+    DROP POLICY IF EXISTS "Permitir_Lectura_SystemUsers" ON public.system_users;
+    DROP POLICY IF EXISTS "Permitir_Escritura_SystemUsers" ON public.system_users;
+    DROP POLICY IF EXISTS "Permitir_Lectura_Technicians" ON public.technicians;
+    DROP POLICY IF EXISTS "Permitir_Escritura_Technicians" ON public.technicians;
+    DROP POLICY IF EXISTS "Permitir_Lectura_ServiceOrders" ON public.service_orders;
+    DROP POLICY IF EXISTS "Permitir_Escritura_ServiceOrders" ON public.service_orders;
+END $$;
+
+CREATE POLICY "Permitir_Lectura_SystemUsers" ON public.system_users FOR SELECT USING (true);
+CREATE POLICY "Permitir_Escritura_SystemUsers" ON public.system_users FOR ALL USING (true) WITH CHECK (true);
+
+CREATE POLICY "Permitir_Lectura_Technicians" ON public.technicians FOR SELECT USING (true);
+CREATE POLICY "Permitir_Escritura_Technicians" ON public.technicians FOR ALL USING (true) WITH CHECK (true);
+
+CREATE POLICY "Permitir_Lectura_ServiceOrders" ON public.service_orders FOR SELECT USING (true);
+CREATE POLICY "Permitir_Escritura_ServiceOrders" ON public.service_orders FOR ALL USING (true) WITH CHECK (true);
 `;
 
   return (

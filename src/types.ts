@@ -229,6 +229,8 @@ export interface Technician {
   avgResponseTimeHours: number;
   avatarUrl?: string;
   status?: 'Activo' | 'Inactivo';
+  userId?: string;
+  user_id?: string;
   createdAt?: string;
 }
 

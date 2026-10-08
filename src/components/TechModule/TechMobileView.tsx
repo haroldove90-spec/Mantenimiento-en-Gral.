@@ -68,13 +68,15 @@ export const TechMobileView: React.FC = () => {
     const curEmail = normalizeStr(currentUser.email);
     const curName = normalizeStr(currentUser.name);
     const curUser = normalizeStr(currentUser.username);
+    const curId = currentUser.id;
+
     return (
       technicians.find(
         t =>
+          (curId && (t.id === curId || t.userId === curId || t.user_id === curId)) ||
           (curEmail && t.email && normalizeStr(t.email) === curEmail) ||
-          (t.id && t.id === currentUser.id) ||
-          (curName && t.name && normalizeStr(t.name) === curName) ||
-          (curUser && t.name && normalizeStr(t.name) === curUser)
+          (curName && t.name && (normalizeStr(t.name) === curName || normalizeStr(t.name).includes(curName) || curName.includes(normalizeStr(t.name)))) ||
+          (curUser && t.name && (normalizeStr(t.name) === curUser || normalizeStr(t.name).includes(curUser) || curUser.includes(normalizeStr(t.name))))
       ) || null
     );
   }, [currentUser, technicians]);
@@ -84,24 +86,37 @@ export const TechMobileView: React.FC = () => {
     const ids: string[] = [];
     if (currentUser?.id) ids.push(currentUser.id);
     if (loggedInTech?.id && !ids.includes(loggedInTech.id)) ids.push(loggedInTech.id);
+    if (loggedInTech?.userId && !ids.includes(loggedInTech.userId)) ids.push(loggedInTech.userId);
+    if (loggedInTech?.user_id && !ids.includes(loggedInTech.user_id)) ids.push(loggedInTech.user_id);
+
+    const curEmail = normalizeStr(currentUser?.email);
+    const curName = normalizeStr(currentUser?.name);
+    const curUser = normalizeStr(currentUser?.username);
+    const curId = currentUser?.id;
 
     technicians.forEach(t => {
-      if (
-        (currentUser?.email && t.email && normalizeStr(t.email) === normalizeStr(currentUser.email)) ||
-        (currentUser?.name && t.name && normalizeStr(t.name) === normalizeStr(currentUser.name)) ||
-        (currentUser?.username && t.name && normalizeStr(t.name) === normalizeStr(currentUser.username))
-      ) {
+      const match =
+        (curId && (t.id === curId || t.userId === curId || t.user_id === curId)) ||
+        (curEmail && t.email && normalizeStr(t.email) === curEmail) ||
+        (curName && t.name && (normalizeStr(t.name) === curName || normalizeStr(t.name).includes(curName) || curName.includes(normalizeStr(t.name)))) ||
+        (curUser && t.name && (normalizeStr(t.name) === curUser || normalizeStr(t.name).includes(curUser) || curUser.includes(normalizeStr(t.name))));
+
+      if (match) {
         if (!ids.includes(t.id)) ids.push(t.id);
+        if (t.userId && !ids.includes(t.userId)) ids.push(t.userId);
+        if (t.user_id && !ids.includes(t.user_id)) ids.push(t.user_id);
       }
     });
 
     systemUsers.forEach(u => {
-      if (
-        (currentUser?.id && u.id === currentUser.id) ||
-        (currentUser?.email && u.email && normalizeStr(u.email) === normalizeStr(currentUser.email)) ||
-        (currentUser?.username && u.username && normalizeStr(u.username) === normalizeStr(currentUser.username))
-      ) {
-        if (!ids.includes(u.id)) ids.push(u.id);
+      const match =
+        (curId && u.id === curId) ||
+        (curEmail && u.email && normalizeStr(u.email) === curEmail) ||
+        (curUser && u.username && normalizeStr(u.username) === curUser) ||
+        (curName && u.name && (normalizeStr(u.name) === curName || normalizeStr(u.name).includes(curName) || curName.includes(normalizeStr(u.name))));
+
+      if (match && !ids.includes(u.id)) {
+        ids.push(u.id);
       }
     });
 
@@ -112,10 +127,13 @@ export const TechMobileView: React.FC = () => {
     const names: string[] = [];
     if (currentUser?.name) names.push(normalizeStr(currentUser.name));
     if (currentUser?.username) names.push(normalizeStr(currentUser.username));
-    if (loggedInTech?.name) names.push(normalizeStr(loggedInTech.name));
+    if (loggedInTech?.name) {
+      const ltName = normalizeStr(loggedInTech.name);
+      if (!names.includes(ltName)) names.push(ltName);
+    }
 
     technicians.forEach(t => {
-      if (myTechIds.includes(t.id)) {
+      if (myTechIds.includes(t.id) || (t.userId && myTechIds.includes(t.userId)) || (t.user_id && myTechIds.includes(t.user_id))) {
         const n = normalizeStr(t.name);
         if (n && !names.includes(n)) names.push(n);
       }
@@ -181,7 +199,7 @@ export const TechMobileView: React.FC = () => {
   const [execOrder, setExecOrder] = useState<ServiceOrder | null>(null);
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
 
-  // Check whether an order belongs exclusively to the current logged-in technician
+  // Check whether an order belongs to the current logged-in technician
   const isOrderAssignedToMe = useMemo(() => {
     return (o: ServiceOrder): boolean => {
       const orderTechId = (o.technicianId || '').trim();
@@ -211,43 +229,43 @@ export const TechMobileView: React.FC = () => {
         return false;
       }
 
-      // 1. Direct ID match: order's techId matches my registered IDs
+      // 1. Direct ID match: order's techId matches any of my registered technician/user IDs
       if (orderTechId && myTechIds.includes(orderTechId)) {
         return true;
       }
 
       // 2. Direct Name match
       if (orderTechName && myTechNames.includes(orderTechName)) {
-        // If the order has an orderTechId pointing to a different known technician with a different name, exclude it
-        if (orderTechId) {
-          const otherTech = technicians.find(
-            t => t.id === orderTechId && !myTechIds.includes(t.id) && normalizeStr(t.name) !== orderTechName
-          );
-          if (otherTech) return false;
-        }
         return true;
       }
 
-      // 3. Name containment (e.g., first and last name variations)
+      // 3. Name containment and word token matching (e.g. "Carlos" matches "Carlos Mendoza")
       const matchesPartialName = myTechNames.some(myN => {
         if (!myN || !orderTechName) return false;
-        if (myN.length >= 4 && (orderTechName.includes(myN) || myN.includes(orderTechName))) {
+        if (myN.length >= 3 && (orderTechName.includes(myN) || myN.includes(orderTechName))) {
           return true;
         }
-        return false;
+        const myTokens = myN.split(/\s+/).filter(t => t.length >= 3);
+        const orderTokens = orderTechName.split(/\s+/).filter(t => t.length >= 3);
+        return myTokens.some(tok => orderTokens.includes(tok));
       });
 
       if (matchesPartialName) {
-        // Ensure this doesn't actually match another technician in the team
-        const belongsToOther = technicians.some(
-          t => !myTechIds.includes(t.id) && normalizeStr(t.name) === orderTechName
-        );
-        if (!belongsToOther) {
-          return true;
+        return true;
+      }
+
+      // 4. Resolve via linked technician profile
+      if (orderTechId) {
+        const linkedTech = technicians.find(t => t.id === orderTechId);
+        if (linkedTech) {
+          const ltNameNorm = normalizeStr(linkedTech.name);
+          if (ltNameNorm && myTechNames.includes(ltNameNorm)) return true;
+          if (linkedTech.userId && myTechIds.includes(linkedTech.userId)) return true;
+          if (linkedTech.user_id && myTechIds.includes(linkedTech.user_id)) return true;
         }
       }
 
-      // 4. Email match fallback
+      // 5. Email match fallback
       if (
         currentUser?.email &&
         (o as any).technicianEmail &&
@@ -275,7 +293,13 @@ export const TechMobileView: React.FC = () => {
 
       return orders.filter(o => {
         if (targetId && o.technicianId && o.technicianId === targetId) return true;
-        if (targetNameNorm && o.technicianName && normalizeStr(o.technicianName) === targetNameNorm) return true;
+        if (targetNameNorm && o.technicianName) {
+          const oNorm = normalizeStr(o.technicianName);
+          if (oNorm === targetNameNorm || oNorm.includes(targetNameNorm) || targetNameNorm.includes(oNorm)) return true;
+          const targetTokens = targetNameNorm.split(/\s+/).filter(t => t.length >= 3);
+          const orderTokens = oNorm.split(/\s+/).filter(t => t.length >= 3);
+          if (targetTokens.some(tok => orderTokens.includes(tok))) return true;
+        }
         return false;
       });
     }

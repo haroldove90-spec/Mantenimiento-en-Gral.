@@ -153,6 +153,39 @@ CREATE TABLE IF NOT EXISTS public.service_orders (
     completed_at TIMESTAMP WITH TIME ZONE
 );
 
+-- Agregar columnas de asignación y compatibilidad sin alterar registros existentes
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS technician_name TEXT;
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS technician_id UUID;
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS client_name TEXT;
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS department_name TEXT;
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS equipment_type TEXT;
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS scheduled_date DATE;
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+ALTER TABLE public.technicians ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE public.technicians ADD COLUMN IF NOT EXISTS user_id UUID;
+
+-- Sincronizar automáticamente registros existentes donde falte technician_name
+UPDATE public.service_orders so
+SET technician_name = t.name
+FROM public.technicians t
+WHERE so.technician_id = t.id
+  AND (so.technician_name IS NULL OR TRIM(so.technician_name) = '');
+
+-- Sincronizar automáticamente technician_id donde falte pero exista el nombre
+UPDATE public.service_orders so
+SET technician_id = t.id
+FROM public.technicians t
+WHERE so.technician_id IS NULL
+  AND so.technician_name IS NOT NULL
+  AND LOWER(TRIM(so.technician_name)) = LOWER(TRIM(t.name));
+
+-- Enlazar technicians.user_id con system_users
+UPDATE public.technicians t
+SET user_id = u.id, email = COALESCE(t.email, u.email)
+FROM public.system_users u
+WHERE t.user_id IS NULL
+  AND (LOWER(TRIM(t.name)) = LOWER(TRIM(u.name)) OR (t.email IS NOT NULL AND LOWER(TRIM(t.email)) = LOWER(TRIM(u.email))));
+
 -- Cotizaciones y Presupuestos
 CREATE TABLE IF NOT EXISTS public.budgets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

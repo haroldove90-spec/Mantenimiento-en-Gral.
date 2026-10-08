@@ -205,7 +205,9 @@ export const deduplicateTechnicians = (techs: Technician[]): Technician[] => {
         email: existing.email || t.email || '',
         phone: existing.phone || t.phone || '',
         specialty: existing.specialty || t.specialty || 'Técnico de Campo',
-        status: (t.status === 'Inactivo' && existing.status === 'Inactivo') ? 'Inactivo' : 'Activo'
+        status: (t.status === 'Inactivo' && existing.status === 'Inactivo') ? 'Inactivo' : 'Activo',
+        userId: t.userId || existing.userId || t.user_id || existing.user_id,
+        user_id: t.user_id || existing.user_id || t.userId || existing.userId
       };
 
       byKey.set(matchedKey, merged);
@@ -800,6 +802,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Sync data from Supabase on load, on realtime events, and with live polling
   const fetchSupabaseData = async (silent = false): Promise<{ success: boolean; ordersCount: number; error?: string; isQuotaBlocked?: boolean }> => {
     let fetchedTechs: Technician[] = [];
+    const allUsersMap = new Map<string, SystemUser>();
     let orderSyncError: string | undefined;
     let isQuotaBlocked = false;
     let fetchedOrderCount = 0;
@@ -818,7 +821,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } catch {}
       })();
 
-      let allUsersMap = new Map<string, SystemUser>();
       const rawTechCandidates: Technician[] = [];
       const forbiddenDemoNames = new Set(['tecnico 1', 'tecnico 2', 'técnico 1', 'técnico 2']);
 
@@ -964,7 +966,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 specialty: t.specialty || 'Técnico de Campo',
                 activeOrdersCount: 0,
                 avgResponseTimeHours: 2.5,
-                status: 'Activo'
+                status: 'Activo',
+                userId: t.user_id || undefined,
+                user_id: t.user_id || undefined
               });
             }
           });
@@ -1078,11 +1082,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (!oErr && oData && Array.isArray(oData)) {
         fetchedOrderCount = oData.length;
         const mappedOrders: ServiceOrder[] = oData.map((o: any) => {
-          let matchedTechId = o.technician_id;
-          if (!matchedTechId && o.technician_name) {
-            const foundTech = fetchedTechs.find(t => normalizeStr(t.name) === normalizeStr(o.technician_name));
-            if (foundTech) matchedTechId = foundTech.id;
+          let matchedTechId = o.technician_id || undefined;
+          let matchedTechName = o.technician_name || undefined;
+
+          // Bidirectional resolution: if ID exists but name is null/empty, resolve name
+          if (matchedTechId && !matchedTechName) {
+            const foundTech = fetchedTechs.find(t => t.id === matchedTechId || t.userId === matchedTechId || t.user_id === matchedTechId);
+            if (foundTech) {
+              matchedTechName = foundTech.name;
+            } else {
+              for (const u of allUsersMap.values()) {
+                if (u.id === matchedTechId) {
+                  matchedTechName = u.name;
+                  break;
+                }
+              }
+            }
           }
+          // If name exists but ID is missing, resolve ID
+          if (!matchedTechId && matchedTechName) {
+            const normName = normalizeStr(matchedTechName);
+            const foundTech = fetchedTechs.find(t => normalizeStr(t.name) === normName);
+            if (foundTech) {
+              matchedTechId = foundTech.id;
+            } else {
+              for (const u of allUsersMap.values()) {
+                if (normalizeStr(u.name) === normName) {
+                  matchedTechId = u.id;
+                  break;
+                }
+              }
+            }
+          }
+
           return {
             id: o.id,
             folio: o.folio || `OS-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -1095,7 +1127,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             status: (o.status as OrderStatus) || 'Pendiente de Visita',
             description: o.description || '',
             technicianId: matchedTechId || undefined,
-            technicianName: o.technician_name || undefined,
+            technicianName: matchedTechName || undefined,
             scheduledDate: o.scheduled_date || new Date().toISOString().split('T')[0],
             routeOrder: Number(o.route_order || 1),
             diagnosticNotes: o.diagnostic_notes || '',

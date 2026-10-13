@@ -313,3 +313,35 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO postgres, service_role, anon, aut
 
 -- Notificar a PostgREST para recargar la caché de esquema inmediatamente
 NOTIFY pgrst, 'reload schema';
+
+-- ====================================================================
+-- 7. SCRIPT SEGURO DE CONCILIACIÓN DE TÉCNICOS Y ÓRDENES (SIN BORRAR NADA)
+-- Ejecutar en Supabase SQL Editor para vincular técnicos y órdenes existentes:
+-- ====================================================================
+
+-- A. Asegurar columnas opcionales sin borrar datos
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS technician_name TEXT;
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS technician_id UUID;
+ALTER TABLE public.technicians ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES public.system_users(id) ON DELETE SET NULL;
+ALTER TABLE public.technicians ADD COLUMN IF NOT EXISTS email TEXT;
+
+-- B. Vincular técnicos huérfanos con sus usuarios de sistema correspondientes
+UPDATE public.technicians t
+SET user_id = u.id, email = u.email
+FROM public.system_users u
+WHERE t.user_id IS NULL 
+  AND (LOWER(TRIM(t.name)) = LOWER(TRIM(u.name)) OR (t.email IS NOT NULL AND LOWER(TRIM(t.email)) = LOWER(TRIM(u.email))));
+
+-- C. Corregir órdenes con technician_id faltante pero que ya tienen el nombre asignado
+UPDATE public.service_orders so
+SET technician_id = t.id
+FROM public.technicians t
+WHERE (so.technician_id IS NULL OR so.technician_id NOT IN (SELECT id FROM public.technicians))
+  AND so.technician_name IS NOT NULL
+  AND LOWER(TRIM(so.technician_name)) = LOWER(TRIM(t.name));
+
+-- D. Si existen órdenes con el ID de system_users en vez del ID de technicians, remapearlas
+UPDATE public.service_orders so
+SET technician_id = t.id
+FROM public.technicians t
+WHERE so.technician_id = t.user_id;

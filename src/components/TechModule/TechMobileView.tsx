@@ -287,12 +287,17 @@ export const TechMobileView: React.FC = () => {
 
     // For Office / Admin / Owner supervising the field module:
     if (activeTechId !== 'all') {
-      const targetTech = currentTech || technicians.find(t => t.id === activeTechId);
-      const targetId = targetTech ? targetTech.id : activeTechId;
+      const targetTech = currentTech || technicians.find(t => t.id === activeTechId || t.userId === activeTechId || t.user_id === activeTechId);
+      const targetIds: string[] = [activeTechId];
+      if (targetTech) {
+        if (targetTech.id && !targetIds.includes(targetTech.id)) targetIds.push(targetTech.id);
+        if (targetTech.userId && !targetIds.includes(targetTech.userId)) targetIds.push(targetTech.userId);
+        if (targetTech.user_id && !targetIds.includes(targetTech.user_id)) targetIds.push(targetTech.user_id);
+      }
       const targetNameNorm = targetTech ? normalizeStr(targetTech.name) : '';
 
       return orders.filter(o => {
-        if (targetId && o.technicianId && o.technicianId === targetId) return true;
+        if (o.technicianId && targetIds.includes(o.technicianId)) return true;
         if (targetNameNorm && o.technicianName) {
           const oNorm = normalizeStr(o.technicianName);
           if (oNorm === targetNameNorm || oNorm.includes(targetNameNorm) || targetNameNorm.includes(oNorm)) return true;
@@ -502,7 +507,11 @@ export const TechMobileView: React.FC = () => {
                   )
                   .map(t => {
                     const count = orders.filter(
-                      o => o.technicianId === t.id || (o.technicianName && o.technicianName.toLowerCase() === t.name.toLowerCase())
+                      o =>
+                        o.technicianId === t.id ||
+                        (t.userId && o.technicianId === t.userId) ||
+                        (t.user_id && o.technicianId === t.user_id) ||
+                        (o.technicianName && normalizeStr(o.technicianName) === normalizeStr(t.name))
                     ).length;
                     return (
                       <option key={t.id} value={t.id}>

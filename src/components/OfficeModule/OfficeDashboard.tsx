@@ -1254,7 +1254,13 @@ export const OfficeDashboard: React.FC = () => {
                           
                           {/* Reassign Tech Dropdown */}
                           <select
-                            value={ord.technicianId || uniqueTechnicians.find(t => normalizeStr(t.name) === normalizeStr(ord.technicianName))?.id || ''}
+                            value={
+                              uniqueTechnicians.find(
+                                t =>
+                                  (ord.technicianId && (t.id === ord.technicianId || t.userId === ord.technicianId || t.user_id === ord.technicianId)) ||
+                                  (ord.technicianName && normalizeStr(t.name) === normalizeStr(ord.technicianName))
+                              )?.id || ''
+                            }
                             onChange={e => {
                               if (e.target.value) {
                                 assignTechnician(ord.id, e.target.value, ord.routeOrder || 1, ord.scheduledDate);

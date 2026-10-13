@@ -181,7 +181,7 @@ export const deduplicateTechnicians = (techs: Technician[]): Technician[] => {
     const normName = normalizeStr(t.name);
     const normEmail = normalizeStr(t.email);
 
-    // Check if matching technician already exists by email, name, or id
+    // Check if matching technician already exists by email, name, id, or userId
     let matchedKey: string | null = null;
     if (normEmail && byKey.has(normEmail)) {
       matchedKey = normEmail;
@@ -189,14 +189,32 @@ export const deduplicateTechnicians = (techs: Technician[]): Technician[] => {
       matchedKey = normName;
     } else if (t.id && byKey.has(t.id)) {
       matchedKey = t.id;
+    } else if (t.userId && byKey.has(t.userId)) {
+      matchedKey = t.userId;
+    } else if (t.user_id && byKey.has(t.user_id)) {
+      matchedKey = t.user_id;
     }
 
     if (matchedKey) {
       const existing = byKey.get(matchedKey)!;
-      // Prefer Supabase UUID over synthetic id
-      const isCurrentUuid = isUuid(t.id);
-      const isExistingUuid = isUuid(existing.id);
-      const finalId = isCurrentUuid ? t.id : (isExistingUuid ? existing.id : (existing.id || t.id));
+      // Prefer Supabase technicians table UUID as primary ID, and system_users ID as userId
+      let finalId = existing.id || t.id;
+      let finalUserId = t.userId || existing.userId || t.user_id || existing.user_id;
+
+      // If one of them has userId/user_id, it is definitively the technicians table record
+      if (existing.userId || existing.user_id) {
+        finalId = existing.id;
+        finalUserId = existing.userId || existing.user_id || (t.id !== existing.id ? t.id : undefined);
+      } else if (t.userId || t.user_id) {
+        finalId = t.id;
+        finalUserId = t.userId || t.user_id || (existing.id !== t.id ? existing.id : undefined);
+      } else if (isUuid(existing.id) && isUuid(t.id) && existing.id !== t.id) {
+        // One is technicians.id and the other is system_users.id. Keep existing as primary and t.id as userId
+        finalId = existing.id;
+        finalUserId = t.id;
+      } else if (isUuid(t.id) && !isUuid(existing.id)) {
+        finalId = t.id;
+      }
 
       const merged: Technician = {
         ...existing,
@@ -206,19 +224,22 @@ export const deduplicateTechnicians = (techs: Technician[]): Technician[] => {
         phone: existing.phone || t.phone || '',
         specialty: existing.specialty || t.specialty || 'Técnico de Campo',
         status: (t.status === 'Inactivo' && existing.status === 'Inactivo') ? 'Inactivo' : 'Activo',
-        userId: t.userId || existing.userId || t.user_id || existing.user_id,
-        user_id: t.user_id || existing.user_id || t.userId || existing.userId
+        userId: finalUserId,
+        user_id: finalUserId
       };
 
       byKey.set(matchedKey, merged);
       if (normName) byKey.set(normName, merged);
       if (normEmail) byKey.set(normEmail, merged);
       if (merged.id) byKey.set(merged.id, merged);
+      if (finalUserId) byKey.set(finalUserId, merged);
     } else {
       const primaryKey = normName;
       byKey.set(primaryKey, t);
       if (normEmail) byKey.set(normEmail, t);
       if (t.id) byKey.set(t.id, t);
+      if (t.userId) byKey.set(t.userId, t);
+      if (t.user_id) byKey.set(t.user_id, t);
     }
   }
 
@@ -1102,9 +1123,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           // If name exists but ID is missing, resolve ID
           if (!matchedTechId && matchedTechName) {
             const normName = normalizeStr(matchedTechName);
-            const foundTech = fetchedTechs.find(t => normalizeStr(t.name) === normName);
+            const foundTech = fetchedTechs.find(t => normalizeStr(t.name) === normName) || technicians.find(t => normalizeStr(t.name) === normName);
             if (foundTech) {
               matchedTechId = foundTech.id;
+              if (o.id && isUuid(o.id) && isUuid(foundTech.id)) {
+                supabase.from('service_orders').update({ technician_id: foundTech.id }).eq('id', o.id).then(() => {});
+              }
             } else {
               for (const u of allUsersMap.values()) {
                 if (normalizeStr(u.name) === normName) {
@@ -1573,7 +1597,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const cleanPayload: any = { ...payload };
       if ('client_id' in cleanPayload && !isUuid(cleanPayload.client_id)) delete cleanPayload.client_id;
       if ('department_id' in cleanPayload && !isUuid(cleanPayload.department_id)) delete cleanPayload.department_id;
-      if ('technician_id' in cleanPayload && !isUuid(cleanPayload.technician_id)) delete cleanPayload.technician_id;
+      
+      // Resolve technician_id to a valid row in technicians table
+      if (cleanPayload.technician_id || cleanPayload.technician_name) {
+        let resolvedTechId: string | null = null;
+        if (cleanPayload.technician_id && isUuid(cleanPayload.technician_id)) {
+          const directMatch = technicians.find(t => t.id === cleanPayload.technician_id);
+          if (directMatch && isUuid(directMatch.id)) {
+            resolvedTechId = directMatch.id;
+          } else {
+            const userMatch = technicians.find(t => t.userId === cleanPayload.technician_id || t.user_id === cleanPayload.technician_id);
+            if (userMatch && isUuid(userMatch.id)) {
+              resolvedTechId = userMatch.id;
+            } else if (cleanPayload.technician_name) {
+              const nameMatch = technicians.find(t => normalizeStr(t.name) === normalizeStr(cleanPayload.technician_name));
+              if (nameMatch && isUuid(nameMatch.id)) {
+                resolvedTechId = nameMatch.id;
+              }
+            }
+          }
+        } else if (cleanPayload.technician_name) {
+          const nameMatch = technicians.find(t => normalizeStr(t.name) === normalizeStr(cleanPayload.technician_name));
+          if (nameMatch && isUuid(nameMatch.id)) {
+            resolvedTechId = nameMatch.id;
+          }
+        }
+        if (resolvedTechId) {
+          cleanPayload.technician_id = resolvedTechId;
+        } else if (!isUuid(cleanPayload.technician_id)) {
+          delete cleanPayload.technician_id;
+        }
+      }
 
       // Ensure valid scheduled_date format YYYY-MM-DD
       if (cleanPayload.scheduled_date) {
@@ -1733,6 +1787,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return { data: null, error: null };
       }
 
+      // Resolve technician_id to a valid row in technicians table
+      let validTechId: string | null = null;
+      if (order.technicianId && isUuid(order.technicianId)) {
+        const directMatch = technicians.find(t => t.id === order.technicianId);
+        if (directMatch && isUuid(directMatch.id)) {
+          validTechId = directMatch.id;
+        } else {
+          const userMatch = technicians.find(t => t.userId === order.technicianId || t.user_id === order.technicianId);
+          if (userMatch && isUuid(userMatch.id)) {
+            validTechId = userMatch.id;
+          } else if (order.technicianName) {
+            const nameMatch = technicians.find(t => normalizeStr(t.name) === normalizeStr(order.technicianName));
+            if (nameMatch && isUuid(nameMatch.id)) {
+              validTechId = nameMatch.id;
+            }
+          }
+        }
+      } else if (order.technicianName) {
+        const nameMatch = technicians.find(t => normalizeStr(t.name) === normalizeStr(order.technicianName));
+        if (nameMatch && isUuid(nameMatch.id)) {
+          validTechId = nameMatch.id;
+        }
+      }
+
       const fullPayload: any = {
         folio: order.folio,
         client_name: order.clientName || 'Cliente',
@@ -1762,7 +1840,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         timeline: Array.isArray(order.timeline) ? order.timeline : []
       };
 
-      if (isUuid(order.technicianId)) fullPayload.technician_id = order.technicianId;
+      if (validTechId && isUuid(validTechId)) fullPayload.technician_id = validTechId;
       if (isUuid(order.clientId)) fullPayload.client_id = order.clientId;
       if (isUuid(order.departmentId)) fullPayload.department_id = order.departmentId;
 
@@ -1781,7 +1859,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return { data, error: null };
       }
 
-      // Retry with minimal safe columns if extended columns are rejected
+      // Retry with core payload if full payload fails
       const corePayload: any = {
         folio: order.folio,
         client_name: order.clientName || 'Cliente',
@@ -1792,10 +1870,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         technician_name: order.technicianName || null,
         scheduled_date: order.scheduledDate || new Date().toISOString().split('T')[0]
       };
-      if (isUuid(order.technicianId)) corePayload.technician_id = order.technicianId;
+      if (validTechId && isUuid(validTechId)) corePayload.technician_id = validTechId;
       if (isUuid(order.clientId)) corePayload.client_id = order.clientId;
 
-      const { data: coreData, error: coreErr } = await supabase.from('service_orders').insert([corePayload]).select();
+      let { data: coreData, error: coreErr } = await supabase.from('service_orders').insert([corePayload]).select();
+
+      // If foreign key constraint still fails, retry without foreign keys so order is not lost
+      if (coreErr && (coreErr.message?.includes('violates foreign key constraint') || coreErr.code === '23503')) {
+        const noFkCore = { ...corePayload };
+        delete noFkCore.technician_id;
+        delete noFkCore.client_id;
+        const noFkRes = await supabase.from('service_orders').insert([noFkCore]).select();
+        if (!noFkRes.error && noFkRes.data && noFkRes.data.length > 0) {
+          coreData = noFkRes.data;
+          coreErr = null;
+        }
+      }
+
       const latencyMs = Math.max(1, Math.round(performance.now() - startTime));
       recordTelemetry({
         table: 'service_orders',
@@ -1938,6 +2029,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ? technicians.find(
           t =>
             t.id === technicianId ||
+            t.userId === technicianId ||
+            t.user_id === technicianId ||
             normalizeStr(t.name) === normalizeStr(technicianId) ||
             (t.email && normalizeStr(t.email) === normalizeStr(technicianId))
         )
@@ -1951,16 +2044,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           (u.email && normalizeStr(u.email) === normalizeStr(technicianId))
       );
       if (userMatch) {
-        tech = {
-          id: userMatch.id,
-          name: userMatch.name,
-          email: userMatch.email || '',
-          phone: userMatch.phone || '',
-          specialty: 'Técnico de Campo',
-          status: 'Activo',
-          activeOrdersCount: 0,
-          avgResponseTimeHours: 2.5
-        };
+        const existingTech = technicians.find(
+          t =>
+            t.userId === userMatch.id ||
+            t.user_id === userMatch.id ||
+            normalizeStr(t.name) === normalizeStr(userMatch.name) ||
+            (t.email && userMatch.email && normalizeStr(t.email) === normalizeStr(userMatch.email))
+        );
+        if (existingTech) {
+          tech = existingTech;
+        } else {
+          tech = {
+            id: userMatch.id,
+            userId: userMatch.id,
+            user_id: userMatch.id,
+            name: userMatch.name,
+            email: userMatch.email || '',
+            phone: userMatch.phone || '',
+            specialty: 'Técnico de Campo',
+            status: 'Activo',
+            activeOrdersCount: 0,
+            avgResponseTimeHours: 2.5
+          };
+        }
       }
     }
 
@@ -2189,6 +2295,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let tech = technicians.find(
       t =>
         t.id === technicianId ||
+        t.userId === technicianId ||
+        t.user_id === technicianId ||
         normalizeStr(t.name) === normalizeStr(technicianId) ||
         (t.email && normalizeStr(t.email) === normalizeStr(technicianId))
     );
@@ -2200,17 +2308,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           (u.email && normalizeStr(u.email) === normalizeStr(technicianId))
       );
       if (userMatch) {
-        tech = {
-          id: userMatch.id,
-          name: userMatch.name,
-          email: userMatch.email || '',
-          phone: userMatch.phone || '',
-          specialty: 'Técnico de Campo',
-          status: 'Activo',
-          activeOrdersCount: 0,
-          avgResponseTimeHours: 2.5
-        };
-        setTechnicians(prev => deduplicateTechnicians([...prev, tech!]));
+        const existingTech = technicians.find(
+          t =>
+            t.userId === userMatch.id ||
+            t.user_id === userMatch.id ||
+            normalizeStr(t.name) === normalizeStr(userMatch.name) ||
+            (t.email && userMatch.email && normalizeStr(t.email) === normalizeStr(userMatch.email))
+        );
+        if (existingTech) {
+          tech = existingTech;
+        } else {
+          tech = {
+            id: userMatch.id,
+            userId: userMatch.id,
+            user_id: userMatch.id,
+            name: userMatch.name,
+            email: userMatch.email || '',
+            phone: userMatch.phone || '',
+            specialty: 'Técnico de Campo',
+            status: 'Activo',
+            activeOrdersCount: 0,
+            avgResponseTimeHours: 2.5
+          };
+          setTechnicians(prev => deduplicateTechnicians([...prev, tech!]));
+        }
       }
     }
 
@@ -2292,16 +2413,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         finalDate = new Date().toISOString().split('T')[0];
       }
 
-      // Proactively ensure technician exists in Supabase technicians table if UUID
-      if (isUuid(tech.id)) {
+      // Resolve valid technician_id in Supabase technicians table
+      let finalTechDbId: string | null = null;
+      const directDbTech = technicians.find(t => t.id === tech.id);
+      if (directDbTech && directDbTech.id) {
+        finalTechDbId = directDbTech.id;
+      } else {
+        const byUser = technicians.find(t => t.userId === tech.id || t.user_id === tech.id);
+        if (byUser && byUser.id) {
+          finalTechDbId = byUser.id;
+        } else {
+          const byName = technicians.find(t => normalizeStr(t.name) === normalizeStr(tech.name));
+          if (byName && byName.id) {
+            finalTechDbId = byName.id;
+          }
+        }
+      }
+
+      // If no row in technicians exists yet, proactively create it with status 'Disponible'
+      if (!finalTechDbId && isUuid(tech.id)) {
         try {
           await supabase.from('technicians').upsert({
             id: tech.id,
+            user_id: tech.userId || tech.user_id || tech.id,
             name: tech.name,
-            phone: tech.phone || undefined,
-            specialty: tech.specialty || 'General',
-            status: tech.status || 'Activo'
+            phone: tech.phone || '555-000-0000',
+            specialty: tech.specialty || 'Técnico de Campo',
+            status: 'Disponible'
           }, { onConflict: 'id' });
+          finalTechDbId = tech.id;
         } catch {
           // Ignore if technicians table has different schema
         }
@@ -2312,7 +2452,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         scheduled_date: finalDate,
         route_order: Number(routeOrder || targetOrd?.routeOrder || 1)
       };
-      if (isUuid(tech.id)) {
+      if (finalTechDbId && isUuid(finalTechDbId)) {
+        updatePayload.technician_id = finalTechDbId;
+      } else if (isUuid(tech.id)) {
         updatePayload.technician_id = tech.id;
       }
       if (targetOrd?.timeline) {

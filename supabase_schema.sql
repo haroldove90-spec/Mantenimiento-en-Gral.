@@ -345,3 +345,44 @@ UPDATE public.service_orders so
 SET technician_id = t.id
 FROM public.technicians t
 WHERE so.technician_id = t.user_id;
+
+-- E. Asegurar que las contraseñas/PINes de empleados no se limiten a 10 caracteres (sin borrar registros)
+DO $$ BEGIN
+  ALTER TABLE public.employees ALTER COLUMN pin TYPE TEXT;
+EXCEPTION
+  WHEN undefined_table THEN null;
+  WHEN undefined_column THEN null;
+END $$;
+
+-- F. Asegurar columnas de contacto y ruta directa en service_orders
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS client_address TEXT;
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS client_phone TEXT;
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS client_email TEXT;
+ALTER TABLE public.service_orders ADD COLUMN IF NOT EXISTS route_notes TEXT;
+
+-- G. Sincronizar domicilios de sucursales/departamentos hacia las órdenes
+UPDATE public.service_orders so
+SET client_address = d.address,
+    client_phone = COALESCE(so.client_phone, d.phone)
+FROM public.departments d
+WHERE so.department_id = d.id
+  AND (so.client_address IS NULL OR TRIM(so.client_address) = '');
+
+-- H. Habilitar Realtime para departments, system_users y employees
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.departments;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.system_users;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.employees;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+NOTIFY pgrst, 'reload schema';
+

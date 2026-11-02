@@ -1097,7 +1097,66 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (!silent) console.warn('Supabase employees sync notice:', e);
     }
 
-    // 2. Fetch Service Orders (from 'service_orders')
+    // 2. Fetch Departments & Clients first for complete address/contact resolution
+    let dbDepts: any[] = [];
+    let dbClients: any[] = [];
+    try {
+      const { data: deptData } = await supabase.from('departments').select('*');
+      if (deptData && Array.isArray(deptData)) dbDepts = deptData;
+    } catch (dErr) {
+      if (!silent) console.warn('Load departments notice:', dErr);
+    }
+
+    try {
+      const { data: cliData } = await supabase.from('clients').select('*');
+      if (cliData && Array.isArray(cliData)) dbClients = cliData;
+    } catch (cErr) {
+      if (!silent) console.warn('Load clients notice:', cErr);
+    }
+
+    // Map and store Clients with their real Departments
+    if (dbClients.length > 0) {
+      const mappedClients: Client[] = dbClients.map((c: any) => {
+        const clientDepts = dbDepts.filter((d: any) => d.client_id === c.id);
+        return {
+          id: c.id,
+          name: c.name || 'Cliente',
+          taxId: c.tax_id || c.taxId || 'RFC-GEN',
+          email: c.contact_email || c.email || '',
+          phone: c.phone || '',
+          whatsapp: c.whatsapp || '',
+          address: c.address || c.delivery_address || c.fiscal_address || '',
+          model: c.equipment_model || c.model || '',
+          fault: c.reported_fault || c.fault || '',
+          status: c.is_active === false || c.status === 'Inactivo' ? 'Inactivo' : 'Activo',
+          createdAt: c.created_at || new Date().toISOString(),
+          departments: clientDepts.length > 0 ? clientDepts.map((d: any) => ({
+            id: d.id,
+            name: d.name || 'Matriz Principal',
+            contactName: d.contact_name || c.name,
+            phone: d.phone || c.phone || '',
+            address: d.address || c.address || ''
+          })) : [
+            {
+              id: `dept-${c.id}-1`,
+              name: 'Matriz Principal',
+              contactName: c.name,
+              phone: c.phone || '',
+              address: c.address || ''
+            }
+          ]
+        };
+      });
+      setClients(prev => {
+        const existingIds = new Set(mappedClients.map(c => c.id));
+        const localOnly = prev.filter(c => !existingIds.has(c.id));
+        const combined = [...mappedClients, ...localOnly];
+        localStorage.setItem('app_clients', JSON.stringify(combined));
+        return combined;
+      });
+    }
+
+    // 2.1 Fetch Service Orders (from 'service_orders')
     try {
       const { data: oData, error: oErr } = await supabase.from('service_orders').select('*').order('created_at', { ascending: false });
       if (!oErr && oData && Array.isArray(oData)) {
@@ -1139,13 +1198,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
           }
 
+          // Resolve updated Address & Phone from departments or clients table
+          const matchedDept = dbDepts.find((d: any) => d.id === o.department_id);
+          const matchedClient = dbClients.find((c: any) => c.id === o.client_id || (c.name && o.client_name && normalizeStr(c.name) === normalizeStr(o.client_name)));
+          const resolvedAddress = o.client_address || o.delivery_address || o.address || matchedDept?.address || matchedClient?.address || matchedClient?.delivery_address || undefined;
+          const resolvedPhone = o.client_phone || o.phone || o.whatsapp || matchedDept?.phone || matchedClient?.phone || matchedClient?.whatsapp || undefined;
+          const resolvedEmail = o.client_email || o.email || o.contact_email || matchedClient?.contact_email || matchedClient?.email || undefined;
+          const resolvedContact = o.client_contact || o.contact_name || matchedDept?.contact_name || matchedClient?.contact_name || undefined;
+          const resolvedDepartmentName = o.department_name || matchedDept?.name || 'Matriz Principal';
+
           return {
             id: o.id,
             folio: o.folio || `OS-${Math.floor(1000 + Math.random() * 9000)}`,
             clientId: o.client_id || '',
             clientName: o.client_name || 'Cliente',
-            departmentId: o.department_id || '',
-            departmentName: o.department_name || 'Matriz Principal',
+            departmentId: o.department_id || (matchedDept ? matchedDept.id : ''),
+            departmentName: resolvedDepartmentName,
             equipmentType: o.equipment_type || 'General',
             priority: (o.priority === 'Alta' || o.priority === 'Media' || o.priority === 'Baja') ? o.priority : 'Media',
             status: (o.status as OrderStatus) || 'Pendiente de Visita',
@@ -1159,11 +1227,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             requestedParts: Array.isArray(o.requested_parts) ? o.requested_parts : [],
             solutionNotes: o.solution_notes || '',
             solutionPhotos: parsePhotosSafe(o.solution_photos),
-            clientAddress: o.client_address || o.delivery_address || o.address || undefined,
-            clientPhone: o.client_phone || o.phone || o.whatsapp || undefined,
-            clientEmail: o.client_email || o.email || o.contact_email || undefined,
-            clientContact: o.client_contact || o.contact_name || undefined,
-            clientTaxId: o.client_tax_id || o.tax_id || undefined,
+            clientAddress: resolvedAddress,
+            clientPhone: resolvedPhone,
+            clientEmail: resolvedEmail,
+            clientContact: resolvedContact,
+            clientTaxId: o.client_tax_id || o.tax_id || matchedClient?.tax_id || undefined,
             collectedAmount: Number(o.collected_amount || 0),
             paymentMethod: o.payment_method || undefined,
             isWarranty: Boolean(o.is_warranty),
@@ -1237,44 +1305,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       orderSyncError = e?.message || 'Error al conectar con Supabase';
       isQuotaBlocked = String(e?.message || '').includes('exceed_egress_quota') || e?.status === 402;
       if (!silent) console.warn('Supabase service_orders sync notice:', e);
-    }
-
-    // 3. Fetch Clients (from 'clients')
-    try {
-      const { data: cData, error: cErr } = await supabase.from('clients').select('*');
-      if (!cErr && cData && Array.isArray(cData) && cData.length > 0) {
-        const mappedClients: Client[] = cData.map((c: any) => ({
-          id: c.id,
-          name: c.name || 'Cliente',
-          taxId: c.tax_id || c.taxId || 'RFC-GEN',
-          email: c.contact_email || c.email || '',
-          phone: c.phone || '',
-          whatsapp: c.whatsapp || '',
-          address: c.address || c.delivery_address || c.fiscal_address || '',
-          model: c.equipment_model || c.model || '',
-          fault: c.reported_fault || c.fault || '',
-          status: c.is_active === false || c.status === 'Inactivo' ? 'Inactivo' : 'Activo',
-          createdAt: c.created_at || new Date().toISOString(),
-          departments: Array.isArray(c.departments) ? c.departments : [
-            {
-              id: `dept-${c.id}-1`,
-              name: 'Matriz Principal',
-              contactName: c.name,
-              phone: c.phone || '',
-              address: c.address || ''
-            }
-          ]
-        }));
-        setClients(prev => {
-          const existingIds = new Set(mappedClients.map(c => c.id));
-          const localOnly = prev.filter(c => !existingIds.has(c.id));
-          const combined = [...mappedClients, ...localOnly];
-          localStorage.setItem('app_clients', JSON.stringify(combined));
-          return combined;
-        });
-      }
-    } catch (e) {
-      if (!silent) console.warn('Supabase clients sync notice:', e);
     }
 
     // 4. Fetch Spare Parts (from 'spare_parts')
@@ -1506,6 +1536,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             fetchSupabaseData(true);
           }
         )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'departments' },
+          () => {
+            fetchSupabaseData(true);
+          }
+        )
+        .on('broadcast', { event: 'sij-order-updated' }, () => {
+          fetchSupabaseData(true);
+        })
+        .on('broadcast', { event: 'sij-user-created' }, () => {
+          fetchSupabaseData(true);
+        })
         .on(
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'notifications' },
@@ -3137,11 +3180,105 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateOrder = async (id: string, orderData: Partial<ServiceOrder>) => {
-    setOrders(prev =>
-      prev.map(ord => (ord.id === id ? { ...ord, ...orderData } : ord))
-    );
-    const order = orders.find(o => o.id === id);
+    let targetOrder: ServiceOrder | undefined;
+
+    setOrders(prev => {
+      const updated = prev.map(ord => {
+        if (ord.id === id) {
+          const merged = { ...ord, ...orderData };
+          targetOrder = merged;
+          return merged;
+        }
+        return ord;
+      });
+      localStorage.setItem('app_service_orders', JSON.stringify(updated));
+      return updated;
+    });
+
+    const order = targetOrder || orders.find(o => o.id === id);
     if (order) {
+      const newAddress = (orderData.clientAddress !== undefined ? orderData.clientAddress : order.clientAddress || '').trim();
+      const newPhone = (orderData.clientPhone !== undefined ? orderData.clientPhone : order.clientPhone || '').trim();
+      const newDeptName = (orderData.departmentName !== undefined ? orderData.departmentName : order.departmentName || '').trim();
+      const newClientName = (orderData.clientName !== undefined ? orderData.clientName : order.clientName || '').trim();
+      const newClientEmail = (orderData.clientEmail !== undefined ? orderData.clientEmail : order.clientEmail || '').trim();
+      const targetDeptId = orderData.departmentId || order.departmentId;
+      const targetClientId = orderData.clientId || order.clientId;
+
+      // 1. Sync updated address and department details in Supabase 'departments' table
+      if (targetDeptId && isUuid(targetDeptId)) {
+        try {
+          const deptUpdatePayload: any = {};
+          if (newAddress) deptUpdatePayload.address = newAddress;
+          if (newPhone) deptUpdatePayload.phone = newPhone;
+          if (newDeptName) deptUpdatePayload.name = newDeptName;
+          if (Object.keys(deptUpdatePayload).length > 0) {
+            await supabase.from('departments').update(deptUpdatePayload).eq('id', targetDeptId);
+          }
+        } catch (dErr) {
+          console.warn('Update department in Supabase notice:', dErr);
+        }
+      }
+
+      // 2. Sync updated client address and phone in Supabase 'clients' table
+      if (targetClientId && isUuid(targetClientId)) {
+        try {
+          const cliUpdatePayload: any = {};
+          if (newAddress) {
+            cliUpdatePayload.address = newAddress;
+            cliUpdatePayload.delivery_address = newAddress;
+          }
+          if (newPhone) cliUpdatePayload.phone = newPhone;
+          if (newClientName) cliUpdatePayload.name = newClientName;
+          if (newClientEmail) cliUpdatePayload.contact_email = newClientEmail;
+          if (Object.keys(cliUpdatePayload).length > 0) {
+            await supabase.from('clients').update(cliUpdatePayload).eq('id', targetClientId);
+          }
+        } catch (cErr) {
+          console.warn('Update client in Supabase notice:', cErr);
+        }
+      }
+
+      // 3. Keep local 'clients' state in sync with updated address/phone
+      if (newAddress || newPhone || newDeptName) {
+        setClients(prev => {
+          const updatedClients = prev.map(c => {
+            const matchesClient = (targetClientId && c.id === targetClientId) ||
+              (c.name && order.clientName && normalizeStr(c.name) === normalizeStr(order.clientName));
+
+            if (!matchesClient) return c;
+
+            const updatedDepts = (c.departments || []).map(d => {
+              const matchesDept = (targetDeptId && d.id === targetDeptId) ||
+                (d.name && order.departmentName && normalizeStr(d.name) === normalizeStr(order.departmentName));
+              if (matchesDept) {
+                return {
+                  ...d,
+                  address: newAddress || d.address,
+                  phone: newPhone || d.phone,
+                  name: newDeptName || d.name
+                };
+              }
+              return d;
+            });
+
+            return {
+              ...c,
+              address: newAddress || c.address,
+              deliveryAddress: newAddress || c.deliveryAddress,
+              phone: newPhone || c.phone,
+              name: newClientName || c.name,
+              email: newClientEmail || c.email,
+              departments: updatedDepts
+            };
+          });
+
+          localStorage.setItem('app_clients', JSON.stringify(updatedClients));
+          return updatedClients;
+        });
+      }
+
+      // 4. Construct payload for Supabase 'service_orders'
       const updatePayload: any = {
         equipment_type: orderData.equipmentType ?? order.equipmentType,
         description: orderData.description ?? order.description,
@@ -3161,6 +3298,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (orderData.warrantyNotes !== undefined) updatePayload.warranty_reason = orderData.warrantyNotes;
       if (orderData.collectedAmount !== undefined) updatePayload.collected_amount = orderData.collectedAmount;
       if (orderData.paymentMethod !== undefined) updatePayload.payment_method = orderData.paymentMethod;
+      if (orderData.routeNotes !== undefined) updatePayload.route_notes = orderData.routeNotes;
+      if (orderData.isActive !== undefined) updatePayload.is_active = orderData.isActive;
+
       if (orderData.technicianId !== undefined) {
         if (isUuid(orderData.technicianId)) {
           updatePayload.technician_id = orderData.technicianId;
@@ -3187,7 +3327,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (isUuid(orderData.departmentId ?? order.departmentId)) {
         updatePayload.department_id = orderData.departmentId ?? order.departmentId;
       }
+
       await updateSupabaseOrder(id, updatePayload, order.folio);
+
+      // 5. Broadcast live order update to all other open clients/tablets/phones
+      try {
+        const liveChannel = supabase.channel('sij-live-sync-and-notifs');
+        liveChannel.send({
+          type: 'broadcast',
+          event: 'sij-order-updated',
+          payload: {
+            orderId: id,
+            folio: order.folio,
+            clientAddress: newAddress,
+            clientPhone: newPhone,
+            departmentName: newDeptName,
+            status: orderData.status || order.status,
+            technicianId: orderData.technicianId || order.technicianId,
+            technicianName: orderData.technicianName || order.technicianName
+          }
+        });
+      } catch (bErr) {
+        console.warn('Realtime broadcast notice:', bErr);
+      }
     }
   };
 
@@ -3530,17 +3692,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Owner System Users / Employees & Expenses
   const addSystemUser = async (userData: Omit<SystemUser, 'id'>): Promise<{ success: boolean; savedInDb: boolean; error?: string }> => {
-    const userEmail = (userData.email || '').trim().toLowerCase();
-    const userUsername = (userData.username || '').trim().toLowerCase() || userEmail.split('@')[0];
+    const rawUsername = (userData.username || '').trim().toLowerCase().replace(/\s+/g, '');
+    const rawEmail = (userData.email || '').trim().toLowerCase();
+    const userUsername = rawUsername || (rawEmail.includes('@') ? rawEmail.split('@')[0] : `usr${Date.now()}`);
+    // If no email or invalid email format, generate valid unique email format to satisfy DB unique constraints
+    const userEmail = rawEmail.includes('@') ? rawEmail : `${userUsername}@sij.local`;
+    const userPassword = (userData.password || '').trim() || 'Temp1234!';
+    const empPin = userPassword.slice(0, 10); // Safely fit into employees.pin varchar(10)
     const nowIso = new Date().toISOString();
     const userRole = normalizeRole(userData.role);
+    let dbSuccess = true;
+    let dbErrorMsg = '';
 
     // 0. Supabase Auth registration
-    if (userEmail.includes('@') && userData.password) {
+    if (userEmail.includes('@') && userPassword) {
       try {
         await supabase.auth.signUp({
           email: userEmail,
-          password: userData.password,
+          password: userPassword,
           options: {
             data: {
               name: userData.name || userUsername,
@@ -3550,18 +3719,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         });
       } catch (authErr) {
-        console.warn('Supabase Auth signUp skipped/handled:', authErr);
+        console.warn('Supabase Auth signUp notice:', authErr);
       }
     }
 
     // 1. Save or Update in Supabase 'system_users' table
     try {
-      const { data: existingSys } = await supabase.from('system_users').select('id').ilike('email', userEmail);
+      const { data: existingSys } = await supabase
+        .from('system_users')
+        .select('id')
+        .or(`email.ilike.${userEmail},username.ilike.${userUsername}`);
+
       const sysPayload = {
-        name: userData.name || 'Usuario',
+        name: userData.name || userUsername,
         username: userUsername,
         email: userEmail,
-        password: userData.password || '',
+        password: userPassword,
         phone: userData.phone || '',
         role: userRole,
         status: userData.status || 'Activo',
@@ -3569,9 +3742,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
 
       if (existingSys && existingSys.length > 0) {
-        await supabase.from('system_users').update(sysPayload).ilike('email', userEmail);
+        await supabase.from('system_users').update(sysPayload).eq('id', existingSys[0].id);
       } else {
-        await supabase.from('system_users').insert([sysPayload]);
+        const { error: insSysErr } = await supabase.from('system_users').insert([sysPayload]);
+        if (insSysErr) {
+          console.warn('system_users insert error:', insSysErr);
+          dbSuccess = false;
+          dbErrorMsg = insSysErr.message;
+        }
       }
     } catch (err: any) {
       console.warn('System users insert/update notice:', err);
@@ -3580,28 +3758,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 2. Save or Update in Supabase 'employees' table (if administrative or tech)
     if (userRole !== 'client') {
       try {
-        const { data: existingEmp } = await supabase.from('employees').select('id').ilike('email', userEmail);
+        const { data: existingEmp } = await supabase
+          .from('employees')
+          .select('id')
+          .or(`email.ilike.${userEmail},username.ilike.${userUsername}`);
+
         const empPayload: any = {
-          name: userData.name || 'Empleado',
+          name: userData.name || userUsername,
           username: userUsername,
           email: userEmail,
           role: userRole,
           phone: userData.phone || '',
-          pin: userData.password || '1234',
+          pin: empPin,
           is_active: userData.status !== 'Inactivo',
           created_at: nowIso
         };
 
         if (existingEmp && existingEmp.length > 0) {
-          await supabase.from('employees').update(empPayload).ilike('email', userEmail);
+          await supabase.from('employees').update(empPayload).eq('id', existingEmp[0].id);
         } else {
           const { error: insErr } = await supabase.from('employees').insert([empPayload]);
           if (insErr) {
+            // Retry with truncated pin or without pin
             await supabase.from('employees').insert([{
-              name: userData.name || 'Empleado',
+              name: userData.name || userUsername,
               username: userUsername,
               email: userEmail,
               role: userRole,
+              phone: userData.phone || '',
+              pin: empPin,
               created_at: nowIso
             }]);
           }
@@ -3614,7 +3799,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 3. If role is 'client', save or update in Supabase 'clients' table
     if (userRole === 'client') {
       try {
-        const { data: existingClient } = await supabase.from('clients').select('id').ilike('contact_email', userEmail);
+        const { data: existingClient } = await supabase
+          .from('clients')
+          .select('id')
+          .or(`contact_email.ilike.${userEmail},email.ilike.${userEmail}`);
+
         const clientPayload = {
           name: userData.name || userUsername,
           contact_name: userData.name || userUsername,
@@ -3627,7 +3816,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           created_at: nowIso
         };
         if (existingClient && existingClient.length > 0) {
-          await supabase.from('clients').update(clientPayload).ilike('contact_email', userEmail);
+          await supabase.from('clients').update(clientPayload).eq('id', existingClient[0].id);
         } else {
           await supabase.from('clients').insert([clientPayload]);
         }
@@ -3639,18 +3828,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 4. If role is 'tech', also save / update in Supabase 'technicians' table
     if (userRole === 'tech') {
       try {
-        const { data: existingTech } = await supabase.from('technicians').select('id').ilike('email', userEmail);
+        const { data: existingTech } = await supabase
+          .from('technicians')
+          .select('id')
+          .or(`email.ilike.${userEmail},name.ilike.${userData.name}`);
+
         const techPayload: any = {
           name: userData.name || 'Técnico',
           email: userEmail,
           phone: userData.phone || '',
           specialty: 'Técnico de Campo',
-          status: userData.status === 'Inactivo' ? 'Inactivo' : 'Activo',
+          status: userData.status === 'Inactivo' ? 'Inactivo' : 'Disponible',
           created_at: nowIso
         };
 
         if (existingTech && existingTech.length > 0) {
-          await supabase.from('technicians').update(techPayload).ilike('email', userEmail);
+          await supabase.from('technicians').update(techPayload).eq('id', existingTech[0].id);
         } else {
           const { error: techInsErr } = await supabase.from('technicians').insert([techPayload]);
           if (techInsErr) {
@@ -3671,10 +3864,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newId = `usr-${Date.now()}`;
     const newUser: SystemUser = {
       id: newId,
-      name: userData.name || 'Usuario',
+      name: userData.name || userUsername,
       username: userUsername,
       email: userEmail,
-      password: userData.password || '',
+      password: userPassword,
       phone: userData.phone || '',
       role: userRole,
       status: userData.status || 'Activo',
@@ -3683,7 +3876,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setSystemUsers(prev => {
-      const filtered = prev.filter(u => u && (u.email || '').toLowerCase() !== userEmail);
+      const filtered = prev.filter(u => u && (u.email || '').toLowerCase() !== userEmail && (u.username || '').toLowerCase() !== userUsername);
       const updated = [...filtered, newUser];
       localStorage.setItem('app_system_users', JSON.stringify(updated));
       return updated;
@@ -3691,8 +3884,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (newUser.role === 'tech') {
       setTechnicians(prev => {
-        const filtered = prev.filter(t => (t.email || '').toLowerCase() !== userEmail);
-        return [
+        const filtered = prev.filter(t => (t.email || '').toLowerCase() !== userEmail && normalizeStr(t.name) !== normalizeStr(newUser.name));
+        const updatedTechs = [
           ...filtered,
           {
             id: `tech-${Date.now()}`,
@@ -3705,10 +3898,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             status: 'Activo'
           }
         ];
+        localStorage.setItem('app_technicians', JSON.stringify(updatedTechs));
+        return updatedTechs;
       });
     }
 
-    return { success: true, savedInDb: true };
+    // Broadcast user creation across connected clients
+    try {
+      supabase.channel('sij-live-sync-and-notifs').send({
+        type: 'broadcast',
+        event: 'sij-user-created',
+        payload: { username: userUsername, email: userEmail, role: userRole }
+      });
+    } catch {}
+
+    return { success: dbSuccess, savedInDb: dbSuccess, error: dbErrorMsg || undefined };
   };
 
   const syncUsersToSupabase = async (): Promise<{ success: boolean; count: number; error?: string }> => {

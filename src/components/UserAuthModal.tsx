@@ -152,10 +152,18 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
 
       // 2. Query Supabase 'system_users' table by username, email, or name
       try {
+        let filterOr = `email.ilike.${inputLower},username.ilike.${inputLower},name.ilike.${rawInput}`;
+        if (!isEmail) {
+          filterOr += `,email.ilike.${inputLower}@sij.local,email.ilike.${inputLower}@sistema.com`;
+        } else {
+          const userPart = inputLower.split('@')[0];
+          filterOr += `,username.ilike.${userPart}`;
+        }
+
         const { data: sysUsersData, error: sysErr } = await supabase
           .from('system_users')
           .select('*')
-          .or(`email.ilike.${inputLower},username.ilike.${inputLower},name.ilike.${rawInput}`)
+          .or(filterOr)
           .limit(1);
 
         if (!sysErr && sysUsersData && sysUsersData.length > 0) {
@@ -179,10 +187,18 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
       // 3. If not found, check Supabase 'employees' table
       if (!foundUser) {
         try {
+          let filterOr = `email.ilike.${inputLower},username.ilike.${inputLower},name.ilike.${rawInput}`;
+          if (!isEmail) {
+            filterOr += `,email.ilike.${inputLower}@sij.local,email.ilike.${inputLower}@sistema.com`;
+          } else {
+            const userPart = inputLower.split('@')[0];
+            filterOr += `,username.ilike.${userPart}`;
+          }
+
           const { data: empData, error: empErr } = await supabase
             .from('employees')
             .select('*')
-            .or(`email.ilike.${inputLower},username.ilike.${inputLower},name.ilike.${rawInput}`)
+            .or(filterOr)
             .limit(1);
 
           if (!empErr && empData && empData.length > 0) {
@@ -191,7 +207,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
               id: emp.id,
               name: emp.name || emp.username || emp.email?.split('@')[0] || 'Empleado',
               username: emp.username || emp.email?.split('@')[0] || rawInput,
-              email: emp.email || `${rawInput}@sistema.com`,
+              email: emp.email || `${rawInput}@sij.local`,
               password: emp.pin || emp.password || '',
               phone: emp.phone || '',
               role: normalizeRole(emp.role),
@@ -234,12 +250,18 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
 
       // 5. Fallback: check local systemUsers state
       if (!foundUser) {
-        foundUser = systemUsers.find(
-          u =>
-            (u.email && u.email.trim().toLowerCase() === inputLower) ||
-            (u.username && u.username.trim().toLowerCase() === inputLower) ||
-            (u.name && u.name.trim().toLowerCase() === inputLower)
-        ) || null;
+        foundUser = systemUsers.find(u => {
+          const uEmail = (u.email || '').trim().toLowerCase();
+          const uUsername = (u.username || '').trim().toLowerCase();
+          const uName = (u.name || '').trim().toLowerCase();
+          return (
+            uEmail === inputLower ||
+            uUsername === inputLower ||
+            uName === inputLower ||
+            (!isEmail && (uEmail === `${inputLower}@sij.local` || uEmail === `${inputLower}@sistema.com`)) ||
+            (isEmail && uUsername === inputLower.split('@')[0])
+          );
+        }) || null;
       }
 
       setIsSubmitting(false);
@@ -252,7 +274,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
             id: `usr-${Date.now()}`,
             name: rawInput.split('@')[0],
             username: rawInput.split('@')[0],
-            email: isEmail ? rawInput : `${rawInput}@sistema.com`,
+            email: isEmail ? rawInput : `${rawInput}@sij.local`,
             password: inputPass,
             phone: '',
             role: normalizeRole(targetRole),
@@ -273,7 +295,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
 
         setMessage({
           type: 'error',
-          text: '❌ Usuario o correo no encontrado en la base de datos. Verifica tu nombre de usuario / correo o regístrate.'
+          text: 'No se encontró ningún usuario con el identificador ingresado. Si eres nuevo en el equipo, solicita tu alta al Administrador para recibir tus credenciales.'
         });
         return;
       }
@@ -287,13 +309,13 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
         return;
       }
 
-      // Check password validation
+      // Check password validation (supports plain text, truncated pin from 10-char DB columns, or auto-sync)
       let isPasswordValid = false;
 
       if (authUserSuccess) {
         isPasswordValid = true;
       } else if (!foundUser.password || foundUser.password.trim() === '') {
-        // User was created in Supabase Table Editor without a plain-text password set:
+        // User was created without a plain-text password set:
         // Set this as their password automatically so future logins match seamlessly!
         isPasswordValid = true;
         try {
@@ -304,7 +326,11 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
         } catch (e) {
           console.warn('Could not auto-update password in Supabase:', e);
         }
-      } else if (foundUser.password.trim() === inputPass) {
+      } else if (
+        foundUser.password.trim() === inputPass ||
+        foundUser.password.trim() === inputPass.slice(0, 10) ||
+        (foundUser.password.length === 10 && inputPass.startsWith(foundUser.password))
+      ) {
         isPasswordValid = true;
       }
 

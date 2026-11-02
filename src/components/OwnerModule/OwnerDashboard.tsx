@@ -102,6 +102,8 @@ export const OwnerDashboard: React.FC = () => {
   // Modals
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<SystemUser | null>(null);
+  const [isSavingUser, setIsSavingUser] = useState(false);
+  const [userFormError, setUserFormError] = useState<string | null>(null);
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
 
   // Delete modal state
@@ -286,52 +288,72 @@ export const OwnerDashboard: React.FC = () => {
   };
 
   // Form submit for Employee
-  const handleCreateUser = (e: React.FormEvent) => {
+  const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userName || !userEmail) return;
-
-    if (editingUser) {
-      const updatePayload: Partial<SystemUser> = {
-        name: userName.trim(),
-        username: userUsername ? userUsername.trim().toLowerCase().replace(/\s+/g, '') : userEmail.split('@')[0].toLowerCase(),
-        email: userEmail.trim().toLowerCase(),
-        phone: userPhone.trim(),
-        role: userRole
-      };
-      if (userPassword && userPassword.trim()) {
-        updatePayload.password = userPassword.trim();
-      }
-      updateSystemUser(editingUser.id, updatePayload);
-      setEditingUser(null);
-    } else {
-      addSystemUser({
-        name: userName.trim(),
-        username: userUsername ? userUsername.trim().toLowerCase().replace(/\s+/g, '') : userEmail.split('@')[0].toLowerCase(),
-        email: userEmail.trim().toLowerCase(),
-        password: userPassword.trim() || 'Temp1234!',
-        phone: userPhone.trim(),
-        role: userRole,
-        status: 'Activo'
-      });
-
-      // Automatically trigger WhatsApp credentials modal
-      setWhatsAppModalData({
-        type: userRole === 'tech' ? 'tech' : 'client',
-        recipientName: userName.trim(),
-        recipientUsername: userUsername ? userUsername.trim().toLowerCase().replace(/\s+/g, '') : userEmail.split('@')[0].toLowerCase(),
-        recipientEmail: userEmail.trim().toLowerCase(),
-        recipientPhone: userPhone.trim(),
-        recipientPassword: userPassword.trim() || 'Temp1234!',
-        specialty: userRole === 'tech' ? 'Técnico de Campo' : userRole === 'office' ? 'Oficina Administrativa' : 'Administrador'
-      });
+    if (!userName.trim()) {
+      setUserFormError('El nombre completo es obligatorio.');
+      return;
     }
 
-    setUserName('');
-    setUserUsername('');
-    setUserEmail('');
-    setUserPassword('');
-    setUserPhone('');
-    setIsAddUserOpen(false);
+    const cleanUsername = userUsername
+      ? userUsername.trim().toLowerCase().replace(/\s+/g, '')
+      : userName.trim().toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
+
+    const cleanEmail = userEmail.trim().toLowerCase() || `${cleanUsername}@sij.local`;
+    const passwordToUse = userPassword.trim() || 'Temp1234!';
+
+    setIsSavingUser(true);
+    setUserFormError(null);
+
+    try {
+      if (editingUser) {
+        const updatePayload: Partial<SystemUser> = {
+          name: userName.trim(),
+          username: cleanUsername,
+          email: cleanEmail,
+          phone: userPhone.trim(),
+          role: userRole
+        };
+        if (userPassword && userPassword.trim()) {
+          updatePayload.password = userPassword.trim();
+        }
+        await updateSystemUser(editingUser.id, updatePayload);
+        setEditingUser(null);
+      } else {
+        const res = await addSystemUser({
+          name: userName.trim(),
+          username: cleanUsername,
+          email: cleanEmail,
+          password: passwordToUse,
+          phone: userPhone.trim(),
+          role: userRole,
+          status: 'Activo'
+        });
+
+        // Automatically trigger WhatsApp credentials modal with clean credentials
+        setWhatsAppModalData({
+          type: userRole === 'tech' ? 'tech' : 'client',
+          recipientName: userName.trim(),
+          recipientUsername: cleanUsername,
+          recipientEmail: cleanEmail,
+          recipientPhone: userPhone.trim(),
+          recipientPassword: passwordToUse,
+          specialty: userRole === 'tech' ? 'Técnico de Campo' : userRole === 'office' ? 'Oficina Administrativa' : 'Administrador'
+        });
+      }
+
+      setUserName('');
+      setUserUsername('');
+      setUserEmail('');
+      setUserPassword('');
+      setUserPhone('');
+      setIsAddUserOpen(false);
+    } catch (err: any) {
+      console.error('Error saving user in Supabase:', err);
+      setUserFormError(err?.message || 'Error al guardar el empleado en la base de datos.');
+    } finally {
+      setIsSavingUser(false);
+    }
   };
 
   // Form submit for Expense
@@ -1372,6 +1394,13 @@ export const OwnerDashboard: React.FC = () => {
               </button>
             </div>
 
+            {userFormError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-start space-x-2">
+                <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <span>{userFormError}</span>
+              </div>
+            )}
+
             <form onSubmit={handleCreateUser} className="space-y-3 text-xs">
               <div>
                 <label className="font-bold text-slate-700 block mb-1">Nombre Completo *</label>
@@ -1411,13 +1440,15 @@ export const OwnerDashboard: React.FC = () => {
               </div>
 
               <div>
-                <label className="font-bold text-slate-700 block mb-1">Correo Electrónico *</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-slate-700">Correo Electrónico</label>
+                  <span className="text-[10px] text-slate-400 font-semibold">(Opcional con usuario)</span>
+                </div>
                 <input
-                  type="email"
-                  required
+                  type="text"
                   value={userEmail}
                   onChange={e => setUserEmail(e.target.value)}
-                  placeholder="carlos@sijservicios.com"
+                  placeholder={userUsername ? `${userUsername}@sij.local` : 'carlos@sijservicios.com'}
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-800 font-medium focus:bg-white outline-hidden"
                 />
               </div>
@@ -1467,15 +1498,18 @@ export const OwnerDashboard: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsAddUserOpen(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer"
+                  disabled={isSavingUser}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer disabled:opacity-50"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md cursor-pointer transition-all active:scale-95"
+                  disabled={isSavingUser}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md cursor-pointer transition-all active:scale-95 disabled:opacity-50 flex items-center space-x-2"
                 >
-                  {editingUser ? 'Guardar Cambios' : 'Registrar Empleado'}
+                  {isSavingUser && <Clock className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{isSavingUser ? 'Guardando...' : (editingUser ? 'Guardar Cambios' : 'Registrar Empleado')}</span>
                 </button>
               </div>
             </form>
